@@ -1,3 +1,4 @@
+import json
 
 class ChatManager:
     """
@@ -23,7 +24,8 @@ class ChatManager:
         if self.attachments:
             attachments_display = []
             for attachment in self.attachments:
-                attachments_display.append(f"{attachment['filename']} ({attachment['num_pages']}ページ)")
+                page_info = f"{attachment['num_pages']}ページ" if attachment['num_pages'] > 0 else ""
+                attachments_display.append(f"{attachment['filename']} ({page_info})")
             attachments_info = "\n\n[添付ファイル: " + ", ".join(attachments_display) + "]"
 
         display_content = content + attachments_info
@@ -33,11 +35,13 @@ class ChatManager:
         self.messages.append(message)
 
         # 完全なメッセージ履歴に一時的なプレースホルダーを追加
-        # 後で拡張プロンプトに置き換える
-        self.full_messages.append({"role": "user", "content": "placeholder_for_enhanced_prompt"})
+        # IDを含めることでメッセージの対応関係を明確にする
+        message_id = len(self.messages) - 1  # メッセージのインデックスをIDとして使用
+        placeholder = {"role": "user", "content": f"placeholder_for_enhanced_prompt_{message_id}",
+                       "message_id": message_id}
+        self.full_messages.append(placeholder)
 
         return message
-
     def add_assistant_message(self, content):
         """
         アシスタントメッセージを追加
@@ -153,9 +157,14 @@ class ChatManager:
         Args:
             enhanced_prompt (str): 拡張されたプロンプト内容
         """
+        # 最後のメッセージのIDを取得
+        latest_message_id = len(self.messages) - 1
+
+        # 対応するプレースホルダーを探して更新
         for i in range(len(self.full_messages) - 1, -1, -1):
-            if self.full_messages[i]["role"] == "user":
-                self.full_messages[i]["content"] = enhanced_prompt
+            msg = self.full_messages[i]
+            if msg["role"] == "user" and "message_id" in msg and msg["message_id"] == latest_message_id:
+                self.full_messages[i] = {"role": "user", "content": enhanced_prompt, "message_id": latest_message_id}
                 break
 
     def prepare_messages_for_api(self, meta_prompt=""):
@@ -174,15 +183,21 @@ class ChatManager:
         if meta_prompt.strip():
             messages_for_api.append({"role": "system", "content": meta_prompt})
 
-        # 履歴メッセージを追加（最後のユーザーメッセージは拡張プロンプトを使用）
+        # 履歴を確認して、ユーザーメッセージとアシスタントメッセージが交互に来るようにする
         for i, msg in enumerate(self.messages):
-            if i == len(self.messages) - 1 and msg["role"] == "user":
-                # 最後のユーザーメッセージについては、full_messagesから対応する拡張プロンプトを使用
-                for full_msg in reversed(self.full_messages):
+            if msg["role"] == "user":
+                # ユーザーメッセージの場合は、拡張プロンプトをfull_messagesから探す
+                for full_msg in self.full_messages:
                     if full_msg["role"] == "user" and full_msg["content"] != "placeholder_for_enhanced_prompt":
-                        messages_for_api.append({"role": "user", "content": full_msg["content"]})
-                        break
+                        user_content_base = msg["content"].split("\n\n[添付ファイル:")[0].strip()
+                        if user_content_base in full_msg["content"]:
+                            messages_for_api.append({"role": "user", "content": full_msg["content"]})
+                            break
+                else:
+                    # 見つからなければ、表示用のメッセージをそのまま使用
+                    messages_for_api.append({"role": msg["role"], "content": msg["content"]})
             else:
+                # アシスタントメッセージはそのまま追加
                 messages_for_api.append({"role": msg["role"], "content": msg["content"]})
 
         return messages_for_api
@@ -267,7 +282,6 @@ class ChatManager:
         Returns:
             bool: 読み込みの成功/失敗
         """
-        import json
 
         try:
             messages = json.loads(json_str)
@@ -284,7 +298,7 @@ class ChatManager:
                 if msg["role"] not in ["user", "assistant", "system"]:
                     return False
 
-            # 検証通過後にメッセージをロード
+            # 検証通過後にメッセージをクリア
             self.messages = []
             self.full_messages = []
 
@@ -292,9 +306,10 @@ class ChatManager:
                 if msg["role"] == "system":
                     self.add_system_message(msg["content"])
                 elif msg["role"] == "user":
-                    # ユーザーメッセージは表示用と完全版の両方に追加
-                    self.messages.append(msg)
-                    self.full_messages.append(msg)
+                    # ユーザーメッセージはadd_user_messageを使わず、直接追加する
+                    # これにより、placeholderの置き換え処理がスキップされる
+                    self.messages.append({"role": "user", "content": msg["content"]})
+                    self.full_messages.append({"role": "user", "content": msg["content"]})
                 else:
                     self.add_assistant_message(msg["content"])
 
