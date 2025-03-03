@@ -8,10 +8,10 @@ class Config:
     """アプリケーション設定を保持するデータクラス"""
     server_url: str = "http://127.0.0.1:11434/v1/"
     api_key: str = "dummy-key"
-    selected_model: str = "qwen2.5:1.5b"
+    selected_model: str = "hf.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF:Q5_K_M"
     meta_prompt: str = ""
-    context_length: int = 4000  # 添付ファイルの長さ制限
-    message_length: int = 8000  # メッセージ全体の長さ制限
+    context_length: int = 8000  # 添付ファイルの長さ制限
+    message_length: int = 16000  # メッセージ全体の長さ制限
     uri_processing: bool = False  # メッセージ中のURLを解決してダウンロードするか
 
     @classmethod
