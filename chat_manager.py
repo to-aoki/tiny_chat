@@ -164,6 +164,7 @@ class ChatManager:
         for i in range(len(self.full_messages) - 1, -1, -1):
             msg = self.full_messages[i]
             if msg["role"] == "user" and "message_id" in msg and msg["message_id"] == latest_message_id:
+                # プレースホルダーを拡張プロンプトで完全に置き換える
                 self.full_messages[i] = {"role": "user", "content": enhanced_prompt, "message_id": latest_message_id}
                 break
 
@@ -183,22 +184,34 @@ class ChatManager:
         if meta_prompt.strip():
             messages_for_api.append({"role": "system", "content": meta_prompt})
 
-        # 履歴を確認して、ユーザーメッセージとアシスタントメッセージが交互に来るようにする
+        # 履歴からメッセージを順番に追加
+        user_msg_count = 0
+
+        # まず、ユーザーメッセージとアシスタントメッセージのインデックスとIDのマッピングを作成
+        message_map = {}
         for i, msg in enumerate(self.messages):
             if msg["role"] == "user":
-                # ユーザーメッセージの場合は、拡張プロンプトをfull_messagesから探す
-                for full_msg in self.full_messages:
-                    if full_msg["role"] == "user" and full_msg["content"] != "placeholder_for_enhanced_prompt":
-                        user_content_base = msg["content"].split("\n\n[添付ファイル:")[0].strip()
-                        if user_content_base in full_msg["content"]:
-                            messages_for_api.append({"role": "user", "content": full_msg["content"]})
-                            break
+                message_map[user_msg_count] = i
+                user_msg_count += 1
+
+        # 次に、full_messagesからユーザーメッセージの拡張コンテンツを取得
+        enhanced_contents = {}
+        for msg in self.full_messages:
+            if msg["role"] == "user" and "message_id" in msg:
+                enhanced_contents[msg["message_id"]] = msg["content"]
+
+        # 最後に、メッセージを順番に追加
+        for i, msg in enumerate(self.messages):
+            if msg["role"] == "user":
+                # ユーザーメッセージの場合は、拡張コンテンツがあればそれを使用
+                if i in enhanced_contents:
+                    messages_for_api.append({"role": "user", "content": enhanced_contents[i]})
                 else:
-                    # 見つからなければ、表示用のメッセージをそのまま使用
-                    messages_for_api.append({"role": msg["role"], "content": msg["content"]})
+                    # 拡張コンテンツがなければ、表示用のメッセージをそのまま使用
+                    messages_for_api.append({"role": "user", "content": msg["content"]})
             else:
                 # アシスタントメッセージはそのまま追加
-                messages_for_api.append({"role": msg["role"], "content": msg["content"]})
+                messages_for_api.append({"role": "user", "content": msg["content"]})
 
         return messages_for_api
 
@@ -228,7 +241,7 @@ class ChatManager:
 
     def to_json(self, include_system=False):
         """
-        メッセージ履歴をJSON形式で出力
+        メッセージ履歴をJSON形式で出力（拡張プロンプトを含む）
 
         Args:
             include_system (bool): システムメッセージを含めるかどうか
@@ -240,20 +253,37 @@ class ChatManager:
 
         filtered_messages = []
 
-        for msg in self.messages:
+        # まず、full_messagesからユーザーメッセージID -> 拡張コンテンツのマッピングを作成
+        enhanced_contents = {}
+        for msg in self.full_messages:
+            if msg["role"] == "user" and "message_id" in msg:
+                enhanced_contents[msg["message_id"]] = msg["content"]
+
+        # 通常のメッセージを処理し、ユーザーメッセージを拡張コンテンツで置き換える
+        for i, msg in enumerate(self.messages):
             if not include_system and msg["role"] == "system":
                 continue
 
-            # プレースホルダーチェック（ユーザーメッセージのみ）
-            if msg["role"] == "user" and "placeholder_for_enhanced_prompt" in msg["content"]:
-                # プレースホルダーが含まれる場合はスキップ
-                continue
-
-            # プレースホルダーがなければそのまま追加
-            filtered_messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
+            if msg["role"] == "user":
+                # 対応する拡張コンテンツがあるか確認
+                if i in enhanced_contents:
+                    # プレースホルダーではなく、拡張コンテンツを使用
+                    filtered_messages.append({
+                        "role": "user",
+                        "content": enhanced_contents[i]
+                    })
+                else:
+                    # 拡張コンテンツがない場合は通常のコンテンツを使用
+                    filtered_messages.append({
+                        "role": "user",
+                        "content": msg["content"]
+                    })
+            else:
+                # アシスタントメッセージはそのまま追加
+                filtered_messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
 
         return json.dumps(filtered_messages, ensure_ascii=False, indent=2)
 
