@@ -180,7 +180,7 @@ with st.sidebar:
 
     # メッセージ長設定
     message_length = st.number_input(
-        "メッセージ",
+        "メッセージ長",
         min_value=1000,
         max_value=500000,
         value=st.session_state.message_length,
