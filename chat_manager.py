@@ -240,37 +240,79 @@ class ChatManager:
 
         filtered_messages = []
 
-        for i, msg in enumerate(self.messages):
+        for msg in self.messages:
             if not include_system and msg["role"] == "system":
                 continue
 
-            # ユーザーメッセージの場合、対応する完全なメッセージ内容を探す
-            if msg["role"] == "user":
-                # 対応するfull_messagesからユーザーメッセージを探す
-                user_index = -1
-                msg_index = -1
+            # プレースホルダーチェック（ユーザーメッセージのみ）
+            if msg["role"] == "user" and "placeholder_for_enhanced_prompt" in msg["content"]:
+                # プレースホルダーが含まれる場合はスキップ
+                continue
 
-                for j, full_msg in enumerate(self.full_messages):
-                    if full_msg["role"] == "user":
-                        user_index += 1
-
-                    if msg["role"] == "user":
-                        msg_index += 1
-
-                    if user_index == msg_index and full_msg["role"] == "user" and full_msg["content"] != "placeholder_for_enhanced_prompt":
-                        filtered_messages.append({
-                            "role": "user",
-                            "content": full_msg["content"]
-                        })
-                        break
-                else:
-                    # 見つからなければそのまま追加
-                    filtered_messages.append(msg)
-            else:
-                # ユーザー以外のメッセージはそのまま追加
-                filtered_messages.append(msg)
+            # プレースホルダーがなければそのまま追加
+            filtered_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
 
         return json.dumps(filtered_messages, ensure_ascii=False, indent=2)
+
+    def apply_imported_history(self, json_str):
+        """
+        JSONからインポートした履歴を適用し、プレースホルダーなどを適切に処理する
+
+        Args:
+            json_str (str): JSON形式のメッセージ履歴
+
+        Returns:
+            bool: 適用の成功/失敗
+        """
+        import json
+
+        try:
+            # 現在の状態を一時保存（エラー時の復元用）
+            current_messages = self.messages.copy()
+            current_full_messages = self.full_messages.copy()
+
+            # 一旦メッセージをクリア
+            self.messages = []
+            self.full_messages = []
+
+            # JSONデータをパース
+            messages = json.loads(json_str)
+
+            # メッセージを1つずつ追加
+            message_id = 0
+            for msg in messages:
+                if msg["role"] == "system":
+                    self.add_system_message(msg["content"])
+                elif msg["role"] == "user":
+                    # プレースホルダーテキストをチェック
+                    if "placeholder_for_enhanced_prompt" in msg["content"]:
+                        # プレースホルダーを含む場合は、有効なコンテンツのみ抽出
+                        clean_content = ""
+                        if "[添付ファイル:" in msg["content"]:
+                            # 添付ファイル情報があれば保持
+                            attachment_part = msg["content"].split("[添付ファイル:")[1]
+                            clean_content = "[添付ファイル:" + attachment_part
+                    else:
+                        # プレースホルダーがなければそのまま使用
+                        clean_content = msg["content"]
+
+                    # 処理済みコンテンツをメッセージに追加
+                    self.messages.append({"role": "user", "content": clean_content})
+                    self.full_messages.append({"role": "user", "content": clean_content, "message_id": message_id})
+                    message_id += 1
+                else:
+                    self.add_assistant_message(msg["content"])
+
+            return True
+
+        except Exception as e:
+            # エラー時は元の状態に戻す
+            self.messages = current_messages
+            self.full_messages = current_full_messages
+            return False
 
     def load_from_json(self, json_str):
         """
@@ -282,6 +324,7 @@ class ChatManager:
         Returns:
             bool: 読み込みの成功/失敗
         """
+        import json
 
         try:
             messages = json.loads(json_str)
@@ -302,14 +345,29 @@ class ChatManager:
             self.messages = []
             self.full_messages = []
 
+            message_id = 0
             for msg in messages:
                 if msg["role"] == "system":
                     self.add_system_message(msg["content"])
                 elif msg["role"] == "user":
-                    # ユーザーメッセージはadd_user_messageを使わず、直接追加する
-                    # これにより、placeholderの置き換え処理がスキップされる
-                    self.messages.append({"role": "user", "content": msg["content"]})
-                    self.full_messages.append({"role": "user", "content": msg["content"]})
+                    # プレースホルダーテキストを検出して置き換える
+                    content = msg["content"]
+                    if "placeholder_for_enhanced_prompt" in content:
+                        # プレースホルダーが含まれている場合は、表示用のコンテンツを作成
+                        # 添付ファイル情報だけを残す
+                        if "[添付ファイル:" in content:
+                            parts = content.split("[添付ファイル:")
+                            # 元のメッセージ部分を空にして、添付ファイル情報だけ保持
+                            content = "[添付ファイル:" + parts[1]
+                        else:
+                            # プレースホルダーを含むが添付ファイル情報がない場合、空のメッセージにする
+                            content = ""
+
+                    # ユーザーメッセージを直接追加
+                    self.messages.append({"role": "user", "content": content})
+                    # full_messagesにも同じ内容を追加 (JSONから復元する場合はプレースホルダーは不要)
+                    self.full_messages.append({"role": "user", "content": content, "message_id": message_id})
+                    message_id += 1
                 else:
                     self.add_assistant_message(msg["content"])
 
@@ -317,7 +375,8 @@ class ChatManager:
 
         except json.JSONDecodeError:
             return False
-        except Exception:
+        except Exception as e:
+            print(f"JSON load error: {str(e)}")
             return False
 
     def check_total_message_length(self, meta_prompt=""):

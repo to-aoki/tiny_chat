@@ -363,14 +363,22 @@ with st.sidebar:
     if uploaded_json is not None:
         # アップロードされたJSONファイルを読み込む
         content = uploaded_json.getvalue().decode("utf-8")
-        success = st.session_state.chat_manager.load_from_json(content)
 
-        if success:
-            if st.button("インポートした履歴を適用", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
+        # 新しいメソッドを使用して履歴を適用
+        if st.button("インポートした履歴を適用", disabled=st.session_state.is_sending_message):
+            # ChatManagerに追加した新しいメソッドを呼び出す
+            if hasattr(st.session_state.chat_manager, 'apply_imported_history'):
+                success = st.session_state.chat_manager.apply_imported_history(content)
+            else:
+                # 新しいメソッドがない場合は従来のメソッドを使用
+                success = st.session_state.chat_manager.load_from_json(content)
+
+            if success:
                 st.success("メッセージ履歴を正常にインポートしました")
                 st.rerun()
-        else:
-            st.error("JSONのインポートに失敗しました: 無効なフォーマットです")
+            else:
+                st.error("JSONのインポートに失敗しました: 無効なフォーマットです")
+
 
 # 処理中ステータス表示エリア
 status_area = st.empty()
