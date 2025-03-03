@@ -1,5 +1,6 @@
 import json
 
+
 class ChatManager:
     """
     LLMとのチャットを管理するクラス
@@ -34,14 +35,19 @@ class ChatManager:
         message = {"role": "user", "content": display_content}
         self.messages.append(message)
 
-        # 完全なメッセージ履歴に一時的なプレースホルダーを追加
-        # IDを含めることでメッセージの対応関係を明確にする
         message_id = len(self.messages) - 1  # メッセージのインデックスをIDとして使用
-        placeholder = {"role": "user", "content": f"placeholder_for_enhanced_prompt_{message_id}",
-                       "message_id": message_id}
-        self.full_messages.append(placeholder)
+
+        if self.attachments:
+            # 完全なメッセージ履歴に一時的なプレースホルダーを追加
+            placeholder = {"role": "user", "content": f"placeholder_for_enhanced_prompt_{message_id}",
+                           "message_id": message_id}
+            self.full_messages.append(placeholder)
+        else:
+            # 拡張が必要ない場合は、実際のメッセージをそのまま追加
+            self.full_messages.append({"role": "user", "content": display_content, "message_id": message_id})
 
         return message
+
     def add_assistant_message(self, content):
         """
         アシスタントメッセージを追加
@@ -249,35 +255,59 @@ class ChatManager:
         Returns:
             str: JSON形式のメッセージ履歴
         """
-        import json
 
         filtered_messages = []
 
-        # まず、full_messagesからユーザーメッセージID -> 拡張コンテンツのマッピングを作成
-        enhanced_contents = {}
-        for msg in self.full_messages:
-            if msg["role"] == "user" and "message_id" in msg:
-                enhanced_contents[msg["message_id"]] = msg["content"]
-
-        # 通常のメッセージを処理し、ユーザーメッセージを拡張コンテンツで置き換える
-        for i, msg in enumerate(self.messages):
-            if not include_system and msg["role"] == "system":
-                continue
-
-            if msg["role"] == "user":
-                # 対応する拡張コンテンツがあるか確認
-                if i in enhanced_contents:
-                    # プレースホルダーではなく、拡張コンテンツを使用
+        # システムメッセージの追加（含める場合）
+        if include_system:
+            for msg in self.full_messages:
+                if msg["role"] == "system":
                     filtered_messages.append({
-                        "role": "user",
-                        "content": enhanced_contents[i]
-                    })
-                else:
-                    # 拡張コンテンツがない場合は通常のコンテンツを使用
-                    filtered_messages.append({
-                        "role": "user",
+                        "role": "system",
                         "content": msg["content"]
                     })
+
+        # ユーザーメッセージとアシスタントメッセージを処理
+        for i, msg in enumerate(self.messages):
+            if msg["role"] == "user":
+                # プレースホルダー文字列を検索して除外する
+                content = msg["content"]
+
+                # ユーザーメッセージの場合、full_messagesから対応する拡張コンテンツを探す
+                enhanced_content = None
+                for full_msg in self.full_messages:
+                    if full_msg["role"] == "user" and "message_id" in full_msg and full_msg["message_id"] == i:
+                        # プレースホルダーのチェック - もしプレースホルダーならスキップする
+                        if "placeholder_for_enhanced_prompt" not in full_msg["content"]:
+                            enhanced_content = full_msg["content"]
+                        break
+
+                # 拡張コンテンツが見つかった場合はそれを使用、見つからなければ通常のコンテンツを使用
+                if enhanced_content:
+                    filtered_messages.append({
+                        "role": "user",
+                        "content": enhanced_content
+                    })
+                else:
+                    # 通常のコンテンツから添付ファイル情報を抽出
+                    if "[添付ファイル:" in content:
+                        clean_content = content.split("[添付ファイル:")[0].strip()
+                        attachment_info = "[添付ファイル:" + content.split("[添付ファイル:")[1]
+                        if clean_content:  # 内容がある場合
+                            filtered_messages.append({
+                                "role": "user",
+                                "content": clean_content + "\n\n" + attachment_info
+                            })
+                        else:  # 内容がない場合（プレースホルダーだった可能性）
+                            filtered_messages.append({
+                                "role": "user",
+                                "content": attachment_info
+                            })
+                    else:
+                        filtered_messages.append({
+                            "role": "user",
+                            "content": content
+                        })
             else:
                 # アシスタントメッセージはそのまま追加
                 filtered_messages.append({
@@ -286,7 +316,6 @@ class ChatManager:
                 })
 
         return json.dumps(filtered_messages, ensure_ascii=False, indent=2)
-
     def apply_imported_history(self, json_str):
         """
         JSONからインポートした履歴を適用し、プレースホルダーなどを適切に処理する
@@ -297,7 +326,6 @@ class ChatManager:
         Returns:
             bool: 適用の成功/失敗
         """
-        import json
 
         try:
             # 現在の状態を一時保存（エラー時の復元用）
@@ -354,7 +382,6 @@ class ChatManager:
         Returns:
             bool: 読み込みの成功/失敗
         """
-        import json
 
         try:
             messages = json.loads(json_str)
