@@ -74,7 +74,6 @@ class ModelManager:
             tuple: (モデルリスト, 成功フラグ)
         """
         try:
-            # OpenAI クライアント初期化（既存のクライアントがない場合）
             from openai import OpenAI
 
             if openai_client is None:
