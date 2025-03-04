@@ -13,6 +13,7 @@ class Config:
     context_length: int = 8000  # 添付ファイルの長さ制限
     message_length: int = 16000  # メッセージ全体の長さ制限
     uri_processing: bool = False  # メッセージ中のURLを解決してダウンロードするか
+    is_azure: bool = False  # Azure OpenAIを利用するか
 
     @classmethod
     def load(cls, config_file):
@@ -61,7 +62,8 @@ class ModelManager:
     """モデル関連の機能を提供するクラス"""
 
     @staticmethod
-    def fetch_available_models(server_url, api_key, openai_client=None):
+    def fetch_available_models(
+            server_url, api_key, openai_client=None, is_azure=False):
         """
         利用可能なモデル一覧を取得
 
@@ -73,10 +75,14 @@ class ModelManager:
         Returns:
             tuple: (モデルリスト, 成功フラグ)
         """
-        try:
-            from openai import OpenAI
+        if is_azure:
+            # deployments APIで代替可だがあまり使わない？
+            return [], True
 
+        try:
             if openai_client is None:
+                from openai import OpenAI
+
                 openai_client = OpenAI(
                     base_url=server_url,
                     api_key=api_key
@@ -95,7 +101,7 @@ class ModelManager:
             return [], False  # 失敗を示すフラグを返す
 
     @staticmethod
-    def update_models_on_server_change(new_server_url, api_key, current_model):
+    def update_models_on_server_change(new_server_url, api_key, current_model, is_azure=False):
         """
         サーバーURLが変更された時にモデルリストを更新
 
@@ -108,7 +114,8 @@ class ModelManager:
             tuple: (新しいモデルリスト, 選択されるべきモデル, 成功フラグ)
         """
         # 新しいモデルリストを取得
-        new_models, success = ModelManager.fetch_available_models(new_server_url, api_key)
+        new_models, success = ModelManager.fetch_available_models(
+            new_server_url, api_key, is_azure=is_azure)
 
         # 現在のモデルが新しいリストに含まれていない場合は先頭のモデルを選択
         if current_model not in new_models and new_models:

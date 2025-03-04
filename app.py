@@ -1,7 +1,6 @@
 import uuid
 import streamlit as st
 import os
-from openai import OpenAI
 
 from config_manager import Config, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
@@ -15,6 +14,24 @@ CONFIG_FILE = "chat_app_config.json"
 
 def reset_file_uploader():
     st.session_state.file_uploader_key = str(uuid.uuid4())
+
+
+def get_llm_client(server_url, api_key='dummy-key', is_azure=False, azure_api_version="2024-06-01"):
+    if is_azure:
+        from openai import AzureOpenAI
+
+        return AzureOpenAI(
+            api_key=api_key,
+            azure_endpoint=server_url,
+            api_version=azure_api_version
+        )
+    else:
+        from openai import OpenAI
+
+        return OpenAI(
+            base_url=server_url,
+            api_key=api_key
+        )
 
 
 # 円形アニメーションのCSS
@@ -92,11 +109,16 @@ if "is_sending_message" not in st.session_state:
 if "status_message" not in st.session_state:
     st.session_state.status_message = ""
 
+if "is_azure" not in st.session_state:
+    st.session_state.is_azure = config.is_azure
+
 # モデル情報を初期化
 if "available_models" not in st.session_state:
     models, success = ModelManager.fetch_available_models(
         st.session_state.server_url,
-        st.session_state.api_key
+        st.session_state.api_key,
+        None,
+        st.session_state.is_azure
     )
     st.session_state.available_models = models
     st.session_state.models_api_success = success
@@ -109,10 +131,12 @@ if "meta_prompt" not in st.session_state:
 
 if "openai_client" not in st.session_state:
     try:
-        st.session_state.openai_client = OpenAI(
-            base_url=st.session_state.server_url,
-            api_key=st.session_state.api_key
+        st.session_state.openai_client = get_llm_client(
+            server_url=st.session_state.server_url,
+            api_key=st.session_state.api_key,
+            is_azure=st.session_state.is_azure
         )
+
     except Exception as e:
         st.error(f"OpenAI クライアントの初期化に失敗しました: {str(e)}")
         st.session_state.openai_client = None
@@ -169,6 +193,14 @@ with st.sidebar:
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
+    # Azureチェックボックス
+    is_azure = st.checkbox(
+        "Azure OpenAIを利用",
+        value=st.session_state.is_azure,
+        help="APIはAzure OpenAIを利用します",
+        disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+    )
+
     # メタプロンプト設定
     meta_prompt = st.text_area(
         "メタプロンプト",
@@ -220,7 +252,8 @@ with st.sidebar:
         new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
             server_url,
             api_key,
-            st.session_state.selected_model
+            st.session_state.selected_model,
+            is_azure=st.session_state.is_azure
         )
 
         st.session_state.available_models = new_models
@@ -234,9 +267,10 @@ with st.sidebar:
                 f"'{selected_model}' に変更されました。")
 
         try:
-            st.session_state.openai_client = OpenAI(
-                base_url=server_url,
-                api_key=api_key
+            st.session_state.openai_client = get_llm_client(
+                server_url=server_url,
+                api_key=api_key,
+                is_azure=is_azure
             )
         except Exception as e:
             st.error(f"OpenAI クライアントの初期化に失敗しました: {str(e)}")
@@ -248,16 +282,20 @@ with st.sidebar:
             st.session_state.api_key = api_key
             models, api_success = ModelManager.fetch_available_models(
                 server_url,
-                api_key
+                api_key,
+                st.session_state.openai_client,
+                is_azure=is_azure
             )
             st.session_state.available_models = models
             st.session_state.models_api_success = api_success
 
             try:
-                st.session_state.openai_client = OpenAI(
-                    base_url=server_url,
-                    api_key=api_key
+                st.session_state.openai_client = get_llm_client(
+                    server_url=server_url,
+                    api_key=api_key,
+                    is_azure=is_azure
                 )
+
             except Exception as e:
                 st.error(f"OpenAI クライアントの初期化に失敗しました: {str(e)}")
                 st.session_state.openai_client = None
@@ -274,7 +312,8 @@ with st.sidebar:
             new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
                 server_url,
                 api_key,
-                st.session_state.selected_model
+                st.session_state.selected_model,
+                is_azure=is_azure
             )
 
             st.session_state.available_models = new_models
@@ -291,17 +330,21 @@ with st.sidebar:
             st.session_state.api_key = api_key
             models, api_success = ModelManager.fetch_available_models(
                 server_url,
-                api_key
+                api_key,
+                st.session_state.openai_client,
+                is_azure=is_azure
             )
             st.session_state.available_models = models
             st.session_state.models_api_success = api_success
 
         # クライアントを再初期化
         try:
-            st.session_state.openai_client = OpenAI(
-                base_url=server_url,
-                api_key=api_key
+            st.session_state.openai_client = get_llm_client(
+                server_url=server_url,
+                api_key=api_key,
+                is_azure=is_azure
             )
+
         except Exception as e:
             st.error(f"OpenAI クライアントの初期化に失敗しました: {str(e)}")
             st.session_state.openai_client = None
@@ -319,6 +362,7 @@ with st.sidebar:
             message_length=message_length,
             context_length=context_length,
             uri_processing=uri_processing,
+            is_azure=is_azure
         )
 
         if config.save(CONFIG_FILE):
@@ -562,7 +606,7 @@ if prompt:
         st.session_state.status_message = "メッセージを処理中..."
         st.rerun()  # 状態を更新してUIを再描画
 
-# メッセージ送信処理（フラグがONの場合に実行）
+# メッセージ送信処理
 if st.session_state.is_sending_message and st.session_state.chat_manager.messages and \
         st.session_state.chat_manager.messages[-1]["role"] != "assistant":
     try:
@@ -620,9 +664,10 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
             try:
                 # クライアントインスタンスが存在しない場合は初期化
                 if "openai_client" not in st.session_state or st.session_state.openai_client is None:
-                    st.session_state.openai_client = OpenAI(
-                        base_url=st.session_state.server_url,
-                        api_key=st.session_state.api_key
+                    st.session_state.openai_client = get_llm_client(
+                        server_url=st.session_state.server_url,
+                        api_key=st.session_state.api_key,
+                        is_azure=st.session_state.is_azure
                     )
 
                 # 既存のクライアントインスタンスを使用
