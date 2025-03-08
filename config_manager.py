@@ -1,61 +1,95 @@
 import json
 import os
-from dataclasses import dataclass, asdict
 
 
-@dataclass
 class Config:
-    """アプリケーション設定を保持するデータクラス"""
-    server_url: str = "http://127.0.0.1:11434/v1/"
-    api_key: str = "dummy-key"
-    selected_model: str = "hf.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF:Q5_K_M"
-    meta_prompt: str = ""
-    context_length: int = 8000  # 添付ファイルの長さ制限
-    message_length: int = 16000  # メッセージ全体の長さ制限
-    uri_processing: bool = False  # メッセージ中のURLを解決してダウンロードするか
-    is_azure: bool = False  # Azure OpenAIを利用するか
+    """
+    チャットアプリケーションの設定を管理するクラス
+    """
+
+    def __init__(
+            self,
+            server_url: str = "http://localhost:8000/v1",
+            api_key: str = "dummy-key",
+            selected_model: str = "gpt-3.5-turbo",
+            meta_prompt: str = "",
+            message_length: int = 10000,
+            context_length: int = 2000,
+            uri_processing: bool = True,
+            search_enabled: bool = False,  # 検索機能の有効/無効
+            search_results_count: int = 3,  # 検索結果の表示数
+            is_azure: bool = False
+    ):
+        self.server_url = server_url
+        self.api_key = api_key
+        self.selected_model = selected_model
+        self.meta_prompt = meta_prompt
+        self.message_length = message_length
+        self.context_length = context_length
+        self.uri_processing = uri_processing
+        self.search_enabled = search_enabled  # 検索機能の有効/無効
+        self.search_results_count = search_results_count  # 検索結果の表示数
+        self.is_azure = is_azure
 
     @classmethod
-    def load(cls, config_file):
+    def load(cls, file_path: str) -> 'Config':
         """
         設定ファイルから設定を読み込む
-        ファイルが存在しない場合はデフォルト設定を返す
 
         Args:
-            config_file (str): 設定ファイルのパス
+            file_path (str): 設定ファイルのパス
 
         Returns:
-            Config: 読み込んだ設定
-        """
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r') as f:
-                    config_dict = json.load(f)
-                    # 辞書から Config オブジェクトを作成
-                    return cls(**config_dict)
-            except Exception as e:
-                pass
-        return Config()
-
-    def save(self, config_file):
-        """
-        Config オブジェクトをファイルに保存
-
-        Args:
-            config_file (str): 設定ファイルのパス
-
-        Returns:
-            bool: 成功した場合はTrue、失敗した場合はFalse
+            Config: 設定オブジェクト
         """
         try:
-            # Config オブジェクトを辞書に変換
-            config_dict = asdict(self)
-            with open(config_file, 'w') as f:
-                json.dump(config_dict, f, indent=2)
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+
+                # 検索機能の設定がなければデフォルト値を使用
+                if 'search_enabled' not in config_data:
+                    config_data['search_enabled'] = False
+
+                if 'search_results_count' not in config_data:
+                    config_data['search_results_count'] = 3
+
+                return cls(**config_data)
+            else:
+                return cls()
+        except Exception:
+            return cls()
+
+    def save(self, file_path: str) -> bool:
+        """
+        設定をファイルに保存する
+
+        Args:
+            file_path (str): 設定ファイルのパス
+
+        Returns:
+            bool: 保存が成功したかどうか
+        """
+        try:
+            config_data = {
+                'server_url': self.server_url,
+                'api_key': self.api_key,
+                'selected_model': self.selected_model,
+                'meta_prompt': self.meta_prompt,
+                'message_length': self.message_length,
+                'context_length': self.context_length,
+                'uri_processing': self.uri_processing,
+                'search_enabled': self.search_enabled,  # 検索機能の有効/無効
+                'search_results_count': self.search_results_count,  # 検索結果の表示数
+                'is_azure': self.is_azure
+            }
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, ensure_ascii=False, indent=2)
             return True
-        except Exception as e:
-            print(f"設定ファイルの保存に失敗しました: {str(e)}")
+        except Exception:
             return False
+
 
 
 class ModelManager:
