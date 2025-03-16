@@ -9,10 +9,10 @@ from chat_manager import ChatManager
 from logger import get_logger
 from llm_utils import get_llm_client
 
-# ロガーを初期化
-logger = get_logger(log_dir="logs", log_level=logging.INFO)
 
+logger = get_logger(log_dir="logs", log_level=logging.INFO)
 st.set_page_config(page_title="チャット", layout="wide")
+
 
 # 設定ファイルのパス
 CONFIG_FILE = "chat_app_config.json"
@@ -22,17 +22,18 @@ def reset_file_uploader():
     st.session_state.file_uploader_key = str(uuid.uuid4())
 
 
-
 circle_spinner_css = """
 <style>
 .spinner {
-  width: 40px;
-  height: 40px;
-  margin: 10px auto;
-  border: 5px solid rgba(0, 120, 212, 0.2);
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 0.15em solid rgba(0, 120, 212, 0.2);
   border-top-color: rgba(0, 120, 212, 1);
   border-radius: 50%;
   animation: spin 1s ease-in-out infinite;
+  vertical-align: middle;
+  margin-right: 0.5em;
 }
 
 @keyframes spin {
@@ -42,28 +43,26 @@ circle_spinner_css = """
 }
 
 .spinner-container {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 20px;
+  padding: 8px 12px;
   background-color: rgba(255, 255, 255, 0.9);
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin: 10px 0;
+  font-size: 16px;
 }
 
 .spinner-text {
-  margin-top: 10px;
   font-weight: bold;
   color: #0078D4;
+  display: inline;
 }
 </style>
 """
 
 
 def initialize_session_state():
-    # 設定値を直接保持するconfigオブジェクトをセッション状態に追加
     if "config" not in st.session_state:
         # 外部設定ファイルから設定を読み込む
         file_config = Config.load(CONFIG_FILE)
@@ -131,8 +130,8 @@ def initialize_session_state():
             st.session_state.openai_client = None
 
 
-# セッション状態を初期化
 initialize_session_state()
+
 
 with st.sidebar:
     st.header("API設定")
@@ -175,7 +174,6 @@ with st.sidebar:
         config.save(CONFIG_FILE)
         logger.info("設定を保存しました")
 
-    # サーバーURL設定
     server_url = st.text_input(
         "サーバーURL",
         value=st.session_state.config["server_url"],
@@ -183,7 +181,6 @@ with st.sidebar:
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
-    # APIキー設定
     api_key = st.text_input(
         "API Key",
         value=st.session_state.config["api_key"],
@@ -192,7 +189,6 @@ with st.sidebar:
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
-    # Azureチェックボックス
     is_azure = st.checkbox(
         "Azure OpenAIを利用",
         value=st.session_state.config["is_azure"],
@@ -200,7 +196,6 @@ with st.sidebar:
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
-    # メタプロンプト設定
     meta_prompt = st.text_area(
         "メタプロンプト",
         value=st.session_state.config["meta_prompt"],
@@ -209,7 +204,6 @@ with st.sidebar:
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
-    # メッセージ長設定
     message_length = st.number_input(
         "メッセージ長",
         min_value=1000,
@@ -220,20 +214,18 @@ with st.sidebar:
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
-    # コンテキスト長設定
     context_length = st.number_input(
-        "コンテキスト長",
+        "添付ファイル文字列長",
         min_value=100,
         max_value=100000,
         value=st.session_state.config["context_length"],
         step=500,
-        help="添付ファイルやURLからのコンテンツを切り詰める文字数を指定します",
+        help="添付ファイルやURLコンテンツの取得最大長（切り詰める）文字数を指定します",
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
-    # URLチェックボックス
     uri_processing = st.checkbox(
-        "メッセージURLを取得",
+        "メッセージURLコンテンツ取得",
         value=st.session_state.config["uri_processing"],
         help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
@@ -243,13 +235,14 @@ with st.sidebar:
         st.session_state.config["uri_processing"] = uri_processing
         logger.info(f"URI処理設定を変更: {uri_processing}")
 
-    if server_url != st.session_state.config["server_url"] and not st.session_state.is_sending_message:
+    if (server_url != st.session_state.config["server_url"] or
+            is_azure != st.session_state.config["is_azure"]) and not st.session_state.is_sending_message:
         logger.info(f"サーバーURLを変更: {server_url}")
         st.session_state.config["previous_server_url"] = st.session_state.config["server_url"]
         st.session_state.config["server_url"] = server_url
         st.session_state.config["api_key"] = api_key
+        st.session_state.config["is_azure"] = is_azure
 
-        # モデルリストを更新し、必要に応じて選択モデルも更新
         logger.info("サーバー変更に伴いモデルリストを更新中...")
         new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
             server_url,
@@ -285,8 +278,8 @@ with st.sidebar:
             st.session_state.openai_client = None
 
     else:
-        # サーバURLは同じだがAPIキーだけ変更された場合（かつメッセージ送信中でない場合）
         if api_key != st.session_state.config["api_key"] and not st.session_state.is_sending_message:
+            # サーバURLは同じだがAPIキーだけ変更された場合（かつメッセージ送信中でない場合）
             logger.info("APIキーを変更しました")
             st.session_state.config["api_key"] = api_key
             logger.info("APIキー変更に伴いモデルリストを更新中...")
@@ -313,17 +306,16 @@ with st.sidebar:
                 st.error(error_msg)
                 st.session_state.openai_client = None
 
-    # 設定を反映ボタン
     if st.button("設定を反映", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
         logger.info("設定反映ボタンがクリックされました")
         # サーバURLが変更された場合はモデルリストを更新
-        if server_url != st.session_state.config["server_url"]:
+        if server_url != st.session_state.config["server_url"] or is_azure != st.session_state.config["is_azure"]:
             logger.info(f"サーバーURLを変更: {server_url}")
             st.session_state.config["previous_server_url"] = st.session_state.config["server_url"]
             st.session_state.config["server_url"] = server_url
             st.session_state.config["api_key"] = api_key
+            st.session_state.config["is_azure"] = is_azure
 
-            # モデルリストを更新し、必要に応じて選択モデルも更新
             logger.info("サーバー変更に伴いモデルリストを更新中...")
             new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
                 server_url,
@@ -358,7 +350,6 @@ with st.sidebar:
             st.session_state.available_models = models
             st.session_state.models_api_success = api_success
 
-        # クライアントを再初期化
         try:
             logger.info("OpenAIクライアントを再初期化中...")
             st.session_state.openai_client = get_llm_client(
@@ -373,7 +364,6 @@ with st.sidebar:
             st.error(error_msg)
             st.session_state.openai_client = None
 
-        # その他の設定を更新
         if meta_prompt != st.session_state.config["meta_prompt"]:
             logger.info("メタプロンプトを更新しました")
         st.session_state.config["meta_prompt"] = meta_prompt
@@ -386,9 +376,6 @@ with st.sidebar:
             logger.info(f"コンテキスト長を更新: {context_length}")
         st.session_state.config["context_length"] = context_length
 
-        st.session_state.config["is_azure"] = is_azure
-
-        # 設定を外部ファイルに保存
         config = Config(
             server_url=server_url,
             api_key=api_key,
@@ -407,41 +394,8 @@ with st.sidebar:
             logger.warning("設定ファイルへの保存に失敗しました")
             st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
 
-    # メッセージ履歴をJSONとして出力する機能
-    st.markdown("---")
-    if st.button("メッセージ履歴をJSONで保存", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
-        logger.info("JSONエクスポートボタンがクリックされました")
-        if not st.session_state.chat_manager.messages:
-            logger.warning("保存するメッセージ履歴がありません")
-            st.warning("保存するメッセージ履歴がありません")
-        else:
-            # 拡張プロンプトを含むメッセージ履歴を生成
-            logger.info("メッセージ履歴をJSONに変換中...")
-            chat_history = st.session_state.chat_manager.to_json()
-
-            # ダウンロードボタンを表示
-            st.download_button(
-                label="JSONファイルをダウンロード",
-                data=chat_history,
-                file_name="chat_history.json",
-                mime="application/json",
-                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-            )
-            logger.info("メッセージ履歴のJSONエクスポートを準備しました")
-
-    # メッセージ履歴のクリア機能
-    st.markdown("---")
-    if st.button("チャット履歴をクリア", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
-        logger.info("チャット履歴クリアボタンがクリックされました")
-        st.session_state.chat_manager = ChatManager()
-        reset_file_uploader()
-        logger.info("チャット履歴をクリアしました")
-        st.rerun()
-
-    # メッセージ履歴のインポート機能
-    st.markdown("---")
     uploaded_json = st.file_uploader(
-        "メッセージ履歴をインポート (JSON)",
+        "チャット履歴をインポート",
         type=["json"],
         help="以前に保存したチャット履歴JSONファイルをアップロードします",
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
@@ -449,20 +403,11 @@ with st.sidebar:
 
     if uploaded_json is not None:
         logger.info(f"JSONファイルがアップロードされました: {uploaded_json.name}")
-        # アップロードされたJSONファイルを読み込む
         content = uploaded_json.getvalue().decode("utf-8")
 
-        # 新しいメソッドを使用して履歴を適用
         if st.button("インポートした履歴を適用", disabled=st.session_state.is_sending_message):
             logger.info("履歴インポート適用ボタンがクリックされました")
-            # ChatManagerに追加した新しいメソッドを呼び出す
-            if hasattr(st.session_state.chat_manager, 'apply_imported_history'):
-                success = st.session_state.chat_manager.apply_imported_history(content)
-            else:
-                # 新しいメソッドがない場合は従来のメソッドを使用
-                logger.warning("apply_imported_history メソッドが見つかりません。load_from_json を使用します")
-                success = st.session_state.chat_manager.load_from_json(content)
-
+            success = st.session_state.chat_manager.apply_imported_history(content)
             if success:
                 logger.info("メッセージ履歴のインポートに成功しました")
                 st.success("メッセージ履歴を正常にインポートしました")
@@ -474,10 +419,12 @@ with st.sidebar:
 # 処理中ステータス表示エリア
 status_area = st.empty()
 
+
 # チャット履歴の表示
 for message in st.session_state.chat_manager.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
+
 
 # 添付ファイル一覧を表示
 if st.session_state.chat_manager.attachments:
@@ -528,28 +475,45 @@ if st.session_state.chat_manager.attachments:
                         st.session_state.chat_manager.attachments.pop(idx)
                         st.rerun()
 
-# メッセージ処理中の表示を入力欄の直前に移動
-if st.session_state.is_sending_message:
-    with st.container():
-        # CSSを挿入
-        st.markdown(circle_spinner_css, unsafe_allow_html=True)
+with st.container():
+    cols = st.columns([3, 2, 3])
+    with cols[0]:
+        if st.button("チャットクリア",
+                    disabled=st.session_state.is_sending_message,
+                    use_container_width=True,
+                    key="clear_chat_history_button"):
+            st.session_state.chat_manager = ChatManager()
+            reset_file_uploader()
+            st.rerun()
 
-        # 円形のスピナーとメッセージを表示
-        st.markdown(f"""
-        <div class="spinner-container">
-            <div class="spinner"></div>
-            <div class="spinner-text">{st.session_state.status_message}</div>
-        </div>
-        """, unsafe_allow_html=True)
+    with cols[2]:
+        if st.button("チャット保存",
+                    disabled=st.session_state.is_sending_message,
+                    use_container_width=True,
+                    key="export_chat_history_button"):
 
-# サポートするファイル形式を定義
-supported_extensions = ["pdf", "xlsx", "xls", "docx", "pptx", "txt", "csv", "json", "md", "html"]
-uploaded_file = st.file_uploader(
-    "ファイルをアップロード",
-    type=supported_extensions,
-    key=st.session_state.file_uploader_key,
-    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-)
+            if not st.session_state.chat_manager.messages:
+                st.warning("保存するメッセージ履歴がありません")
+            else:
+                chat_history = st.session_state.chat_manager.to_json()
+                st.download_button(
+                    label="JSONファイルをダウンロード",
+                    data=chat_history,
+                    file_name="chat_history.json",
+                    mime="application/json",
+                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+                )
+                logger.info("メッセージ履歴のJSONエクスポートを準備しました")
+
+    # サポートするファイル形式を定義 (完全に効いてない)
+    supported_extensions = ["pdf", "xlsx", "xls", "docx", "pptx", "txt", "csv", "json", "md", "html"]
+    uploaded_file = st.file_uploader(
+        "ファイルをアップロード",
+        type=supported_extensions,
+        key=st.session_state.file_uploader_key,
+        disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+    )
+
 
 # ファイル処理
 if uploaded_file is not None:
@@ -626,7 +590,6 @@ prompt = st.chat_input(
     disabled=st.session_state.is_sending_message
 )
 
-# 新しいメッセージが入力された場合の処理
 if prompt:
     # メッセージ長チェック
     would_exceed, estimated_length, max_length = st.session_state.chat_manager.would_exceed_message_length(
@@ -655,7 +618,19 @@ if prompt:
         st.session_state.status_message = "メッセージを処理中..."
         st.rerun()  # 状態を更新してUIを再描画
 
-# メッセージ送信処理
+if st.session_state.is_sending_message:
+    with st.container():
+        st.markdown(circle_spinner_css, unsafe_allow_html=True)
+
+        # 円形のスピナーとメッセージを表示
+        st.markdown(f"""
+        <div class="spinner-container">
+            <div class="spinner"></div>
+            <div class="spinner-text">{st.session_state.status_message}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
 if st.session_state.is_sending_message and st.session_state.chat_manager.messages and \
         st.session_state.chat_manager.messages[-1]["role"] != "assistant":
     try:
@@ -709,7 +684,7 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
         # AIからの応答を取得
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            message_placeholder.markdown("_応答を生成中..._")
+            full_response = ""
 
             try:
                 # クライアントインスタンスが存在しない場合は初期化
@@ -729,14 +704,16 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
                     messages=messages_for_api,
                     stream=True
                 )
+
                 # ストリーミング応答をリアルタイムで処理
                 full_response = ""
+                message_placeholder.markdown("_応答を生成中..._")
+
                 for chunk in response:
                     if chunk.choices and len(chunk.choices) > 0:
                         delta = chunk.choices[0].delta
                         if hasattr(delta, 'content') and delta.content:
                             full_response += delta.content
-                            # リアルタイムで表示を更新
                             message_placeholder.markdown(full_response)
 
                 # 応答をメッセージ履歴に追加
@@ -752,7 +729,9 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
     except Exception as e:
         st.error(f"エラーが発生しました: {str(e)}")
 
-    # 処理完了後にフラグをOFF
     st.session_state.is_sending_message = False
-    st.rerun()  # 状態を更新してUIを再描画
     st.session_state.status_message = "処理完了"
+    st.rerun()
+
+
+
