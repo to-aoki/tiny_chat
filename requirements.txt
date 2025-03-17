@@ -4,4 +4,4 @@ python-docx
 python-pptx
 beautifulsoup4
 openai
-streamlit
+streamlit>=v1.43.2
