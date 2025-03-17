@@ -1,6 +1,5 @@
 import os
 import logging
-
 import streamlit as st
 
 from config_manager import Config, ModelManager
@@ -8,10 +7,9 @@ from file_processor import URIProcessor, FileProcessorFactory
 from chat_manager import ChatManager
 from logger import get_logger
 from llm_utils import get_llm_client
-
 from sidebar import sidebar
-from spinner import spinner
-
+from wait_view import spinner
+from copy_botton import copy_button
 
 LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
 st.set_page_config(page_title="チャット", layout="wide")
@@ -87,7 +85,6 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
 
 initialize_session_state(config_file_path=CONFIG_FILE)
 
-
 # サイドバー
 sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
 
@@ -95,10 +92,12 @@ sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
 status_area = st.empty()
 
 # チャット履歴の表示
-for message in st.session_state.chat_manager.messages:
+for i, message in enumerate(st.session_state.chat_manager.messages):
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
+        if message["role"] == "assistant":
+            copy_button(message["content"])
 
 # 添付ファイル一覧を表示
 if st.session_state.chat_manager.attachments:
@@ -109,7 +108,7 @@ if st.session_state.chat_manager.attachments:
                 filename = attachment['filename']
                 _, ext = os.path.splitext(filename)
 
-                # ファイルタイプの判定をシンプルに
+                # ファイルタイプと表示単位
                 file_types = {
                     '.pdf': ("PDF", "ページ"),
                     '.xlsx': ("Excel", "シート"),
@@ -123,7 +122,6 @@ if st.session_state.chat_manager.attachments:
                     '.html': ("HTML", ""),
                 }
 
-                # デフォルト値の設定
                 file_type = "ファイル"
                 count_type = ""
 
@@ -138,7 +136,6 @@ if st.session_state.chat_manager.attachments:
 
                 st.text(f"{idx + 1}. [{file_type}] {filename} {count_text}")
                 LOGGER.debug(f"添付ファイル表示: {filename} {count_text}")
-
 
 with st.container():
     cols = st.columns([3, 2, 3])
@@ -179,7 +176,6 @@ prompt = st.chat_input(
     accept_file=True,
     file_type=["pdf", "xlsx", "xls", "docx", "pptx", "txt", "csv", "json", "md", "html"],
 )
-
 
 if prompt:
 
@@ -269,7 +265,6 @@ if prompt:
         st.session_state.status_message = "メッセージを処理中..."
         st.rerun()  # 状態を更新してUIを再描画
 
-
 if st.session_state.is_sending_message:
     # 処理待機用描画
     spinner()
@@ -309,7 +304,7 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
                 st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
 
         # 処理ステータスを更新
-        st.session_state.status_message = "LLMからの応答を生成中..."
+        st.session_state.status_message = "LLMにプロンプトを入力中..."
 
         messages_for_api = st.session_state.chat_manager.prepare_messages_for_api(
             st.session_state.config["meta_prompt"])
@@ -346,7 +341,7 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
 
                 # ストリーミング応答をリアルタイムで処理
                 full_response = ""
-                message_placeholder.markdown("_応答を生成中..._")
+                message_placeholder.markdown("応答を生成中..._")
 
                 for chunk in response:
                     if chunk.choices and len(chunk.choices) > 0:
@@ -354,6 +349,8 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
                         if hasattr(delta, 'content') and delta.content:
                             full_response += delta.content
                             message_placeholder.markdown(full_response)
+
+                message_placeholder.markdown(full_response)
 
                 # 応答をメッセージ履歴に追加
                 st.session_state.chat_manager.add_assistant_message(full_response)
@@ -371,6 +368,3 @@ if st.session_state.is_sending_message and st.session_state.chat_manager.message
     st.session_state.is_sending_message = False
     st.session_state.status_message = "処理完了"
     st.rerun()
-
-
-

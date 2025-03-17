@@ -6,7 +6,7 @@ from llm_utils import get_llm_client
 
 def sidebar(config_file_path, logger):
     with st.sidebar:
-        st.header("API設定")
+        st.header("設定")
 
         # モデル選択または入力
         # APIに接続できる場合はドロップダウンリストを表示し、できない場合はテキスト入力欄を表示
