@@ -83,7 +83,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
             st.session_state.openai_client = None
 
 
-initialize_session_state(config_file_path=CONFIG_FILE)
+initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
 
 # サイドバー
 sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
@@ -95,7 +95,6 @@ status_area = st.empty()
 for i, message in enumerate(st.session_state.chat_manager.messages):
     with st.chat_message(message["role"]):
         st.write(message["content"])
-
         if message["role"] == "assistant":
             copy_button(message["content"])
 
@@ -149,24 +148,26 @@ with st.container():
             st.rerun()
 
     with cols[2]:
-        if st.button(
-                "チャット保存",
-                disabled=st.session_state.is_sending_message,
-                use_container_width=True,
-                key="export_chat_history_button"):
-
-            if not st.session_state.chat_manager.messages:
+        # チャット履歴がある場合はダウンロードボタンを表示、なければ通常ボタンを表示
+        if not st.session_state.chat_manager.messages:
+            if st.button(
+                    "チャット保存",
+                    disabled=st.session_state.is_sending_message,
+                    use_container_width=True,
+                    key="export_chat_history_button"):
                 st.warning("保存するメッセージ履歴がありません")
-            else:
-                chat_history = st.session_state.chat_manager.to_json()
-                st.download_button(
-                    label="JSONファイルをダウンロード",
-                    data=chat_history,
-                    file_name="chat_history.json",
-                    mime="application/json",
-                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-                )
-                LOGGER.info("メッセージ履歴のJSONエクスポートを準備しました")
+        else:
+            chat_history = st.session_state.chat_manager.to_json()
+            st.download_button(
+                label="チャット保存",
+                data=chat_history,
+                file_name="chat_history.json",
+                mime="application/json",
+                disabled=st.session_state.is_sending_message,  # メッセージ送信中は無効化
+                use_container_width=True,
+                key="export_chat_history_button"
+            )
+            LOGGER.info("メッセージ履歴のJSONエクスポート機能を提供しました")
 
 # ユーザー入力
 # 添付ファイルは streamlit v1.43.2 以降

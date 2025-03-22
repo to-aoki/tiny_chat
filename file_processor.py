@@ -450,4 +450,4 @@ class URIProcessor:
             return extract_text, message
 
         except Exception as e:
-            return None, f"エラーが発生しました: {str(e)}"
+            return None, f"URLコンテンツ取得中にエラーが発生しました: {str(e)}"
