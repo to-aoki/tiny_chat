@@ -1,0 +1,6 @@
+include LICENSE
+include requirements.txt
+include *.py
+recursive-exclude img *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[cod]
