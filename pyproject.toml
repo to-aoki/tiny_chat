@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tiny-chat"
+version = "0.1.0"
+description = "A simple chat application"
+authors = [
+    { name = "Toshihiko Aoki" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "streamlit>=1.24.0",
+    "openai>=0.27.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/to-aoki/tiny_chat"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tiny_chat"]
+
+[project.scripts]
+tiny-chat = "tiny_chat:main"
