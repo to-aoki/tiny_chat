@@ -4,7 +4,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models.models import QueryResponse
 from bm25_text_embedding import BM25TextEmbedding
-from static_emb_ja import StaticEmbeddingJapanese
+from static_embedding import StaticEmbedding
 from text_chunk import TextChunker
 
 class QdrantManager:
@@ -16,8 +16,8 @@ class QdrantManager:
                  collection_name: str = "documents",
                  path: str = "./qdrant_data",
                  host: Optional[str] = None,
-                 port: Optional[int] = 6333,
-                 use_uuid: bool = True):
+                 port: Optional[int] = 6333
+    ):
         """
         QdrantManagerの初期化
 
@@ -29,14 +29,16 @@ class QdrantManager:
             use_uuid: IDタイプとしてUUIDを使用するかどうか（Falseの場合は文字列IDを使用）
         """
         self.collection_name = collection_name
-        self.use_uuid = use_uuid
         
         # BM25とStaticEmbeddingJapaneseモデルの初期化
         self.bm25_model = BM25TextEmbedding()
-        self.sej_model = StaticEmbeddingJapanese()
+        self.static_emb_model = StaticEmbedding()
         
         # TextChunkerの初期化
-        self.chunker = TextChunker(chunk_size=1024, chunk_overlap=24)
+        self.chunker = TextChunker(
+            chunk_size=self.static_emb_model.dimension,
+            chunk_overlap=24
+        )
         
         # ベクトルフィールド名の設定
         self.sparse_vector_field_name = "sparse"
@@ -64,7 +66,7 @@ class QdrantManager:
                 collection_name=self.collection_name,
                 vectors_config={
                     self.dense_vector_field_name: models.VectorParams(
-                        size=1024,
+                        size=self.static_emb_model.dimension,
                         distance=models.Distance.COSINE,
                     )
                 },
@@ -223,7 +225,7 @@ class QdrantManager:
                 
                 # BM25とStaticEmbeddingJapaneseを使用してチャンクをベクトル化
                 sparse_embedding = list(self.bm25_model.embed(chunk))[0]
-                dense_embedding = list(self.sej_model.embed(chunk))[0]
+                dense_embedding = list(self.static_emb_model.embed(chunk))[0]
                 
                 # Qdrantポイントの作成
                 point = models.PointStruct(
@@ -272,7 +274,7 @@ class QdrantManager:
         """
         # BM25とStaticEmbeddingJapaneseを使用してクエリをベクトル化
         sparse_embedding = list(self.bm25_model.query_embed(query))[0]
-        dense_embedding = list(self.sej_model.query_embed(query))[0]
+        dense_embedding = list(self.static_emb_model.query_embed(query))[0]
 
         # 検索フィルタを作成
         search_filter = None
@@ -446,8 +448,11 @@ class QdrantManager:
 
 if __name__ == "__main__":
     # テスト用のインスタンス作成
+    import time
+    start_time = time.time()
     manager = QdrantManager(collection_name="test-hybrid", path="./qdrant_test_data")
-    
+    print(f"初期化時間: {time.time() - start_time:.4f}秒")
+
     # テスト用の文書とメタデータを作成
     documents = [
         "東京は日本の首都で、人口が最も多い都市です。多くの観光名所や企業の本社があります。",
@@ -466,7 +471,9 @@ if __name__ == "__main__":
     ]
     
     print("=== 文書の追加 ===")
+    start_time = time.time()
     ids = manager.add_documents(documents, metadata_list)
+    print(f"ドキュメント追加時間: {time.time() - start_time:.4f}秒")
     print(f"追加された文書ID: {ids}")
     print(f"コレクション内の文書数: {manager.count_documents()}")
     
@@ -481,6 +488,7 @@ if __name__ == "__main__":
     
     for query in queries:
         print(f"\nクエリ: {query}")
+        start_time = time.time()
         results = manager.query_points(query, top_k=2)
         
         print(f"検索結果（上位{len(results)}件）:")
