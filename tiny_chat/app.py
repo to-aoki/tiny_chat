@@ -258,41 +258,6 @@ initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
 # サイドバー
 sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
 
-# 検索用サイドバー設定
-st.sidebar.title("検索")
-
-# コレクション名の選択（サイドバーに表示）
-# Qdrantデータディレクトリからコレクション一覧を取得
-collections_path = os.path.join("./qdrant_data", "collection")
-available_collections = []
-if os.path.exists(collections_path):
-    available_collections = [d for d in os.listdir(collections_path) if os.path.isdir(os.path.join(collections_path, d))]
-
-# コレクションがなければデフォルトのものを表示
-if not available_collections:
-    available_collections = [st.session_state.manager.collection_name]
-
-
-# コレクション選択UIをサイドバーに配置
-st.sidebar.markdown('<p class="small-font">コレクション選択</p>', unsafe_allow_html=True)
-search_collection = st.sidebar.selectbox(
-    "コレクション",  # 空のラベルから有効なラベルに変更
-    available_collections,
-    index=available_collections.index(st.session_state.manager.collection_name) if st.session_state.manager.collection_name in available_collections else 0,
-    label_visibility="collapsed"  # ラベルを視覚的に非表示にする
-)
-
-# 選択されたコレクションに切り替え
-if search_collection != st.session_state.manager.collection_name:
-    st.session_state.manager.get_collection(search_collection)
-
-# サイドバーに現在のコレクション情報を表示
-doc_count = st.session_state.manager.count_documents()
-st.sidebar.markdown('<p class="small-font">現在のコレクション</p>', unsafe_allow_html=True)
-st.sidebar.code(st.session_state.manager.collection_name)
-st.sidebar.markdown('<p class="small-font">登録ドキュメント数</p>', unsafe_allow_html=True)
-st.sidebar.code(f"{doc_count}")
-
 # タブの作成
 tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
