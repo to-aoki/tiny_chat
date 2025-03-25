@@ -4,7 +4,7 @@ from sentence_transformers.util import cos_sim
 from fastembed.common.types import NumpyArray
 
 
-class StaticEmbeddingJapanese:
+class StaticEmbedding:
     """
     A text embedding class using a Japanese static embedding model.
     This class wraps the SentenceTransformer model to provide a consistent interface
@@ -18,14 +18,20 @@ class StaticEmbeddingJapanese:
         **kwargs
     ):
         """
-        Initialize the StaticEmbeddingJapanese with a specific model.
+        Initialize the StaticEmbedding with a specific model.
 
         Args:
             model_name (str): Name of the model to use.
             device (str): Device to use for computation ('cpu' or 'cuda').
             **kwargs: Additional arguments to pass to SentenceTransformer.
         """
-        self.model = SentenceTransformer(model_name, device=device, **kwargs)
+
+        self.model = SentenceTransformer(
+            model_name,
+            # backend="onnx",
+            # model_kwargs={"file_name": "onnx/model_int8.onnx"},
+            device=device, **kwargs
+        )
         self.dimension = self.model.get_sentence_embedding_dimension()
 
     def _ensure_list(self, documents: Union[str, Iterable[str]]) -> list[str]:
@@ -138,12 +144,12 @@ if __name__ == "__main__":
         "駅前にある古い建物の中のイタリアンレストランは、本格的なパスタが食べられると評判です。",
     ]
     
-    print("=== StaticEmbeddingJapanese のテスト ===")
+    print("=== StaticEmbedding のテスト ===")
     
     # 1. クラスの初期化
     print("\n1. クラスの初期化")
     start_time = time.time()
-    embedding = StaticEmbeddingJapanese()
+    embedding = StaticEmbedding()
     print(f"初期化時間: {time.time() - start_time:.4f}秒")
     print(f"埋め込みの次元数: {embedding.dimension}")
     
