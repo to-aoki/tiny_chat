@@ -7,7 +7,6 @@ openai
 streamlit>=v1.43.2
 sentence-transformers
 fugashi
-sentencepiece
 unidic-lite
 qdrant-client
 sudachidict_core

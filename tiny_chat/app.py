@@ -276,9 +276,10 @@ if not available_collections:
 # コレクション選択UIをサイドバーに配置
 st.sidebar.markdown('<p class="small-font">コレクション選択</p>', unsafe_allow_html=True)
 search_collection = st.sidebar.selectbox(
-    "",  # ラベルを空にする
+    "コレクション",  # 空のラベルから有効なラベルに変更
     available_collections,
-    index=available_collections.index(st.session_state.manager.collection_name) if st.session_state.manager.collection_name in available_collections else 0
+    index=available_collections.index(st.session_state.manager.collection_name) if st.session_state.manager.collection_name in available_collections else 0,
+    label_visibility="collapsed"  # ラベルを視覚的に非表示にする
 )
 
 # 選択されたコレクションに切り替え
@@ -502,8 +503,14 @@ with tabs[0]:
                 uri_processor = URIProcessor()
                 detects_urls = uri_processor.detect_uri(prompt_content)
 
-            # 拡張プロンプトを生成
-            if st.session_state.chat_manager.attachments or len(detects_urls) > 0:
+            # この部分は不要になりました (既に上で処理されています)
+
+            # 処理ステータスを更新
+            st.session_state.status_message = "LLMにプロンプトを入力中..."
+            
+            # 拡張プロンプトの取得
+            enhanced_prompt = None
+            if st.session_state.chat_manager.attachments or (st.session_state.config["uri_processing"] and len(detects_urls) > 0):
                 # 処理ステータスを更新
                 if st.session_state.chat_manager.attachments:
                     st.session_state.status_message = "添付ファイルの内容を解析中..."
@@ -514,14 +521,33 @@ with tabs[0]:
                 enhanced_prompt = st.session_state.chat_manager.get_enhanced_prompt(
                     prompt_content,
                     max_length=st.session_state.config["context_length"],
-                    uri_processor=uri_processor
+                    uri_processor=uri_processor if st.session_state.config["uri_processing"] else None
                 )
-                if enhanced_prompt:
-                    # 拡張プロンプトで最後のユーザーメッセージを更新
-                    st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
-
-            # 処理ステータスを更新
-            st.session_state.status_message = "LLMにプロンプトを入力中..."
+            
+            # RAGモードが有効な場合、検索を実行
+            if st.session_state.rag_mode:
+                st.session_state.status_message = "関連文書を検索中..."
+                # 最新のユーザーメッセージで検索
+                search_results = search_documents(prompt_content, top_k=5)
+                
+                if search_results:
+                    # 検索結果を整形
+                    search_context = "以下は検索システムから取得した関連情報です:\n\n"
+                    for i, result in enumerate(search_results):
+                        search_context += f"[{i+1}] {result.payload.get('filename', '文書')}:\n"
+                        search_context += f"{result.payload.get('text', '')[:1000]}\n\n"
+                    
+                    # 検索結果を含めた拡張プロンプトを作成
+                    if enhanced_prompt:
+                        enhanced_prompt += f"\n\n{search_context}"
+                    else:
+                        enhanced_prompt = prompt_content + f"\n\n{search_context}"
+                    
+                    st.session_state.status_message = "検索結果を追加しました。LLMにプロンプトを入力中..."
+            
+            # 拡張プロンプトがあれば更新
+            if enhanced_prompt:
+                st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
 
             messages_for_api = st.session_state.chat_manager.prepare_messages_for_api(
                 st.session_state.config["meta_prompt"])
