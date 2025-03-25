@@ -354,6 +354,17 @@ class QdrantManager:
         # 新しいquery_pointsメソッドを使用
         return self.query_points(query, top_k, filter_params)
 
+    def get_collections(self) -> List[str]:
+        """
+        利用可能なコレクション一覧を取得する
+
+        Returns:
+            List[str]: コレクション名のリスト
+        """
+        collections = self.client.get_collections().collections
+        collection_names = [c.name for c in collections]
+        return sorted(collection_names)
+        
     def get_sources(self, limit=10000) -> List[str]:
         """
         データベース内のすべての参照元（ソース）を取得する
@@ -399,6 +410,40 @@ class QdrantManager:
         """
         collection_info = self.client.get_collection(collection_name=self.collection_name)
         return collection_info.points_count
+        
+    def delete_collection(self, collection_name: str = None) -> bool:
+        """
+        コレクションを削除する
+
+        Args:
+            collection_name: 削除するコレクション名 (Noneの場合は現在のコレクションを削除)
+
+        Returns:
+            bool: 削除に成功したかどうか
+        """
+        if collection_name is None:
+            collection_name = self.collection_name
+            
+        try:
+            # コレクションが存在するか確認
+            collections = self.client.get_collections().collections
+            collection_names = [c.name for c in collections]
+            
+            if collection_name not in collection_names:
+                return False  # 削除対象のコレクションが存在しない
+                
+            # コレクションを削除
+            self.client.delete_collection(collection_name=collection_name)
+            
+            # 削除後、現在のコレクション名が一致する場合はデフォルトに戻す
+            if self.collection_name == collection_name:
+                self.collection_name = "default"
+                self._ensure_collection_exists()
+                
+            return True
+        except Exception as e:
+            print(f"コレクション削除エラー: {str(e)}")
+            return False
 
     def delete_by_filter(self, filter_params: Dict[str, Any]) -> int:
         """
