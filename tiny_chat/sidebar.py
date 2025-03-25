@@ -1,5 +1,6 @@
 import streamlit as st
 
+import os
 from config_manager import Config, ModelManager
 from llm_utils import get_llm_client
 
@@ -97,7 +98,7 @@ def sidebar(config_file_path, logger):
         )
 
         uri_processing = st.checkbox(
-            "メッセージURLコンテンツ取得",
+            "メッセージURL取得",
             value=st.session_state.config["uri_processing"],
             help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
             disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
@@ -287,3 +288,36 @@ def sidebar(config_file_path, logger):
                 else:
                     logger.error("メッセージ履歴のインポートに失敗しました: 無効なフォーマット")
                     st.error("JSONのインポートに失敗しました: 無効なフォーマットです")
+
+        # 検索用サイドバー設定
+        st.sidebar.markdown("検索")
+
+        # コレクション名の選択（サイドバーに表示）
+        # Qdrantデータディレクトリからコレクション一覧を取得
+        collections_path = os.path.join("./qdrant_data", "collection")
+        available_collections = []
+        if os.path.exists(collections_path):
+            available_collections = [d for d in os.listdir(collections_path) if os.path.isdir(os.path.join(collections_path, d))]
+
+        # コレクションがなければデフォルトのものを表示
+        if not available_collections:
+            available_collections = [st.session_state.manager.collection_name]
+
+        st.markdown("コレクション選択", help="Qdrantデータベースで利用するコレクション（DB空間）を選択します")
+        search_collection = st.sidebar.selectbox(
+            "コレクション",  # 空のラベルから有効なラベルに変更
+            available_collections,
+            index=available_collections.index(
+                st.session_state.manager.collection_name
+            ) if st.session_state.manager.collection_name in available_collections else 0,
+            label_visibility="collapsed",  # ラベルを視覚的に非表示にする
+            disabled=st.session_state.is_sending_message
+        )
+
+        # 選択されたコレクションに切り替え
+        if search_collection != st.session_state.manager.collection_name:
+            st.session_state.manager.get_collection(search_collection)
+
+        # サイドバーに現在のコレクション情報を表示
+        doc_count = st.session_state.manager.count_documents()
+        st.sidebar.code(f"登録ドキュメント数: {doc_count}")
