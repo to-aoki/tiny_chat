@@ -13,7 +13,7 @@ class Config:
             api_key: str = "dummy-key",
             selected_model: str = "hf.co/mmnga/llm-jp-3-980m-instruct3-gguf:Q4_K_M",
             meta_prompt: str = "",
-            message_length: int = 4000,
+            message_length: int = 8000,
             context_length: int = 1000,
             uri_processing: bool = True,
             is_azure: bool = False

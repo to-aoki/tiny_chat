@@ -361,7 +361,7 @@ def show_chat_component(logger):
                     for i, result in enumerate(search_results):
                         filename = result.payload.get('filename', '文書')
                         source = result.payload.get('source', '')
-                        text = result.payload.get('text', '')[:1000]  # テキスト内容を取得
+                        text = result.payload.get('text', '')[:st.session_state.config["context_length"]]  # テキスト内容を取得
 
                         # 参照情報を保存
                         source_info = {
