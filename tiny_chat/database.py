@@ -6,10 +6,13 @@ import streamlit as st
 import pandas as pd
 from file_processor import FileProcessorFactory
 
+# プロセスレベルでQdrantManagerインスタンスを保持するためのグローバル変数
+_qdrant_manager = None
 
 def get_or_create_qdrant_manager(logger=None):
     """
     QdrantManagerを取得または初期化する共通関数
+    プロセスレベルで一つのインスタンスを共有するよう修正
 
     Args:
         logger: ロガーオブジェクト（オプション）
@@ -17,20 +20,22 @@ def get_or_create_qdrant_manager(logger=None):
     Returns:
         QdrantManager: 初期化されたQdrantManagerオブジェクト
     """
+    global _qdrant_manager
     from qdrant_manager import QdrantManager
 
-    # QdrantManagerがまだ初期化されていない場合は初期化
-    if 'manager' not in st.session_state or st.session_state.manager is None:
+    # プロセスレベルでQdrantManagerがまだ初期化されていない場合は初期化
+    if _qdrant_manager is None:
         with st.spinner("検索データベースを初期化中..."):
             if logger:
                 logger.info("QdrantManagerを初期化しています...")
-            st.session_state.manager = QdrantManager(
+            _qdrant_manager = QdrantManager(
                 collection_name="default",
                 path="./qdrant_data"
             )
             if logger:
                 logger.info("QdrantManagerの初期化が完了しました")
-    return st.session_state.manager
+    
+    return _qdrant_manager
 
 
 def process_file(file_path: str) -> Tuple[str, Dict[str, Any]]:
@@ -163,6 +168,9 @@ def add_files_to_qdrant(texts: List[str], metadatas: List[Dict]) -> List[str]:
     Returns:
         added_ids: 追加されたドキュメントのIDリスト
     """
+    # QdrantManagerを取得
+    manager = get_or_create_qdrant_manager()
+    
     # ソース（ファイル名）の一覧を取得
     sources_to_add = set()
     for metadata in metadatas:
@@ -170,15 +178,15 @@ def add_files_to_qdrant(texts: List[str], metadatas: List[Dict]) -> List[str]:
             sources_to_add.add(metadata["source"])
     
     # 既存のソースと照合し、重複があれば削除
-    existing_sources = st.session_state.manager.get_sources()
+    existing_sources = manager.get_sources()
     for source in sources_to_add:
         if source in existing_sources:
             # ソースに関連するデータを削除
             filter_params = {"source": source}
-            st.session_state.manager.delete_by_filter(filter_params)
+            manager.delete_by_filter(filter_params)
     
     # 新しいデータを追加
-    added_ids = st.session_state.manager.add_documents(texts, metadatas)
+    added_ids = manager.add_documents(texts, metadatas)
     return added_ids
 
 
@@ -205,7 +213,8 @@ def show_database_component(
     # 検索と文書登録のタブを作成
     search_tabs = st.tabs(["🔍 検索", "📁 登録", "🗑️ 削除"])
 
-    _ = get_or_create_qdrant_manager(logger)
+    # QdrantManagerを取得（必要に応じて初期化）
+    manager = get_or_create_qdrant_manager(logger)
 
     # 検索タブ
     with search_tabs[0]:
@@ -221,7 +230,7 @@ def show_database_component(
 
             with col2:
                 # 使用可能なソースを取得
-                sources = st.session_state.manager.get_sources()
+                sources = manager.get_sources()
                 selected_sources = st.multiselect("ソースでフィルタ", options=sources)
 
         # 検索ボタン
@@ -266,7 +275,7 @@ def show_database_component(
         # コレクション名の入力
         collection_name = st.text_input(
             "コレクション名",
-            value=st.session_state.manager.collection_name,
+            value=manager.collection_name,
             help="データを登録するコレクション名を指定します。新しいコレクション名を指定すると自動的に作成されます。"
         )
 
@@ -326,9 +335,9 @@ def show_database_component(
 
                         if texts:
                             # コレクション名を設定して処理
-                            if collection_name != st.session_state.manager.collection_name:
+                            if collection_name != manager.collection_name:
                                 # コレクションを取得または作成
-                                st.session_state.manager.get_collection(collection_name)
+                                manager.get_collection(collection_name)
 
                             # Qdrantに追加
                             added_ids = add_files_to_qdrant(texts, metadatas)
@@ -391,9 +400,9 @@ def show_database_component(
                                         metadata["source"] = custom_path
 
                             # コレクション名を設定して処理
-                            if collection_name != st.session_state.manager.collection_name:
+                            if collection_name != manager.collection_name:
                                 # コレクションを取得または作成
-                                st.session_state.manager.get_collection(collection_name)
+                                manager.get_collection(collection_name)
 
                             # Qdrantに追加
                             added_ids = add_files_to_qdrant(texts, metadatas)
@@ -422,13 +431,13 @@ def show_database_component(
             # コレクション名の入力
             collection_name = st.text_input(
                 "コレクション名",
-                value=st.session_state.manager.collection_name,
+                value=manager.collection_name,
                 help="操作対象のコレクション名を指定します。",
                 key="data_management_collection"
             )
 
             # 使用可能なソースを取得
-            sources = st.session_state.manager.get_sources()
+            sources = manager.get_sources()
 
             if not sources:
                 st.warning("データベースにソースが見つかりません。先にファイルを登録してください。")
@@ -470,12 +479,12 @@ def show_database_component(
                         with st.spinner(f"ソース '{selected_source}' のチャンクを削除中..."):
                             try:
                                 # コレクション名を設定
-                                if collection_name != st.session_state.manager.collection_name:
-                                    st.session_state.manager.get_collection(collection_name)
+                                if collection_name != manager.collection_name:
+                                    manager.get_collection(collection_name)
 
                                 # ソースでフィルタリングして削除
                                 filter_params = {"source": selected_source}
-                                operation_id = st.session_state.manager.delete_by_filter(filter_params)
+                                operation_id = manager.delete_by_filter(filter_params)
 
                                 if operation_id:
                                     st.success(
@@ -491,7 +500,7 @@ def show_database_component(
         with data_management_tabs[1]:
 
             # 利用可能なコレクション一覧を取得
-            collections = st.session_state.manager.get_collections()
+            collections = manager.get_collections()
 
             if not collections:
                 st.warning("データベースにコレクションが見つかりません。")
@@ -504,11 +513,11 @@ def show_database_component(
                 for col_name in collections:
                     try:
                         # 現在のコレクションを一時的に変更
-                        original_collection = st.session_state.manager.collection_name
-                        st.session_state.manager.collection_name = col_name
+                        original_collection = manager.collection_name
+                        manager.collection_name = col_name
 
                         # 文書数を取得
-                        doc_count = st.session_state.manager.count_documents()
+                        doc_count = manager.count_documents()
 
                         # コレクションに関する情報を収集
                         collection_infos.append({
@@ -518,13 +527,13 @@ def show_database_component(
                         })
 
                         # 元のコレクション名に戻す
-                        st.session_state.manager.collection_name = original_collection
+                        manager.collection_name = original_collection
                     except Exception as e:
                         logger.error(f"コレクション情報取得エラー ({col_name}): {str(e)}")
                         collection_infos.append({
                             "name": col_name,
                             "doc_count": "エラー",
-                            "is_current": col_name == st.session_state.manager.collection_name
+                            "is_current": col_name == manager.collection_name
                         })
 
                 # 表形式で表示
@@ -579,7 +588,7 @@ def show_database_component(
                             with st.spinner(f"コレクション '{selected_collection}' を削除中..."):
                                 try:
                                     # コレクションを削除
-                                    success = st.session_state.manager.delete_collection(selected_collection)
+                                    success = manager.delete_collection(selected_collection)
 
                                     if success:
                                         st.success(f"コレクション '{selected_collection}' の削除が完了しました")
