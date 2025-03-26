@@ -40,7 +40,8 @@ def get_or_create_qdrant_manager(logger=None):
                     logger.info("QdrantManagerを初期化しています...")
                 _qdrant_manager = QdrantManager(
                     collection_name="default",
-                    path="./qdrant_data"
+                    # memoryモードを使用してファイルアクセスの競合を避ける
+                    host=None
                 )
                 if logger:
                     logger.info("QdrantManagerの初期化が完了しました")

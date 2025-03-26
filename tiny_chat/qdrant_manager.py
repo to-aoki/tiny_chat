@@ -216,7 +216,6 @@ class QdrantManager:
                 chunk_metadata = metadata.copy()
                 chunk_metadata["chunk_index"] = chunk_idx
                 chunk_metadata["chunk_total"] = len(doc_chunks)
-                chunk_metadata["original_id"] = original_id
                 
                 if "id" in chunk_metadata and chunk_metadata["id"] != point_id:
                     chunk_metadata["parent_id"] = chunk_metadata["id"]
