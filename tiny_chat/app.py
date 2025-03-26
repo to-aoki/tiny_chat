@@ -95,6 +95,10 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
     # RAGモードのフラグ
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
+        
+    # RAG参照ソース情報を保存するリスト
+    if "rag_sources" not in st.session_state:
+        st.session_state.rag_sources = []
 
     # データベースタブが選択されたことを記録するフラグ
     if "database_tab_selected" not in st.session_state:
@@ -357,8 +361,43 @@ with tabs[0]:
                 if search_results:
                     # 検索結果を整形
                     search_context = "以下は検索システムから取得した関連情報です:\n\n"
+                    
+                    # 参照情報をリセット（後でアシスタント出力に表示するため）
+                    st.session_state.rag_sources = []
+                    
+                    # 重複チェック用のソースセット
+                    unique_sources = set()
+
+                    refer = 0
                     for i, result in enumerate(search_results):
-                        search_context += f"[{i+1}] {result.payload.get('filename', '文書')}:\n"
+                        filename = result.payload.get('filename', '文書')
+                        source = result.payload.get('source', '')
+                        
+                        # /tmp/で始まるパスはスキップ（参照情報として表示しない）
+                        if source and source.startswith('/tmp/'):
+                            LOGGER.debug(f"RAG参照情報をスキップ（/tmp/）: [{i+1}] {filename} - {source}")
+                            continue
+                            
+                        # 重複チェック - 既に同じソースが存在する場合はスキップ
+                        if source and source in unique_sources:
+                            LOGGER.debug(f"RAG参照情報をスキップ（重複）: [{i+1}] {filename} - {source}")
+                            continue
+                            
+                        # ユニークなソースを記録（ソースが空でない場合のみ）
+                        if source:
+                            unique_sources.add(source)
+                        
+                        # 参照情報を保存
+                        source_info = {
+                            "index": refer+1,
+                            "filename": filename,
+                            "source": source
+                        }
+                        refer += 1
+                        st.session_state.rag_sources.append(source_info)
+                        LOGGER.debug(f"RAG参照情報を追加: [{i+1}] {filename} - {source}")
+                        
+                        search_context += f"[{i+1}] {filename}:\n"
                         search_context += f"{result.payload.get('text', '')[:1000]}\n\n"
                     
                     # 検索結果を含めた拡張プロンプトを作成
@@ -417,13 +456,55 @@ with tabs[0]:
                                 full_response += delta.content
                                 message_placeholder.markdown(full_response)
 
-                    message_placeholder.markdown(full_response)
+                    # RAGモードで検索結果がある場合、参照情報を追加
+                    final_response = full_response
+                    if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources:
+                        # 参照情報を表示用に整形
+                        sources_md = "\n\n---\n**参照情報:**\n"
+                        for source in st.session_state.rag_sources:
+                            # ソースパスを表示用テキストとリンク先URLに分ける
+                            source_path = source["source"]
+                            filename = source["filename"]
 
-                    # 応答をメッセージ履歴に追加
-                    st.session_state.chat_manager.add_assistant_message(full_response)
+                            # URLの処理
+                            # - httpで始まる場合は、そのままURLとして使用
+                            # - それ以外の場合は、file://プロトコルを付加（絶対パスの処理に注意）
+                            if source_path:
+                                if source_path.startswith('http'):
+                                    source_url = source_path
+                                else:
+                                    # file://プロトコルの正しい形式：file:///path/to/file（スラッシュ3つ）
+                                    # 絶対パスの場合は先頭の / を維持するために注意
+                                    if source_path.startswith('/'):
+                                        source_url = f"file://{source_path}"  # '/path/to/file' → 'file:///path/to/file'
+                                    else:
+                                        source_url = f"file:///{source_path}"  # 相対パスの場合
+                                    
+                                    # ログに出力（デバッグ用）
+                                    LOGGER.debug(f"リンク変換: {source_path} → {source_url}")
+                            else:
+                                source_url = "#"  # ソースパスが空の場合はハッシュリンク
+                            
+                            # インデックス付きの参照リンクを追加
+                            sources_md += f"- [{source['index']}] [{filename}]({source_url})\n"
+                        
+                        # マークダウンで最終出力を表示（出力＋参照情報）
+                        final_response = full_response + sources_md
+                        message_placeholder.markdown(final_response)
+                        LOGGER.info(f"RAG参照情報を表示しました：{len(st.session_state.rag_sources)}件")
+                    else:
+                        # 通常の出力
+                        message_placeholder.markdown(full_response)
+
+                    # 応答をメッセージ履歴に追加（参照情報を含む）
+                    st.session_state.chat_manager.add_assistant_message(final_response)
 
                     # 送信後に添付ファイルを削除
                     st.session_state.chat_manager.clear_attachments()
+                    
+                    # rag_sourcesをクリア
+                    if "rag_sources" in st.session_state:
+                        st.session_state.rag_sources = []
 
                 except Exception as e:
                     error_message = f"APIエラー: {str(e)}"
