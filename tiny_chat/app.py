@@ -10,8 +10,8 @@ from llm_utils import get_llm_client
 from sidebar import sidebar
 from wait_view import spinner
 from copy_botton import copy_button
-from qdrant_manager import QdrantManager
-from database import show_database_component, search_documents
+# 直接QdrantManagerをインポートするのではなく、database.pyの共通関数を使用
+from database import show_database_component, search_documents, get_or_create_qdrant_manager
 
 
 # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
@@ -92,20 +92,14 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
             st.error(error_msg)
             st.session_state.openai_client = None
     
-    # 検索機能のためのQdrantManagerを初期化
-    if 'manager' not in st.session_state:
-        st.session_state.manager = QdrantManager(
-            collection_name="default",
-            path="./qdrant_data"
-        )
-        logger.info("QdrantManagerを初期化しました")
-        
-    # RAGモードのフラグ
+    # RAGモードのフラグ（遅延ロードのため、QdrantManagerは初期化しない）
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
 
+    # データベースタブが選択されたことを記録するフラグ
+    if "database_tab_selected" not in st.session_state:
+        st.session_state.database_tab_selected = False
 
-# 検索機能のための関数
 
 # セッション状態の初期化
 initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
@@ -119,11 +113,21 @@ tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 # チャット機能タブ
 with tabs[0]:
     # RAGモードのチェックボックス（検索を使用するか）
-    if st.checkbox("RAG (検索システムを利用した回答)", value=st.session_state.rag_mode, key="rag_mode_checkbox"):
-        st.session_state.rag_mode = True
+    use_rag = st.checkbox("RAG (検索システムを利用した回答)", value=st.session_state.rag_mode, key="rag_mode_checkbox")
+    
+    # RAGモードが変更された場合、状態を更新
+    if use_rag != st.session_state.rag_mode:
+        st.session_state.rag_mode = use_rag
+        if use_rag:
+            # RAGモードが有効になった場合、ここでQdrantManagerを初期化
+            st.info("RAGモードがオンになりました。検索システムを初期化しています...")
+            # 共通関数を使用してQdrantManagerを初期化
+            get_or_create_qdrant_manager(LOGGER)
+            st.info("RAGモードがオンです：メッセージ内容で文書を検索し、関連情報を回答に活用します")
+        else:
+            st.info("RAGモードがオフです")
+    elif use_rag:
         st.info("RAGモードがオンです：メッセージ内容で文書を検索し、関連情報を回答に活用します")
-    else:
-        st.session_state.rag_mode = False
     
     # 処理中ステータス表示エリア
     status_area = st.empty()
@@ -347,8 +351,8 @@ with tabs[0]:
             # RAGモードが有効な場合、検索を実行
             if st.session_state.rag_mode:
                 st.session_state.status_message = "関連文書を検索中..."
-                # 最新のユーザーメッセージで検索
-                search_results = search_documents(prompt_content, top_k=5)
+                # 最新のユーザーメッセージで検索（共通関数を使用）
+                search_results = search_documents(prompt_content, top_k=5, logger=LOGGER)
                 
                 if search_results:
                     # 検索結果を整形
@@ -432,5 +436,9 @@ with tabs[0]:
         st.session_state.status_message = "処理完了"
         st.rerun()
 
+# データベース機能タブ
 with tabs[1]:
+    # データベースタブが選択されたことを記録
+    st.session_state.database_tab_selected = True
+    # データベース機能の表示（内部でQdrantManagerを初期化）
     show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
