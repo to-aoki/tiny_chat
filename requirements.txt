@@ -5,11 +5,10 @@ python-pptx
 beautifulsoup4
 openai
 streamlit>=v1.43.2
-sentence-transformers
 fugashi
 unidic-lite
-qdrant-client
+qdrant-client==1.13.3
+fastembed==0.6.0
 sudachidict_core
 sudachipy
-fastembed
 stopwordsiso

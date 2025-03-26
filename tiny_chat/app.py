@@ -91,11 +91,11 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
             logger.error(error_msg)
             st.error(error_msg)
             st.session_state.openai_client = None
-    
+
     # RAGモードのフラグ
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
-        
+
     # RAG参照ソース情報を保存するリスト
     if "rag_sources" not in st.session_state:
         st.session_state.rag_sources = []
@@ -126,7 +126,6 @@ def show_chat_component(logger):
         if use_rag:
             # RAGモードが有効になった場合
             st.info("RAGが有効になりました。データベースを準備しています...")
-            # 必要に応じてQdrantManagerを初期化（プロセスレベルで管理）
             get_or_create_qdrant_manager(logger)
             st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
         else:
@@ -292,10 +291,10 @@ def show_chat_component(logger):
                      f"- 添付ファイルを減らすか\n"
                      f"- サイドバー設定のメッセージ長制限を引き上げてください。")
         else:
-            # ユーザーメッセージを追加
+            # ユーザーメッセージを追加（RAG情報はこの時点ではまだ含まれていない）
             user_message = st.session_state.chat_manager.add_user_message(prompt.text)
 
-            # UIに表示
+            # UIに表示 (UIには元のメッセージだけを表示)
             with st.chat_message("user"):
                 st.write(user_message["content"])
 
@@ -359,37 +358,22 @@ def show_chat_component(logger):
                     # 参照情報をリセット（後でアシスタント出力に表示するため）
                     st.session_state.rag_sources = []
 
-                    # 重複チェック用のソースセット
-                    unique_sources = set()
-
-                    refer = 0
                     for i, result in enumerate(search_results):
                         filename = result.payload.get('filename', '文書')
                         source = result.payload.get('source', '')
-
-                        # /tmp/で始まるパスはスキップ（参照情報として表示しない）
-                        if source and source.startswith('/tmp/'):
-                            continue
-
-                        # 重複チェック - 既に同じソースが存在する場合はスキップ
-                        if source and source in unique_sources:
-                            continue
-
-                        # ユニークなソースを記録（ソースが空でない場合のみ）
-                        if source:
-                            unique_sources.add(source)
+                        text = result.payload.get('text', '')[:1000]  # テキスト内容を取得
 
                         # 参照情報を保存
                         source_info = {
-                            "index": refer + 1,
+                            "index": i + 1,
                             "filename": filename,
-                            "source": source
+                            "source": source,
+                            "text": text  # テキスト内容も保存
                         }
-                        refer += 1
                         st.session_state.rag_sources.append(source_info)
 
                         search_context += f"[{i + 1}] {filename}:\n"
-                        search_context += f"{result.payload.get('text', '')[:1000]}\n\n"
+                        search_context += f"{text}\n\n"
 
                     # 検索結果を含めた拡張プロンプトを作成
                     if enhanced_prompt:
@@ -411,11 +395,22 @@ def show_chat_component(logger):
                 if st.session_state.config["meta_prompt"]:
                     messages_for_api.append({"role": "system", "content": st.session_state.config["meta_prompt"]})
 
-                messages_for_api.append({"role": "user", "content": prompt_content})
+                # 通常メッセージ
+                content_to_send = prompt_content
+
+                # RAGが有効で検索結果がある場合は、検索結果を含める
+                if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources:
+                    search_context = "\n\n以下は検索システムから取得した関連情報です:\n\n"
+                    for source in st.session_state.rag_sources:
+                        search_context += f"[{source['index']}] {source['filename']}:\n"
+                        if 'text' in source:
+                            search_context += f"{source['text']}\n\n"
+                    content_to_send += search_context
+
+                messages_for_api.append({"role": "user", "content": content_to_send})
 
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
-                full_response = ""
 
                 try:
                     # クライアントインスタンスが存在しない場合は初期化
@@ -452,32 +447,44 @@ def show_chat_component(logger):
                     if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources:
                         # 参照情報を表示用に整形
                         sources_md = "\n\n---\n**参照情報:**\n"
+                        unique_sources = set()
+                        refer = 0
                         for source in st.session_state.rag_sources:
                             # ソースパスを表示用テキストとリンク先URLに分ける
                             source_path = source["source"]
                             filename = source["filename"]
 
+                            if not source_path:
+                                continue
+
+                            # /tmp/で始まるパスはスキップ（参照情報として表示しない）
+                            if source_path.startswith('/tmp/'):
+                                continue
+
+                            # 重複チェック - 既に同じソースが存在する場合はスキップ
+                            if source_path in unique_sources:
+                                continue
+
                             # URLの処理
                             # - httpで始まる場合は、そのままURLとして使用
                             # - それ以外の場合は、file://プロトコルを付加（絶対パスの処理に注意）
-                            if source_path:
-                                if source_path.startswith('http'):
-                                    source_url = source_path
-                                else:
-                                    # file://プロトコルの正しい形式：file:///path/to/file（スラッシュ3つ）
-                                    # 絶対パスの場合は先頭の / を維持するために注意
-                                    if source_path.startswith('/'):
-                                        source_url = f"file://{source_path}"  # '/path/to/file' → 'file:///path/to/file'
-                                    else:
-                                        source_url = f"file:///{source_path}"  # 相対パスの場合
+                            if source_path.startswith('http'):
+                                source_url = source_path
                             else:
-                                source_url = "#"  # ソースパスが空の場合はハッシュリンク
+                                # file://プロトコルの正しい形式：file:///path/to/file（スラッシュ3つ）
+                                # 絶対パスの場合は先頭の / を維持するために注意
+                                if source_path.startswith('/'):
+                                    source_url = f"file://{source_path}"  # '/path/to/file' → 'file:///path/to/file'
+                                else:
+                                    source_url = f"file:///{source_path}"  # 相対パスの場合
 
                             # インデックス付きの参照リンクを追加
-                            sources_md += f"- [{source['index']}] [{filename}]({source_url})\n"
+                            sources_md += f"- [{refer+1}] [{filename}]({source_url})\n"
+                            refer += 1
 
                         # マークダウンで最終出力を表示（出力＋参照情報）
-                        final_response = full_response + sources_md
+                        if refer > 0:
+                            final_response = full_response + sources_md
                         message_placeholder.markdown(final_response)
                     else:
                         # 通常の出力
@@ -514,5 +521,5 @@ with tabs[0]:
 with tabs[1]:
     # データベースタブが選択されたことを記録
     st.session_state.database_tab_selected = True
-    # データベース機能の表示（内部でQdrantManagerを初期化）
+    # データベース機能の表示
     show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)

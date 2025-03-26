@@ -1,70 +1,47 @@
-from typing import List, Dict, Tuple, Union, Iterable, Optional, Any, Sequence
+from typing import List, Dict, Tuple, Union, Iterable, Optional, Any
+import math
+from collections import Counter, defaultdict
 
 from sudachipy import tokenizer
 from sudachipy import dictionary
+from fastembed import SparseEmbedding
 import stopwordsiso
-from fastembed import SparseEmbedding, SparseTextEmbedding
-from fastembed.common import OnnxProvider
 
 
-class BM25TextEmbedding(SparseTextEmbedding):
+class BM25TextEmbedding:
+    """BM25アルゴリズムを使用したテキスト埋め込みクラス"""
 
     def __init__(
         self,
-        model_name: str = "Qdrant/bm25",
-        cache_dir: Optional[str] = None,
-        threads: Optional[int] = None,
-        providers: Optional[Sequence[OnnxProvider]] = None,
-        cuda: bool = False,
-        device_ids: Optional[list[int]] = None,
-        lazy_load: bool = False,
-        language: str = "japanese",
-        k: float = 1.2,
+        k1: float = 1.5,
         b: float = 0.75,
-        avg_len: float = 256.0,
-        token_max_length: int = 40,
-        **kwargs: Any,
+        avg_doc_length: float = 40,
     ):
         """BM25TextEmbeddingを初期化します。
 
         Args:
-            model_name (str): 使用するモデル名。デフォルトは"Qdrant/bm25"
-            cache_dir (Optional[str]): キャッシュディレクトリ
-            threads (Optional[int]): 使用するスレッド数
-            providers (Optional[Sequence[OnnxProvider]]): ONNXプロバイダー
-            cuda (bool): CUDAを使用するかどうか
-            device_ids (Optional[list[int]]): デバイスID
-            lazy_load (bool): 遅延ロードを使用するかどうか
-            **kwargs: 追加のパラメータ
+            k1 (float): BM25のk1パラメータ (デフォルト: 1.5)
+            b (float): BM25のbパラメータ (デフォルト: 0.75)
         """
-        self.is_japanese = True
-        if language != "japanese":
-            kwargs["language"] = language
-            self.is_japanese = False
-
-        kwargs["k"] = k
-        kwargs["b"] = b
-        kwargs["avg_len"] = avg_len
-        kwargs["token_max_length"] = token_max_length
-
-        # SparseTextEmbeddingのコンストラクタを呼び出し
-        super().__init__(
-            model_name=model_name,
-            cache_dir=cache_dir,
-            threads=threads,
-            providers=providers,
-            cuda=cuda,
-            device_ids=device_ids,
-            lazy_load=lazy_load,
-            disable_stemmer=True if self.is_japanese else False,  # 日本語は機能しない
-            **kwargs
-        )
-
-        # 日本語処理のための追加コンポーネント
-        if self.is_japanese:
-            self._tokenizer = dictionary.Dictionary().create()
-            self._tokenizer_mode = tokenizer.Tokenizer.SplitMode.C  # 最も分割単位が細かいモードを使用
-            self._stopwords = stopwordsiso.stopwords("ja")
+        # BM25パラメータ
+        self.k1 = k1
+        self.b = b
+        
+        # 語彙とIDF値を格納する辞書
+        self.vocabulary = {}  # token -> token_id のマッピング
+        self.idf = {}         # token_id -> idf値 のマッピング
+        self.avg_doc_length = avg_doc_length
+        self.doc_count = 0
+        self.token_count = 0  # ボキャブラリのサイズ
+        
+        # コーパス統計
+        self.doc_lengths = []  # 各文書のトークン数
+        self.doc_freqs = defaultdict(int)  # 各トークンが出現する文書数
+        
+        # 日本語処理のためのコンポーネント
+        self._tokenizer = dictionary.Dictionary().create()
+        self._tokenizer_mode = tokenizer.Tokenizer.SplitMode.C  # 最も分割単位が細かいモードを使用
+        self._stopwords = stopwordsiso.stopwords("ja")
 
     def _remove_symbols(self, morphemes: List) -> List:
         """補助記号を削除します。
@@ -112,6 +89,88 @@ class BM25TextEmbedding(SparseTextEmbedding):
         except Exception as e:
             return []
 
+    def _get_or_add_token_id(self, token: str) -> int:
+        """トークンのIDを取得または新規追加します。
+
+        Args:
+            token (str): トークン
+
+        Returns:
+            int: トークンID
+        """
+        if token not in self.vocabulary:
+            self.vocabulary[token] = self.token_count
+            self.token_count += 1
+        return self.vocabulary[token]
+
+    def _calculate_idf(self) -> None:
+        """トークンのIDF値を計算します。"""
+        for token_id, doc_freq in self.doc_freqs.items():
+            # BM25のIDF計算式
+            self.idf[token_id] = math.log((self.doc_count - doc_freq + 0.5) / (doc_freq + 0.5) + 1.0)
+
+    def _process_documents(self, documents: List[str]) -> List[List[int]]:
+        """ドキュメントを処理してトークンIDのリストに変換します。
+
+        Args:
+            documents (List[str]): 処理するドキュメントのリスト
+
+        Returns:
+            List[List[int]]: 各ドキュメントのトークンIDのリスト
+        """
+        tokenized_docs = []
+        total_length = 0
+        
+        for doc in documents:
+            # テキストをトークン化
+            tokens = self._tokenize(doc)
+            
+            # トークンをIDに変換
+            token_ids = [self._get_or_add_token_id(token) for token in tokens]
+            tokenized_docs.append(token_ids)
+            
+            # 文書の長さを記録
+            doc_length = len(token_ids)
+            self.doc_lengths.append(doc_length)
+            total_length += doc_length
+            
+            # 文書中の各トークンの出現を記録
+            unique_tokens = set(token_ids)
+            for token_id in unique_tokens:
+                self.doc_freqs[token_id] += 1
+        
+        # ドキュメント数と平均長を更新
+        self.doc_count += len(documents)
+        if self.doc_count > 0:
+            self.avg_doc_length = total_length / self.doc_count
+        
+        # IDFを計算
+        self._calculate_idf()
+        
+        return tokenized_docs
+
+    def _bm25_score(self, term_freqs: Dict[int, int], doc_index: int) -> Dict[int, float]:
+        """BM25スコアリングを実行します。
+
+        Args:
+            term_freqs (Dict[int, int]): ドキュメント内の各トークンの出現頻度
+            doc_index (int): ドキュメントのインデックス
+
+        Returns:
+            Dict[int, float]: トークンIDとそのBM25スコアのマッピング
+        """
+        scores = {}
+        doc_len = self.doc_lengths[doc_index]
+        
+        for token_id, tf in term_freqs.items():
+            if token_id in self.idf:
+                # BM25スコア計算式
+                numerator = tf * (self.k1 + 1)
+                denominator = tf + self.k1 * (1 - self.b + self.b * doc_len / self.avg_doc_length)
+                scores[token_id] = self.idf[token_id] * (numerator / denominator)
+        
+        return scores
+
     def embed(
         self,
         documents: Union[str, Iterable[str]],
@@ -119,8 +178,7 @@ class BM25TextEmbedding(SparseTextEmbedding):
         parallel: Optional[int] = None,
         **kwargs: Any,
     ) -> Iterable[SparseEmbedding]:
-        """ドキュメントに対する埋め込みを生成します。
-        日本語向けの前処理を行ってから親クラスのembedを呼び出します。
+        """ドキュメントに対するBM25埋め込みを生成します。
 
         Args:
             documents: 埋め込みを生成するテキストまたはテキストのリスト
@@ -131,27 +189,42 @@ class BM25TextEmbedding(SparseTextEmbedding):
         Returns:
             Iterable[SparseEmbedding]: 埋め込みのシーケンス
         """
-        if self.is_japanese:
-            # 単一文書の場合リストに変換
-            if isinstance(documents, str):
-                documents = [documents]
-
-            filtered_documents = []
-            for doc in documents:
-                tokens = self._tokenize(text=doc)
-                concat_tokens = " ".join(tokens)
-                filtered_documents.append(concat_tokens)
-        else:
-            filtered_documents = documents
+        # 単一文書の場合リストに変換
+        if isinstance(documents, str):
+            documents = [documents]
         
-        # 親クラスのembedメソッドを呼び出す
-        return super().embed(documents=filtered_documents, batch_size=batch_size, parallel=parallel, **kwargs)
+        # 文書を処理
+        tokenized_docs = self._process_documents(documents)
+        
+        # 文書ごとに埋め込みを生成
+        embeddings = []
+        
+        for i, token_ids in enumerate(tokenized_docs):
+            # 文書内の各トークンの出現頻度を計算
+            term_freqs = Counter(token_ids)
+            
+            # BM25スコアを計算
+            scores = self._bm25_score(term_freqs, i)
+            
+            # 非ゼロのスコアを持つトークンのみをスパース埋め込みとして抽出
+            indices = []
+            values = []
+            
+            for token_id, score in scores.items():
+                indices.append(token_id)
+                values.append(score)
+            
+            # スパース埋め込みを作成
+            embedding = SparseEmbedding(indices=indices, values=values)
+            embeddings.append(embedding)
+            
+            # イテレータとして返す
+            yield embedding
 
     def query_embed(
         self, query: Union[str, Iterable[str]], **kwargs: Any
     ) -> Iterable[SparseEmbedding]:
-        """クエリに対する埋め込みを生成します。
-        日本語向けの前処理を行ってから親クラスのquery_embedを呼び出します。
+        """クエリに対するBM25埋め込みを生成します。
 
         Args:
             query: 埋め込みを生成するクエリテキストまたはクエリのリスト
@@ -160,21 +233,44 @@ class BM25TextEmbedding(SparseTextEmbedding):
         Returns:
             Iterable[SparseEmbedding]: クエリの埋め込み
         """
-        # 単一クエリの場合リストに変換
-        if self.is_japanese:
-            if isinstance(query, str):
-                tokens = self._tokenize(text=query)
-                tokenized_query = " ".join(tokens)
-                return super().query_embed(query=tokenized_query, **kwargs)
-            else:
-                # イテラブルの場合、各クエリに対して前処理を適用
-                tokenized_queries = []
-                for q in query:
-                    tokens = self._tokenize(text=q)
-                    tokenized_queries.append(" ".join(tokens))
-                return super().query_embed(query=tokenized_queries, **kwargs)
+        # 単一クエリの場合
+        if isinstance(query, str):
+            tokens = self._tokenize(query)
+            token_ids = [self._get_or_add_token_id(token) for token in tokens]
+            
+            # 各トークンのTF-IDFスコアを計算
+            indices = []
+            values = []
+            
+            # クエリトークンの出現頻度をカウント
+            term_freqs = Counter(token_ids)
+            
+            for token_id, tf in term_freqs.items():
+                if token_id in self.idf:
+                    indices.append(token_id)
+                    # クエリの場合は単純なTF-IDFを使用（BM25より単純化）
+                    values.append(tf * self.idf[token_id])
+            
+            # スパース埋め込みを作成
+            embedding = SparseEmbedding(indices=indices, values=values)
+            yield embedding
         else:
-            return super().query_embed(query=query, **kwargs)
+            # 複数クエリの場合
+            for q in query:
+                tokens = self._tokenize(q)
+                token_ids = [self._get_or_add_token_id(token) for token in tokens]
+                
+                indices = []
+                values = []
+                term_freqs = Counter(token_ids)
+                
+                for token_id, tf in term_freqs.items():
+                    if token_id in self.idf:
+                        indices.append(token_id)
+                        values.append(tf * self.idf[token_id])
+                
+                embedding = SparseEmbedding(indices=indices, values=values)
+                yield embedding
 
     def calculate_similarity(self, query_embedding: SparseEmbedding, document_embedding: SparseEmbedding) -> float:
         """クエリ埋め込みとドキュメント埋め込み間の類似度を計算します。
@@ -186,7 +282,6 @@ class BM25TextEmbedding(SparseTextEmbedding):
         Returns:
             float: 類似度スコア
         """
-        # スパース埋め込みの類似度計算方法
         # インデックスとバリューを取得
         q_indices = query_embedding.indices
         q_values = query_embedding.values
@@ -205,8 +300,6 @@ class BM25TextEmbedding(SparseTextEmbedding):
             
         return score
 
-
-
 from text_chunk import TextChunker
 class BM25Retriever:
     """BM25アルゴリズムを使用してドキュメントを検索するためのリトリーバークラス"""
@@ -221,7 +314,7 @@ class BM25Retriever:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-        # TextEmbedderの代わりにBM25TextEmbeddingを使用
+        # 独自のBM25TextEmbeddingを使用
         self.embedder = BM25TextEmbedding()
         self.documents = []
         self.chunks = []
@@ -261,7 +354,6 @@ class BM25Retriever:
             Dict[int, float]: 文書ベクトル (インデックスとスコアのマップ)
         """
         # 文書の埋め込みを取得
-        # 単一の文書を埋め込むためにリストにして処理
         embedding = next(self.embedder.embed(text))
         
         # 辞書形式に変換
@@ -416,6 +508,7 @@ if __name__ == "__main__":
     # 埋め込みの形状を確認
     for i, embedding in enumerate(embeddings):
         print(f"embedding {i}: インデックス数={len(embedding.indices)}, 値数={len(embedding.values)}")
+        print(embedding.values)
     
     # クエリの埋め込みを生成
     query = "日本の観光地について教えてください"
