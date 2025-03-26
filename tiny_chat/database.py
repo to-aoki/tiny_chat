@@ -229,9 +229,13 @@ def show_database_component(
                 top_k = st.slider("表示件数", min_value=1, max_value=50, value=10)
 
             with col2:
-                # 使用可能なソースを取得
+                # 使用可能なソースを取得（常に最新の状態を取得）
                 sources = manager.get_sources()
-                selected_sources = st.multiselect("ソースでフィルタ", options=sources)
+                selected_sources = st.multiselect(
+                    "ソースでフィルタ", 
+                    options=sources,
+                    key=f"sources_multiselect_{id(sources)}"  # 一意のキーで再描画を促進
+                )
 
         # 検索ボタン
         search_pressed = st.button("検索", key="search_button", type="primary")
@@ -436,18 +440,19 @@ def show_database_component(
                 key="data_management_collection"
             )
 
-            # 使用可能なソースを取得
+            # 使用可能なソースを取得（常に最新の状態を取得）
             sources = manager.get_sources()
 
             if not sources:
                 st.warning("データベースにソースが見つかりません。先にファイルを登録してください。")
             else:
 
-                # ソースの選択
+                # ソースの選択（一意のキーを使用して再描画を強制）
                 selected_source = st.selectbox(
                     "削除するソースを選択",
                     options=sources,
-                    help="指定したソースを持つすべてのチャンクが削除されます。"
+                    help="指定したソースを持つすべてのチャンクが削除されます。",
+                    key=f"source_select_{id(sources)}"
                 )
 
                 # 削除ボタン
@@ -489,7 +494,8 @@ def show_database_component(
                                 if operation_id:
                                     st.success(
                                         f"ソース '{selected_source}' の削除が完了しました（操作ID: {operation_id}）")
-                                    st.info("ページを更新すると、更新された内容が表示されます。")
+                                    # 削除後に画面を更新して、ソースリストを最新化
+                                    st.rerun()
                                 else:
                                     st.error("削除対象のデータが見つかりませんでした。")
                             except Exception as e:
@@ -548,11 +554,12 @@ def show_database_component(
                     hide_index=True
                 )
 
-                # コレクションの選択
+                # コレクションの選択（一意のキーを使用して再描画を強制）
                 selected_collection = st.selectbox(
                     "削除するコレクションを選択",
                     options=collections,
-                    help="選択したコレクションを完全に削除します。この操作は元に戻せません。"
+                    help="選択したコレクションを完全に削除します。この操作は元に戻せません。",
+                    key=f"collection_select_{id(collections)}"
                 )
 
                 # 削除ボタン
@@ -592,7 +599,8 @@ def show_database_component(
 
                                     if success:
                                         st.success(f"コレクション '{selected_collection}' の削除が完了しました")
-                                        st.info("ページを更新すると、更新された内容が表示されます。")
+                                        # コレクション一覧を再取得して表示を更新
+                                        st.rerun()
                                     else:
                                         st.error("コレクションの削除に失敗しました。")
                                 except Exception as e:
