@@ -308,6 +308,7 @@ def sidebar(config_file_path, logger):
             if not available_collections:
                 available_collections = ["default"]
 
+            # プロセスレベルで管理されているQdrantManagerを取得
             manager = get_or_create_qdrant_manager(logger)
             
             st.markdown("コレクション選択", help="Qdrantデータベースで利用するコレクション（DB空間）を選択します")

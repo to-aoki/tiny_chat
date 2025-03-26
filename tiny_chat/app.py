@@ -92,7 +92,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
             st.error(error_msg)
             st.session_state.openai_client = None
     
-    # RAGモードのフラグ（遅延ロードのため、QdrantManagerは初期化しない）
+    # RAGモードのフラグ
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
 
@@ -119,9 +119,9 @@ with tabs[0]:
     if use_rag != st.session_state.rag_mode:
         st.session_state.rag_mode = use_rag
         if use_rag:
-            # RAGモードが有効になった場合、ここでQdrantManagerを初期化
-            st.info("RAGモードがオンになりました。検索システムを初期化しています...")
-            # 共通関数を使用してQdrantManagerを初期化
+            # RAGモードが有効になった場合
+            st.info("RAGモードがオンになりました。検索システムを準備しています...")
+            # 必要に応じてQdrantManagerを初期化（プロセスレベルで管理）
             get_or_create_qdrant_manager(LOGGER)
             st.info("RAGモードがオンです：メッセージ内容で文書を検索し、関連情報を回答に活用します")
         else:
