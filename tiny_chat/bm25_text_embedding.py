@@ -18,6 +18,11 @@ class BM25TextEmbedding(SparseTextEmbedding):
         cuda: bool = False,
         device_ids: Optional[list[int]] = None,
         lazy_load: bool = False,
+        language: str = "japanese",
+        k: float = 1.2,
+        b: float = 0.75,
+        avg_len: float = 256.0,
+        token_max_length: int = 40,
         **kwargs: Any,
     ):
         """BM25TextEmbeddingを初期化します。
@@ -32,6 +37,16 @@ class BM25TextEmbedding(SparseTextEmbedding):
             lazy_load (bool): 遅延ロードを使用するかどうか
             **kwargs: 追加のパラメータ
         """
+        self.is_japanese = True
+        if language != "japanese":
+            kwargs["language"] = language
+            self.is_japanese = False
+
+        kwargs["k"] = k
+        kwargs["b"] = b
+        kwargs["avg_len"] = avg_len
+        kwargs["token_max_length"] = token_max_length
+
         # SparseTextEmbeddingのコンストラクタを呼び出し
         super().__init__(
             model_name=model_name,
@@ -41,14 +56,15 @@ class BM25TextEmbedding(SparseTextEmbedding):
             cuda=cuda,
             device_ids=device_ids,
             lazy_load=lazy_load,
-            disable_stemmer=True,  # 日本語は機能しない
+            disable_stemmer=True if self.is_japanese else False,  # 日本語は機能しない
             **kwargs
         )
-        
+
         # 日本語処理のための追加コンポーネント
-        self._tokenizer = dictionary.Dictionary().create()
-        self._tokenizer_mode = tokenizer.Tokenizer.SplitMode.C  # 最も分割単位が細かいモードを使用
-        self._stopwords = stopwordsiso.stopwords("ja")
+        if self.is_japanese:
+            self._tokenizer = dictionary.Dictionary().create()
+            self._tokenizer_mode = tokenizer.Tokenizer.SplitMode.C  # 最も分割単位が細かいモードを使用
+            self._stopwords = stopwordsiso.stopwords("ja")
 
     def _remove_symbols(self, morphemes: List) -> List:
         """補助記号を削除します。
@@ -115,15 +131,18 @@ class BM25TextEmbedding(SparseTextEmbedding):
         Returns:
             Iterable[SparseEmbedding]: 埋め込みのシーケンス
         """
-        # 単一文書の場合リストに変換
-        if isinstance(documents, str):
-            documents = [documents]
-        
-        filtered_documents = []
-        for doc in documents:
-            tokens = self._tokenize(text=doc)
-            concat_tokens = " ".join(tokens)
-            filtered_documents.append(concat_tokens)
+        if self.is_japanese:
+            # 単一文書の場合リストに変換
+            if isinstance(documents, str):
+                documents = [documents]
+
+            filtered_documents = []
+            for doc in documents:
+                tokens = self._tokenize(text=doc)
+                concat_tokens = " ".join(tokens)
+                filtered_documents.append(concat_tokens)
+        else:
+            filtered_documents = documents
         
         # 親クラスのembedメソッドを呼び出す
         return super().embed(documents=filtered_documents, batch_size=batch_size, parallel=parallel, **kwargs)
@@ -142,17 +161,20 @@ class BM25TextEmbedding(SparseTextEmbedding):
             Iterable[SparseEmbedding]: クエリの埋め込み
         """
         # 単一クエリの場合リストに変換
-        if isinstance(query, str):
-            tokens = self._tokenize(text=query)
-            tokenized_query = " ".join(tokens)
-            return super().query_embed(query=tokenized_query, **kwargs)
+        if self.is_japanese:
+            if isinstance(query, str):
+                tokens = self._tokenize(text=query)
+                tokenized_query = " ".join(tokens)
+                return super().query_embed(query=tokenized_query, **kwargs)
+            else:
+                # イテラブルの場合、各クエリに対して前処理を適用
+                tokenized_queries = []
+                for q in query:
+                    tokens = self._tokenize(text=q)
+                    tokenized_queries.append(" ".join(tokens))
+                return super().query_embed(query=tokenized_queries, **kwargs)
         else:
-            # イテラブルの場合、各クエリに対して前処理を適用
-            tokenized_queries = []
-            for q in query:
-                tokens = self._tokenize(text=q)
-                tokenized_queries.append(" ".join(tokens))
-            return super().query_embed(query=tokenized_queries, **kwargs)
+            return super().query_embed(query=query, **kwargs)
 
     def calculate_similarity(self, query_embedding: SparseEmbedding, document_embedding: SparseEmbedding) -> float:
         """クエリ埋め込みとドキュメント埋め込み間の類似度を計算します。
@@ -182,6 +204,7 @@ class BM25TextEmbedding(SparseTextEmbedding):
             score += q_idx_dict[idx] * d_idx_dict[idx]
             
         return score
+
 
 
 from text_chunk import TextChunker

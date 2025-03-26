@@ -297,20 +297,17 @@ def sidebar(config_file_path, logger):
             st.sidebar.markdown("検索")
 
             # コレクション名の選択（サイドバーに表示）
-            # Qdrantデータディレクトリからコレクション一覧を取得
-            collections_path = os.path.join("./qdrant_data", "collection")
-            available_collections = []
-            if os.path.exists(collections_path):
-                available_collections = [d for d in os.listdir(collections_path) if
-                                         os.path.isdir(os.path.join(collections_path, d))]
-
+            # プロセスレベルで管理されているQdrantManagerを取得（毎回最新の状態を取得）
+            manager = get_or_create_qdrant_manager(logger)
+            
+            # コレクション一覧をQdrantManagerから取得
+            # (ファイルシステムから直接取得するのではなく、QdrantManagerのAPIを使用)
+            available_collections = manager.get_collections()
+            
             # コレクションがなければデフォルトのものを表示
             if not available_collections:
                 available_collections = ["default"]
 
-            # プロセスレベルで管理されているQdrantManagerを取得（毎回最新の状態を取得）
-            manager = get_or_create_qdrant_manager(logger)
-            
             st.markdown("コレクション選択", help="Qdrantデータベースで利用するコレクション（DB空間）を選択します")
             search_collection = st.sidebar.selectbox(
                 "コレクション",  # 空のラベルから有効なラベルに変更
