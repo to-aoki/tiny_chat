@@ -9,15 +9,13 @@ class Config:
 
     def __init__(
             self,
-            server_url: str = "http://localhost:8000/v1",
+            server_url: str = "http://localhost:11434/v1",
             api_key: str = "dummy-key",
-            selected_model: str = "gpt-3.5-turbo",
+            selected_model: str = "hf.co/mmnga/llm-jp-3-980m-instruct3-gguf:Q4_K_M",
             meta_prompt: str = "",
-            message_length: int = 10000,
-            context_length: int = 2000,
+            message_length: int = 4000,
+            context_length: int = 1000,
             uri_processing: bool = True,
-            search_enabled: bool = False,  # 検索機能の有効/無効
-            search_results_count: int = 3,  # 検索結果の表示数
             is_azure: bool = False
     ):
         self.server_url = server_url
@@ -27,8 +25,6 @@ class Config:
         self.message_length = message_length
         self.context_length = context_length
         self.uri_processing = uri_processing
-        self.search_enabled = search_enabled  # 検索機能の有効/無効
-        self.search_results_count = search_results_count  # 検索結果の表示数
         self.is_azure = is_azure
 
     @classmethod
@@ -46,14 +42,6 @@ class Config:
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     config_data = json.load(f)
-
-                # 検索機能の設定がなければデフォルト値を使用
-                if 'search_enabled' not in config_data:
-                    config_data['search_enabled'] = False
-
-                if 'search_results_count' not in config_data:
-                    config_data['search_results_count'] = 3
-
                 return cls(**config_data)
             else:
                 return cls()
@@ -79,8 +67,6 @@ class Config:
                 'message_length': self.message_length,
                 'context_length': self.context_length,
                 'uri_processing': self.uri_processing,
-                'search_enabled': self.search_enabled,  # 検索機能の有効/無効
-                'search_results_count': self.search_results_count,  # 検索結果の表示数
                 'is_azure': self.is_azure
             }
 
