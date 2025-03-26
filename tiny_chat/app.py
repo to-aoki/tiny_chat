@@ -116,22 +116,8 @@ with st.sidebar:
 tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
 
+@st.fragment
 def show_chat_component(logger):
-    # RAGモードのチェックボックス
-    use_rag = st.checkbox("RAG (データベースを利用した回答)", value=st.session_state.rag_mode, key="rag_mode_checkbox")
-
-    # RAGモードが変更された場合、状態を更新
-    if use_rag != st.session_state.rag_mode:
-        st.session_state.rag_mode = use_rag
-        if use_rag:
-            # RAGモードが有効になった場合
-            st.info("RAGが有効になりました。データベースを準備しています...")
-            get_or_create_qdrant_manager(logger)
-            st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
-        else:
-            st.info("RAGが無効です")
-    elif use_rag:
-        st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
 
     # チャット履歴の表示
     for i, message in enumerate(st.session_state.chat_manager.messages):
@@ -209,6 +195,22 @@ def show_chat_component(logger):
                     key="export_chat_history_button"
                 )
                 logger.info("メッセージ履歴のJSONエクスポート機能を提供しました")
+
+        # RAGモードのチェックボックス
+        use_rag = st.checkbox("RAG (データベースを利用した回答)", value=st.session_state.rag_mode,
+                              key="rag_mode_checkbox")
+        # RAGモードが変更された場合、状態を更新
+        if use_rag != st.session_state.rag_mode:
+            st.session_state.rag_mode = use_rag
+            if use_rag:
+                # RAGモードが有効になった場合
+                st.info("RAGが有効になりました。データベースを準備しています...")
+                get_or_create_qdrant_manager(logger)
+                st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
+            else:
+                st.info("RAGが無効です")
+        elif use_rag:
+            st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
 
     # ユーザー入力
     # 添付ファイルは streamlit v1.43.2 以降
