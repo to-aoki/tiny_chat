@@ -7,6 +7,32 @@ import pandas as pd
 from file_processor import FileProcessorFactory
 
 
+def get_or_create_qdrant_manager(logger=None):
+    """
+    QdrantManagerを取得または初期化する共通関数
+
+    Args:
+        logger: ロガーオブジェクト（オプション）
+
+    Returns:
+        QdrantManager: 初期化されたQdrantManagerオブジェクト
+    """
+    from qdrant_manager import QdrantManager
+
+    # QdrantManagerがまだ初期化されていない場合は初期化
+    if 'manager' not in st.session_state or st.session_state.manager is None:
+        with st.spinner("検索データベースを初期化中..."):
+            if logger:
+                logger.info("QdrantManagerを初期化しています...")
+            st.session_state.manager = QdrantManager(
+                collection_name="default",
+                path="./qdrant_data"
+            )
+            if logger:
+                logger.info("QdrantManagerの初期化が完了しました")
+    return st.session_state.manager
+
+
 def process_file(file_path: str) -> Tuple[str, Dict[str, Any]]:
     """
     ファイルを処理し、テキストとメタデータを抽出します
@@ -140,7 +166,7 @@ def add_files_to_qdrant(texts: List[str], metadatas: List[Dict]) -> List[str]:
     return added_ids
 
 
-def search_documents(query: str, top_k: int = 10, filter_params: Dict = None) -> List:
+def search_documents(query: str, top_k: int = 10, filter_params: Dict = None, logger=None) -> List:
     """
     ドキュメントを検索します
 
@@ -152,7 +178,8 @@ def search_documents(query: str, top_k: int = 10, filter_params: Dict = None) ->
     Returns:
         results: 検索結果のリスト
     """
-    results = st.session_state.manager.query_points(query, top_k=top_k, filter_params=filter_params)
+    manager = get_or_create_qdrant_manager(logger)
+    results = manager.query_points(query, top_k=top_k, filter_params=filter_params)
     return results
 
 
@@ -161,6 +188,8 @@ def show_database_component(
         extensions=['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']):
     # 検索と文書登録のタブを作成
     search_tabs = st.tabs(["🔍 検索", "📁 登録", "🗑️ 削除"])
+
+    _ = get_or_create_qdrant_manager(logger)
 
     # 検索タブ
     with search_tabs[0]:
