@@ -11,7 +11,7 @@ from sidebar import sidebar
 from wait_view import spinner
 from copy_botton import copy_button
 from qdrant_manager import QdrantManager
-from database import show_database_tab, search_documents
+from database import show_database_component, search_documents
 
 
 # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
@@ -432,6 +432,5 @@ with tabs[0]:
         st.session_state.status_message = "処理完了"
         st.rerun()
 
-show_database_tab(
-    tabs[1], logger=LOGGER, extensions=SUPPORT_EXTENSIONS
-)
+with tabs[1]:
+    show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
