@@ -154,6 +154,7 @@ def process_directory(directory_path: str,
 def add_files_to_qdrant(texts: List[str], metadatas: List[Dict]) -> List[str]:
     """
     テキストとメタデータをQdrantに追加します
+    同じソース（ファイル名）が既に存在する場合は、削除してから追加します
 
     Args:
         texts: テキストのリスト
@@ -162,6 +163,21 @@ def add_files_to_qdrant(texts: List[str], metadatas: List[Dict]) -> List[str]:
     Returns:
         added_ids: 追加されたドキュメントのIDリスト
     """
+    # ソース（ファイル名）の一覧を取得
+    sources_to_add = set()
+    for metadata in metadatas:
+        if "source" in metadata:
+            sources_to_add.add(metadata["source"])
+    
+    # 既存のソースと照合し、重複があれば削除
+    existing_sources = st.session_state.manager.get_sources()
+    for source in sources_to_add:
+        if source in existing_sources:
+            # ソースに関連するデータを削除
+            filter_params = {"source": source}
+            st.session_state.manager.delete_by_filter(filter_params)
+    
+    # 新しいデータを追加
     added_ids = st.session_state.manager.add_documents(texts, metadatas)
     return added_ids
 
@@ -261,6 +277,13 @@ def show_database_component(
         )
 
         if register_method == "ファイルアップロード":
+            # ソースパスのベースディレクトリ設定
+            source_base_dir = st.text_input(
+                "ソースパスのベースディレクトリ（省略可）",
+                "",
+                help="ファイルの「source」として使用するベースディレクトリを指定できます。空の場合はファイル名のみが使用されます。"
+            )
+            
             # ファイルアップローダー
             uploaded_files = st.file_uploader(
                 "ファイルをアップロード",
@@ -284,6 +307,12 @@ def show_database_component(
                                 temp_path = temp_file.name
 
                             text, metadata = process_file(temp_path)
+                            
+                            # カスタムソースパスを設定（指定があれば）
+                            if text and source_base_dir:
+                                custom_source_path = os.path.join(source_base_dir, uploaded_file.name)
+                                metadata["source"] = custom_source_path
+                                metadata["original_filename"] = metadata["filename"]  # 元のファイル名を保持
 
                             if text:
                                 texts.append(text)
@@ -317,6 +346,22 @@ def show_database_component(
         else:  # ディレクトリ指定
             # ディレクトリパス入力
             directory_path = st.text_input("ディレクトリパスを入力", "")
+            
+            # ソースパスのカスタマイズオプション
+            source_path_option = st.radio(
+                "ソースパスの設定方法",
+                ["実際のファイルパスを使用", "カスタムベースディレクトリを設定"],
+                help="ファイルの「source」として使用するパスの設定方法を選択します"
+            )
+            
+            # カスタムベースディレクトリの設定
+            custom_source_base = ""
+            if source_path_option == "カスタムベースディレクトリを設定":
+                custom_source_base = st.text_input(
+                    "カスタムベースディレクトリ",
+                    "",
+                    help="ファイルの「source」として使用するベースディレクトリを指定します。相対パスはこのベースディレクトリ以下に追加されます。"
+                )
 
             # 処理対象のファイル拡張子選択
             selected_extensions = st.multiselect(
@@ -334,6 +379,16 @@ def show_database_component(
                         if results:
                             texts = [r[0] for r in results]
                             metadatas = [r[1] for r in results]
+                            
+                            # カスタムソースパスの設定（指定があれば）
+                            if custom_source_base:
+                                for metadata in metadatas:
+                                    if "rel_path" in metadata:
+                                        # 元のソースパスを保持
+                                        metadata["original_source"] = metadata["source"]
+                                        # カスタムソースパスを設定
+                                        custom_path = os.path.join(custom_source_base, metadata["rel_path"])
+                                        metadata["source"] = custom_path
 
                             # コレクション名を設定して処理
                             if collection_name != st.session_state.manager.collection_name:
