@@ -10,7 +10,6 @@ from llm_utils import get_llm_client
 from sidebar import sidebar
 from wait_view import spinner
 from copy_botton import copy_button
-# 直接QdrantManagerをインポートするのではなく、database.pyの共通関数を使用
 from database import show_database_component, search_documents, get_or_create_qdrant_manager
 
 
@@ -25,6 +24,7 @@ st.set_page_config(page_title="チャット", layout="wide")
 # 設定ファイルのパス
 CONFIG_FILE = "chat_app_config.json"
 
+# サポートする拡張子
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
 
 
@@ -109,32 +109,30 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
 initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
 
 # サイドバー
-sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
+with st.sidebar:
+    sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
 
 # タブの作成
 tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
-# チャット機能タブ
-with tabs[0]:
-    # RAGモードのチェックボックス（検索を使用するか）
-    use_rag = st.checkbox("RAG (検索システムを利用した回答)", value=st.session_state.rag_mode, key="rag_mode_checkbox")
-    
+
+def show_chat_component(logger):
+    # RAGモードのチェックボックス
+    use_rag = st.checkbox("RAG (データベースを利用した回答)", value=st.session_state.rag_mode, key="rag_mode_checkbox")
+
     # RAGモードが変更された場合、状態を更新
     if use_rag != st.session_state.rag_mode:
         st.session_state.rag_mode = use_rag
         if use_rag:
             # RAGモードが有効になった場合
-            st.info("RAGモードがオンになりました。検索システムを準備しています...")
+            st.info("RAGが有効になりました。データベースを準備しています...")
             # 必要に応じてQdrantManagerを初期化（プロセスレベルで管理）
-            get_or_create_qdrant_manager(LOGGER)
-            st.info("RAGモードがオンです：メッセージ内容で文書を検索し、関連情報を回答に活用します")
+            get_or_create_qdrant_manager(logger)
+            st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
         else:
-            st.info("RAGモードがオフです")
+            st.info("RAGが無効です")
     elif use_rag:
-        st.info("RAGモードがオンです：メッセージ内容で文書を検索し、関連情報を回答に活用します")
-    
-    # 処理中ステータス表示エリア
-    status_area = st.empty()
+        st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
 
     # チャット履歴の表示
     for i, message in enumerate(st.session_state.chat_manager.messages):
@@ -179,7 +177,7 @@ with tabs[0]:
                         count_text = f"（{attachment['num_pages']}{count_type}）"
 
                     st.text(f"{idx + 1}. [{file_type}] {filename} {count_text}")
-                    LOGGER.debug(f"添付ファイル表示: {filename} {count_text}")
+                    logger.debug(f"添付ファイル表示: {filename} {count_text}")
 
     with st.container():
         cols = st.columns([3, 2, 3])
@@ -193,7 +191,6 @@ with tabs[0]:
                 st.rerun()
 
         with cols[2]:
-            # チャット履歴がある場合はダウンロードボタンを表示、なければ通常ボタンを表示
             if not st.session_state.chat_manager.messages:
                 if st.button(
                         "チャット保存",
@@ -212,7 +209,7 @@ with tabs[0]:
                     use_container_width=True,
                     key="export_chat_history_button"
                 )
-                LOGGER.info("メッセージ履歴のJSONエクスポート機能を提供しました")
+                logger.info("メッセージ履歴のJSONエクスポート機能を提供しました")
 
     # ユーザー入力
     # 添付ファイルは streamlit v1.43.2 以降
@@ -224,21 +221,17 @@ with tabs[0]:
     )
 
     if prompt:
-
         if prompt and prompt["files"]:
-            uploaded_file = prompt["files"][0]  # 先頭１件のみ処理
+            uploaded_file = prompt["files"][0]  # INFO 先頭1件のみ処理
             filename = uploaded_file.name
             _, file_extension = os.path.splitext(filename)
             processor_class = FileProcessorFactory.get_processor(file_extension)
             if processor_class is None:
-                # Display error for unsupported file type
                 st.error(f"エラー: サポートされていないファイル形式です: {file_extension}")
-                LOGGER.error(f"未サポートのファイル形式: {file_extension}")
+                logger.error(f"未サポートのファイル形式: {file_extension}")
 
             else:
                 # 各ファイルタイプに応じた処理方法と結果表示の設定
-                extracted_text = None
-                error = None
                 count_value = 1
                 count_type = ""
 
@@ -261,7 +254,7 @@ with tabs[0]:
                 if error:
                     # Display error message to the user
                     st.error(f"ファイル処理エラー: {error}")
-                    LOGGER.error(f"ファイル処理エラー ({filename}): {error}")
+                    logger.error(f"ファイル処理エラー ({filename}): {error}")
                 else:
                     # ファイル名の重複チェックと処理
                     existing_files = [a["filename"] for a in st.session_state.chat_manager.attachments]
@@ -273,7 +266,7 @@ with tabs[0]:
                             counter += 1
                             new_name = f"{base_name}_{counter}{ext}"
                         filename = new_name
-                        LOGGER.info(f"ファイル名重複を検出: {prompt['files'][0].name} → {filename}")
+                        logger.info(f"ファイル名重複を検出: {prompt['files'][0].name} → {filename}")
 
                     # 添付ファイルリストに追加
                     st.session_state.chat_manager.add_attachment(
@@ -282,7 +275,7 @@ with tabs[0]:
                         num_pages=count_value
                     )
                     st.success(f"ファイル '{filename}' を添付しました")
-                    LOGGER.info(f"ファイルを添付: {filename} ({count_value}{count_type})")
+                    logger.info(f"ファイルを添付: {filename} ({count_value}{count_type})")
 
         # メッセージ長チェック
         would_exceed, estimated_length, max_length = st.session_state.chat_manager.would_exceed_message_length(
@@ -295,9 +288,9 @@ with tabs[0]:
 
         if would_exceed:
             st.error(f"エラー: メッセージ長が上限を超えています（推定: {estimated_length}文字、上限: {max_length}文字）。\n"
-                    f"- メッセージを短くするか\n"
-                    f"- 添付ファイルを減らすか\n"
-                    f"- サイドバー設定のメッセージ長制限を引き上げてください。")
+                     f"- メッセージを短くするか\n"
+                     f"- 添付ファイルを減らすか\n"
+                     f"- サイドバー設定のメッセージ長制限を引き上げてください。")
         else:
             # ユーザーメッセージを追加
             user_message = st.session_state.chat_manager.add_user_message(prompt.text)
@@ -335,10 +328,11 @@ with tabs[0]:
 
             # 処理ステータスを更新
             st.session_state.status_message = "LLMにプロンプトを入力中..."
-            
+
             # 拡張プロンプトの取得
             enhanced_prompt = None
-            if st.session_state.chat_manager.attachments or (st.session_state.config["uri_processing"] and len(detects_urls) > 0):
+            if st.session_state.chat_manager.attachments or (
+                    st.session_state.config["uri_processing"] and len(detects_urls) > 0):
                 # 処理ステータスを更新
                 if st.session_state.chat_manager.attachments:
                     st.session_state.status_message = "添付ファイルの内容を解析中..."
@@ -351,20 +345,20 @@ with tabs[0]:
                     max_length=st.session_state.config["context_length"],
                     uri_processor=uri_processor if st.session_state.config["uri_processing"] else None
                 )
-            
+
             # RAGモードが有効な場合、検索を実行
             if st.session_state.rag_mode:
                 st.session_state.status_message = "関連文書を検索中..."
                 # 最新のユーザーメッセージで検索（共通関数を使用）
-                search_results = search_documents(prompt_content, top_k=5, logger=LOGGER)
-                
+                search_results = search_documents(prompt_content, top_k=5, logger=logger)
+
                 if search_results:
                     # 検索結果を整形
                     search_context = "以下は検索システムから取得した関連情報です:\n\n"
-                    
+
                     # 参照情報をリセット（後でアシスタント出力に表示するため）
                     st.session_state.rag_sources = []
-                    
+
                     # 重複チェック用のソースセット
                     unique_sources = set()
 
@@ -372,42 +366,39 @@ with tabs[0]:
                     for i, result in enumerate(search_results):
                         filename = result.payload.get('filename', '文書')
                         source = result.payload.get('source', '')
-                        
+
                         # /tmp/で始まるパスはスキップ（参照情報として表示しない）
                         if source and source.startswith('/tmp/'):
-                            LOGGER.debug(f"RAG参照情報をスキップ（/tmp/）: [{i+1}] {filename} - {source}")
                             continue
-                            
+
                         # 重複チェック - 既に同じソースが存在する場合はスキップ
                         if source and source in unique_sources:
-                            LOGGER.debug(f"RAG参照情報をスキップ（重複）: [{i+1}] {filename} - {source}")
                             continue
-                            
+
                         # ユニークなソースを記録（ソースが空でない場合のみ）
                         if source:
                             unique_sources.add(source)
-                        
+
                         # 参照情報を保存
                         source_info = {
-                            "index": refer+1,
+                            "index": refer + 1,
                             "filename": filename,
                             "source": source
                         }
                         refer += 1
                         st.session_state.rag_sources.append(source_info)
-                        LOGGER.debug(f"RAG参照情報を追加: [{i+1}] {filename} - {source}")
-                        
-                        search_context += f"[{i+1}] {filename}:\n"
+
+                        search_context += f"[{i + 1}] {filename}:\n"
                         search_context += f"{result.payload.get('text', '')[:1000]}\n\n"
-                    
+
                     # 検索結果を含めた拡張プロンプトを作成
                     if enhanced_prompt:
                         enhanced_prompt += f"\n\n{search_context}"
                     else:
                         enhanced_prompt = prompt_content + f"\n\n{search_context}"
-                    
+
                     st.session_state.status_message = "検索結果を追加しました。LLMにプロンプトを入力中..."
-            
+
             # 拡張プロンプトがあれば更新
             if enhanced_prompt:
                 st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
@@ -479,19 +470,15 @@ with tabs[0]:
                                         source_url = f"file://{source_path}"  # '/path/to/file' → 'file:///path/to/file'
                                     else:
                                         source_url = f"file:///{source_path}"  # 相対パスの場合
-                                    
-                                    # ログに出力（デバッグ用）
-                                    LOGGER.debug(f"リンク変換: {source_path} → {source_url}")
                             else:
                                 source_url = "#"  # ソースパスが空の場合はハッシュリンク
-                            
+
                             # インデックス付きの参照リンクを追加
                             sources_md += f"- [{source['index']}] [{filename}]({source_url})\n"
-                        
+
                         # マークダウンで最終出力を表示（出力＋参照情報）
                         final_response = full_response + sources_md
                         message_placeholder.markdown(final_response)
-                        LOGGER.info(f"RAG参照情報を表示しました：{len(st.session_state.rag_sources)}件")
                     else:
                         # 通常の出力
                         message_placeholder.markdown(full_response)
@@ -501,7 +488,7 @@ with tabs[0]:
 
                     # 送信後に添付ファイルを削除
                     st.session_state.chat_manager.clear_attachments()
-                    
+
                     # rag_sourcesをクリア
                     if "rag_sources" in st.session_state:
                         st.session_state.rag_sources = []
@@ -516,6 +503,12 @@ with tabs[0]:
         st.session_state.is_sending_message = False
         st.session_state.status_message = "処理完了"
         st.rerun()
+
+
+# チャット機能タブ
+with tabs[0]:
+    show_chat_component(logger=LOGGER)
+
 
 # データベース機能タブ
 with tabs[1]:

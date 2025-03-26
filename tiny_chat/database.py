@@ -218,6 +218,7 @@ def search_documents(query: str, top_k: int = 10, filter_params: Dict = None, lo
     return results
 
 
+@st.fragment
 def show_database_component(
         logger,
         extensions=['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']):
