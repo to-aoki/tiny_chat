@@ -1,12 +1,10 @@
 import streamlit as st
 
-import os
 from config_manager import Config, ModelManager
 from llm_utils import get_llm_client
 from database import get_or_create_qdrant_manager
 
 
-@st.fragment
 def sidebar(config_file_path, logger):
     st.header("設定")
 

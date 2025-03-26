@@ -7,6 +7,7 @@ from bm25_text_embedding import BM25TextEmbedding
 from static_embedding import StaticEmbedding
 from text_chunk import TextChunker
 
+
 class QdrantManager:
     """
     Qdrantベクターデータベースとの連携を管理するクラス
@@ -45,8 +46,13 @@ class QdrantManager:
         self.dense_vector_field_name = "dense"
 
         if host:
+            # HTTPモード - サーバーに接続
             self.client = QdrantClient(host=host, port=port)
+        elif path == ":memory:":
+            # メモリモード - ファイルを使わない
+            self.client = QdrantClient(":memory:")
         else:
+            # ローカルファイルモード
             self.client = QdrantClient(path=path)
 
         self._ensure_collection_exists()
@@ -258,6 +264,7 @@ class QdrantManager:
         self,
         query: str,
         top_k: int = 5,
+        score_threshold: float = 0.4,
         filter_params: Optional[Dict[str, Any]] = None
     ) -> List[QueryResponse]:
         """
@@ -312,9 +319,10 @@ class QdrantManager:
                 ],
                 query=models.FusionQuery(fusion=models.Fusion.RRF),  # RRF (Reciprocal Rank Fusion)を使用して検索結果を結合
                 limit=top_k,
-                with_vectors=True,
+                with_vectors=False,
                 with_payload=True,
-                query_filter=search_filter
+                query_filter=search_filter,
+                # score_threshold=score_threshold # 効いてなさそう (qdrant-client 1.13.3 file)
             )
 
             # QueryResponseの場合、pointsアトリビュートを取得
@@ -326,7 +334,8 @@ class QdrantManager:
             # 結果をQueryResponseに変換
             results = []
             for point in points:
-                results.append(point)
+                if score_threshold < point.score:
+                    results.append(point)
             
             return results
             
