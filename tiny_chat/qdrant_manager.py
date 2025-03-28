@@ -380,34 +380,40 @@ class QdrantManager:
         Returns:
             List[str]: ユニークな参照元のリスト
         """
-        # scrollメソッドはbatch数を返すのでイテレーションが必要
-        sources = set()
-        offset = 0
-        batch_size = min(10000, limit)  # 大きすぎるバッチサイズはパフォーマンス問題を引き起こす可能性がある
+        try:
+            # scrollメソッドはbatch数を返すのでイテレーションが必要
+            sources = set()
+            offset = None  # Noneを使うとスクロール開始地点から始まる
+            batch_size = min(1000, limit)  # 大きすぎるバッチサイズはパフォーマンス問題を引き起こす可能性がある
+            
+            # 最初は全ペイロードを取得して処理
+            while True:
+                batch, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=batch_size,
+                    offset=offset,
+                    with_payload=True,  # 全ペイロードを取得
+                    with_vectors=False
+                )
 
-        while True:
-            batch = self.client.scroll(
-                collection_name=self.collection_name,
-                limit=batch_size,
-                offset=offset,
-                with_payload=["source"],
-                with_vectors=False
-            )[0]  # scrollはタプル(points, next_offset)を返す
+                if not batch:
+                    break
 
-            if not batch:
-                break
+                for point in batch:
+                    if point.payload and "source" in point.payload:
+                        source = point.payload.get("source")
+                        if source:
+                            sources.add(source)
 
-            for point in batch:
-                source = point.payload.get("source")
-                if source:
-                    sources.add(source)
+                if len(batch) < batch_size or len(sources) >= limit or next_offset is None:
+                    break
 
-            if len(batch) < batch_size or len(sources) >= limit:
-                break
-
-            offset += len(batch)
-
-        return sorted(list(sources))
+                offset = next_offset
+                
+            return sorted(list(sources))
+        except Exception as e:
+            print(f"ソース取得エラー: {str(e)}")
+            return []
 
     def count_documents(self) -> int:
         """
