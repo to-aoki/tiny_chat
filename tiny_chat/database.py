@@ -713,3 +713,18 @@ def show_database_component(
                                 except Exception as e:
                                     st.error(f"削除処理中にエラーが発生しました: {str(e)}")
                                     logger.error(f"コレクション削除エラー: {str(e)}")
+
+
+# 単独動作用
+if __name__ == "__main__":
+    import logging
+    from logger import get_logger  # ロガーをインポート
+
+    # ロガーの初期化
+    LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
+    LOGGER.info("単独データベースアプリケーションを起動しました")
+    st.title("データベース")
+
+    SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
+    # コンポーネントの表示
+    show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
