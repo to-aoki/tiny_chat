@@ -410,17 +410,16 @@ def show_database_component(
             # ソースパスのカスタマイズオプション
             source_path_option = st.radio(
                 "ソースパスの設定方法",
-                ["実際のファイルパスを使用", "カスタムベースディレクトリを設定"],
+                ["実際のファイルパスを使用", "Webパス接頭辞を設定"],
                 help="ファイルの「source」として使用するパスの設定方法を選択します"
             )
             
-            # カスタムベースディレクトリの設定
-            custom_source_base = ""
-            if source_path_option == "カスタムベースディレクトリを設定":
-                custom_source_base = st.text_input(
-                    "カスタムベースディレクトリ",
+            web_prefix_base = ""
+            if source_path_option == "Webパス接頭辞を設定":
+                web_prefix_base = st.text_input(
+                    "Webパス接頭辞",
                     "",
-                    help="ファイルの「source」として使用するベースディレクトリを指定します。相対パスはこのベースディレクトリ以下に追加されます。"
+                    help="ファイルの「source」として使用するWebパス接頭辞を指定します。入力ディレクトリの末尾名と相対パスがこの接頭辞に追加されます。例: http://example.com/path/to/"
                 )
 
             # 処理対象のファイル拡張子選択
@@ -439,16 +438,23 @@ def show_database_component(
                         if results:
                             texts = [r[0] for r in results]
                             metadatas = [r[1] for r in results]
-                            
-                            # カスタムソースパスの設定（指定があれば）
-                            if custom_source_base:
+
+                            # Webパス接頭辞の設定（指定があれば）
+                            if web_prefix_base:
                                 for metadata in metadatas:
                                     if "rel_path" in metadata:
                                         # 元のソースパスを保持
                                         metadata["original_source"] = metadata["source"]
-                                        # カスタムソースパスを設定
-                                        custom_path = os.path.join(custom_source_base, metadata["rel_path"])
-                                        metadata["source"] = custom_path
+                                        # ディレクトリ末尾名を取得
+                                        last_dir_name = os.path.basename(os.path.normpath(directory_path))
+                                        # Webパス接頭辞にディレクトリ末尾名と相対パスを結合
+                                        if web_prefix_base.endswith('/'):
+                                            web_path = f"{web_prefix_base}{last_dir_name}/{metadata['rel_path']}"
+                                        else:
+                                            web_path = f"{web_prefix_base}/{last_dir_name}/{metadata['rel_path']}"
+                                        # URLのパス区切り文字を統一（Windowsの場合のバックスラッシュを置換）
+                                        web_path = web_path.replace('\\', '/')
+                                        metadata["source"] = web_path
 
                             # コレクション名を設定して処理
                             if collection_name != _qdrant_manager.collection_name:
