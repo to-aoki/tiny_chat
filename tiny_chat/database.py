@@ -755,7 +755,12 @@ def show_database_component(
 # 単独動作用
 if __name__ == "__main__":
     import logging
-    from logger import get_logger  # ロガーをインポート
+    from logger import get_logger
+
+    # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
+    # RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
+    import torch
+    torch.classes.__path__ = []
 
     st.set_page_config(page_title="データベース", layout="wide")
     # ロガーの初期化
