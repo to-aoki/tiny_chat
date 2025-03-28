@@ -140,7 +140,7 @@ def show_chat_component(logger):
                         '.pdf': ("PDF", "ページ"),
                         '.xlsx': ("Excel", "シート"),
                         '.xls': ("Excel", "シート"),
-                        '.docx': ("Word", ""),
+                        '.docx': ("Word", "段落"),
                         '.pptx': ("PowerPoint", "スライド"),
                         '.txt': ("テキスト", ""),
                         '.csv': ("CSV", ""),
@@ -247,7 +247,8 @@ def show_chat_component(logger):
                     extracted_text, count_value, error = processor_class.extract_pptx_text(uploaded_file)
                     count_type = "スライド"
                 elif file_extension.lower() == '.docx':
-                    extracted_text, error = processor_class.extract_word_text(uploaded_file)
+                    extracted_text, count_value, error = processor_class.extract_word_text(uploaded_file)
+                    count_type = "段落"
                 else:  # テキスト、HTMLなど
                     extracted_text, error = processor_class.extract_text(uploaded_file)
 

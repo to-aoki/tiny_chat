@@ -8,15 +8,16 @@ class PDFProcessor:
     """PDFファイル処理クラス"""
 
     @staticmethod
-    def extract_text_from_bytes(pdf_bytes):
+    def extract_text_from_bytes(pdf_bytes, is_page=False):
         """
         PDFバイトデータからテキストを抽出する基本メソッド
 
         Args:
             pdf_bytes: PDFファイルのバイトデータ
+            is_page (bool): Trueの場合、ページ単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, ページ数, エラーメッセージ)
+            tuple: (抽出されたテキスト または ページごとのテキスト配列, ページ数, エラーメッセージ)
         """
         try:
             from pypdf import PdfReader
@@ -24,30 +25,43 @@ class PDFProcessor:
             pdf_stream = io.BytesIO(pdf_bytes)
             pdf_reader = PdfReader(pdf_stream)
 
-            extracted_text = ""
-            for page_num in range(len(pdf_reader.pages)):
-                page = pdf_reader.pages[page_num]
-                page_text = page.extract_text()
-                extracted_text += f"\n--- ページ {page_num + 1} ---\n{page_text}"
-
-            return extracted_text, len(pdf_reader.pages), None
+            if is_page:
+                # ページごとにテキストを配列として格納
+                extracted_text_array = []
+                for page_num in range(len(pdf_reader.pages)):
+                    page = pdf_reader.pages[page_num]
+                    page_text = page.extract_text()
+                    formatted_text = f"--- ページ {page_num + 1} ---\n{page_text}"
+                    extracted_text_array.append(formatted_text)
+                
+                return extracted_text_array, len(pdf_reader.pages), None
+            else:
+                # 従来通り、一つの文字列として結合
+                extracted_text = ""
+                for page_num in range(len(pdf_reader.pages)):
+                    page = pdf_reader.pages[page_num]
+                    page_text = page.extract_text()
+                    extracted_text += f"\n--- ページ {page_num + 1} ---\n{page_text}"
+                
+                return extracted_text, len(pdf_reader.pages), None
         except Exception as e:
             return None, 0, str(e)
 
     @staticmethod
-    def extract_pdf_text(pdf_file):
+    def extract_pdf_text(pdf_file, is_page=False):
         """
         PDFファイルからテキストを抽出 (Streamlit用)
 
         Args:
             pdf_file: PDFファイルオブジェクト（Streamlitのアップローダーから取得）
+            is_page (bool): Trueの場合、ページ単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, ページ数, エラーメッセージ)
+            tuple: (抽出されたテキスト または ページごとのテキスト配列, ページ数, エラーメッセージ)
         """
         try:
             pdf_bytes = pdf_file.getvalue()
-            return PDFProcessor.extract_text_from_bytes(pdf_bytes)
+            return PDFProcessor.extract_text_from_bytes(pdf_bytes, is_page)
         except Exception as e:
             return None, 0, str(e)
 
@@ -56,16 +70,17 @@ class ExcelProcessor:
     """Excelファイル処理クラス"""
 
     @staticmethod
-    def extract_text_from_bytes(excel_bytes, include_sheet_names=True):
+    def extract_text_from_bytes(excel_bytes, include_sheet_names=True, is_page=False):
         """
         Excelバイトデータからテキストを抽出する基本メソッド
 
         Args:
             excel_bytes: Excelファイルのバイトデータ
             include_sheet_names (bool): シート名を含めるかどうか
+            is_page (bool): Trueの場合、シート単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, シート数, エラーメッセージ)
+            tuple: (抽出されたテキスト または シートごとのテキスト配列, シート数, エラーメッセージ)
         """
         try:
             import openpyxl
@@ -76,47 +91,76 @@ class ExcelProcessor:
             workbook = openpyxl.load_workbook(excel_stream, data_only=True)
             sheet_names = workbook.sheetnames
 
-            extracted_text = ""
-            for sheet_name in sheet_names:
-                if include_sheet_names:
-                    extracted_text += f"\n--- シート: {sheet_name} ---\n"
+            if is_page:
+                # シートごとにテキストを配列として格納
+                extracted_text_array = []
+                for sheet_name in sheet_names:
+                    sheet_text = ""
+                    if include_sheet_names:
+                        sheet_text += f"--- シート: {sheet_name} ---\n"
 
-                sheet = workbook[sheet_name]
+                    sheet = workbook[sheet_name]
 
-                # 各行をテキストとして処理
-                for row in sheet.iter_rows():
-                    row_values = []
-                    for cell in row:
-                        cell_value = cell.value
-                        if cell_value is not None:
-                            row_values.append(str(cell_value))
+                    # 各行をテキストとして処理
+                    for row in sheet.iter_rows():
+                        row_values = []
+                        for cell in row:
+                            cell_value = cell.value
+                            if cell_value is not None:
+                                row_values.append(str(cell_value))
 
-                    # 行の値を1つの文として結合
-                    if row_values:
-                        row_text = " ".join(row_values)
-                        extracted_text += row_text + "\n"
+                        # 行の値を1つの文として結合
+                        if row_values:
+                            row_text = " ".join(row_values)
+                            sheet_text += row_text + "\n"
 
-                extracted_text += "\n"
+                    extracted_text_array.append(sheet_text)
+                
+                return extracted_text_array, len(sheet_names), None
+            else:
+                # 従来通り、一つの文字列として結合
+                extracted_text = ""
+                for sheet_name in sheet_names:
+                    if include_sheet_names:
+                        extracted_text += f"\n--- シート: {sheet_name} ---\n"
 
-            return extracted_text, len(sheet_names), None
+                    sheet = workbook[sheet_name]
+
+                    # 各行をテキストとして処理
+                    for row in sheet.iter_rows():
+                        row_values = []
+                        for cell in row:
+                            cell_value = cell.value
+                            if cell_value is not None:
+                                row_values.append(str(cell_value))
+
+                        # 行の値を1つの文として結合
+                        if row_values:
+                            row_text = " ".join(row_values)
+                            extracted_text += row_text + "\n"
+
+                    extracted_text += "\n"
+
+                return extracted_text, len(sheet_names), None
         except Exception as e:
             return None, 0, str(e)
 
     @staticmethod
-    def extract_excel_text(excel_file, include_sheet_names=True):
+    def extract_excel_text(excel_file, include_sheet_names=True, is_page=False):
         """
         Excelファイルからテキストを抽出 (Streamlit用)
 
         Args:
             excel_file: Excelファイルオブジェクト（Streamlitのアップローダーから取得）
             include_sheet_names (bool): シート名を含めるかどうか
+            is_page (bool): Trueの場合、シート単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, シート数, エラーメッセージ)
+            tuple: (抽出されたテキスト または シートごとのテキスト配列, シート数, エラーメッセージ)
         """
         try:
             excel_bytes = excel_file.getvalue()
-            return ExcelProcessor.extract_text_from_bytes(excel_bytes, include_sheet_names)
+            return ExcelProcessor.extract_text_from_bytes(excel_bytes, include_sheet_names, is_page)
         except Exception as e:
             return None, 0, str(e)
 
@@ -125,15 +169,16 @@ class WordProcessor:
     """Wordファイル処理クラス"""
 
     @staticmethod
-    def extract_text_from_bytes(word_bytes):
+    def extract_text_from_bytes(word_bytes, is_page=False):
         """
         Wordバイトデータからテキストを抽出する基本メソッド
 
         Args:
             word_bytes: Wordファイルのバイトデータ
+            is_page (bool): Trueの場合、段落単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, エラーメッセージ)
+            tuple: (抽出されたテキスト または 段落ごとのテキスト配列, 段落数, エラーメッセージ)
         """
         try:
             import docx
@@ -141,98 +186,136 @@ class WordProcessor:
             word_stream = io.BytesIO(word_bytes)
             doc = docx.Document(word_stream)
 
-            extracted_text = ""
-
-            # パラグラフからテキストを抽出
+            # 段落数をカウント（空の段落はスキップ）
+            para_count = 0
             for para in doc.paragraphs:
                 if para.text.strip():  # 空のパラグラフをスキップ
-                    extracted_text += para.text + "\n"
+                    para_count += 1
 
-            # テーブルからテキストを抽出
-            for table in doc.tables:
-                for row in table.rows:
-                    row_text = " | ".join([cell.text for cell in row.cells])
-                    extracted_text += row_text + "\n"
-                extracted_text += "\n"
+            if is_page:
+                # 段落ごとにテキストを配列として格納
+                extracted_text_array = []
+                
+                # パラグラフからテキストを抽出
+                count = 0
+                for para in doc.paragraphs:
+                    if para.text.strip():  # 空のパラグラフをスキップ
+                        count += 1
+                        para_text = f"--- 段落 {count} ---\n{para.text}\n"
+                        extracted_text_array.append(para_text)
+                
+                return extracted_text_array, para_count, None
+            else:
+                # 従来通り、一つの文字列として結合
+                extracted_text = ""
 
-            return extracted_text, None
+                # パラグラフからテキストを抽出
+                for para in doc.paragraphs:
+                    if para.text.strip():  # 空のパラグラフをスキップ
+                        extracted_text += para.text + "\n"
+
+                return extracted_text, para_count, None
         except Exception as e:
-            return None, str(e)
+            return None, 0, str(e)
 
     @staticmethod
-    def extract_word_text(word_file):
+    def extract_word_text(word_file, is_page=False):
         """
         Wordファイルからテキストを抽出 (Streamlit用)
 
         Args:
             word_file: Wordファイルオブジェクト（Streamlitのアップローダーから取得）
+            is_page (bool): Trueの場合、段落単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, エラーメッセージ)
+            tuple: (抽出されたテキスト または 段落ごとのテキスト配列, 段落数, エラーメッセージ)
         """
         try:
             word_bytes = word_file.getvalue()
-            return WordProcessor.extract_text_from_bytes(word_bytes)
+            return WordProcessor.extract_text_from_bytes(word_bytes, is_page)
         except Exception as e:
-            return None, str(e)
+            return None, 0, str(e)
 
 
 class PowerPointProcessor:
     """PowerPointファイル処理クラス"""
 
     @staticmethod
-    def extract_text_from_bytes(pptx_bytes):
+    def extract_text_from_bytes(pptx_bytes, is_page=False):
         """
         PowerPointバイトデータからテキストを抽出する基本メソッド
 
         Args:
             pptx_bytes: PowerPointファイルのバイトデータ
+            is_page (bool): Trueの場合、スライド単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, スライド数, エラーメッセージ)
+            tuple: (抽出されたテキスト または スライドごとのテキスト配列, スライド数, エラーメッセージ)
         """
         try:
             from pptx import Presentation
 
             pptx_stream = io.BytesIO(pptx_bytes)
             prs = Presentation(pptx_stream)
-
-            extracted_text = ""
             slide_count = len(prs.slides)
 
-            for i, slide in enumerate(prs.slides):
-                extracted_text += f"\n--- スライド {i + 1} ---\n"
+            if is_page:
+                # スライドごとにテキストを配列として格納
+                extracted_text_array = []
+                for i, slide in enumerate(prs.slides):
+                    slide_text = f"--- スライド {i + 1} ---\n"
 
-                # スライドのタイトル
-                if slide.shapes.title:
-                    title_text = slide.shapes.title.text
-                    extracted_text += f"タイトル: {title_text}\n"
+                    # スライドのタイトル
+                    if slide.shapes.title:
+                        title_text = slide.shapes.title.text
+                        slide_text += f"タイトル: {title_text}\n"
 
-                # スライド内のテキスト
-                for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text.strip():
-                        extracted_text += shape.text + "\n"
+                    # スライド内のテキスト
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text.strip():
+                            slide_text += shape.text + "\n"
 
-                extracted_text += "\n"
+                    slide_text += "\n"
+                    extracted_text_array.append(slide_text)
 
-            return extracted_text, slide_count, None
+                return extracted_text_array, slide_count, None
+            else:
+                # 従来通り、一つの文字列として結合
+                extracted_text = ""
+                for i, slide in enumerate(prs.slides):
+                    extracted_text += f"\n--- スライド {i + 1} ---\n"
+
+                    # スライドのタイトル
+                    if slide.shapes.title:
+                        title_text = slide.shapes.title.text
+                        extracted_text += f"タイトル: {title_text}\n"
+
+                    # スライド内のテキスト
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text.strip():
+                            extracted_text += shape.text + "\n"
+
+                    extracted_text += "\n"
+
+                return extracted_text, slide_count, None
         except Exception as e:
             return None, 0, str(e)
 
     @staticmethod
-    def extract_pptx_text(pptx_file):
+    def extract_pptx_text(pptx_file, is_page=False):
         """
         PowerPointファイルからテキストを抽出 (Streamlit用)
 
         Args:
             pptx_file: PowerPointファイルオブジェクト（Streamlitのアップローダーから取得）
+            is_page (bool): Trueの場合、スライド単位でテキストを配列として返す
 
         Returns:
-            tuple: (抽出されたテキスト, スライド数, エラーメッセージ)
+            tuple: (抽出されたテキスト または スライドごとのテキスト配列, スライド数, エラーメッセージ)
         """
         try:
             pptx_bytes = pptx_file.getvalue()
-            return PowerPointProcessor.extract_text_from_bytes(pptx_bytes)
+            return PowerPointProcessor.extract_text_from_bytes(pptx_bytes, is_page)
         except Exception as e:
             return None, 0, str(e)
 
@@ -389,13 +472,17 @@ class URIProcessor:
         return re.findall(uri_pattern, text)
 
     @staticmethod
-    def process_uri(uri, max_length=4000):
+    def process_uri(uri,
+                    max_length=4000, is_page=False):
         """
         URIからコンテンツを取得して処理
 
         Args:
             uri (str): 処理するURI
             max_length (int): 最大コンテキスト長
+            is_page (bool): PDFの場合、Trueでページ単位でテキストを配列として返す
+            is_sheet (bool): Excelの場合、Trueでシート単位でテキストを配列として返す
+            is_slide (bool): PowerPointの場合、Trueでスライド単位でテキストを配列として返す
 
         Returns:
             tuple: (抽出されたコンテンツ, メッセージ)
@@ -418,19 +505,19 @@ class URIProcessor:
 
             # 各コンテンツタイプごとに処理
             if 'application/pdf' in content_type:
-                extract_text, page_count, error = PDFProcessor.extract_text_from_bytes(content)
+                extract_text, page_count, error = PDFProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = f"PDFから{page_count}ページのテキストを抽出しました" if not error else error
 
             elif 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' in content_type or 'application/vnd.ms-excel' in content_type:
-                extract_text, sheet_count, error = ExcelProcessor.extract_text_from_bytes(content)
+                extract_text, sheet_count, error = ExcelProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = f"Excelから{sheet_count}シートのテキストを抽出しました" if not error else error
 
             elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or 'application/msword' in content_type:
-                extract_text, error = WordProcessor.extract_text_from_bytes(content)
+                extract_text, error = WordProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = "Wordドキュメントからテキストを抽出しました" if not error else error
 
             elif 'application/vnd.openxmlformats-officedocument.presentationml.presentation' in content_type or 'application/vnd.ms-powerpoint' in content_type:
-                extract_text, slide_count, error = PowerPointProcessor.extract_text_from_bytes(content)
+                extract_text, slide_count, error = PowerPointProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = f"PowerPointから{slide_count}スライドのテキストを抽出しました" if not error else error
 
             elif 'text/html' in content_type:
@@ -445,7 +532,13 @@ class URIProcessor:
                 extract_text, message = None, f"サポートされていないコンテンツタイプです: {content_type}"
 
             if extract_text:
-                extract_text = extract_text[:max_length]
+                if isinstance(extract_text, list):  # is_page=True の場合（ページ配列）
+                    max_length_by_page = int(max_length/len(extract_text))
+                    # 各ページに対して文字数制限を適用
+                    for i in range(len(extract_text)):
+                        extract_text[i] = extract_text[i][:max_length_by_page]
+                else:  # 通常のテキスト
+                    extract_text = extract_text[:max_length]
 
             return extract_text, message
 
