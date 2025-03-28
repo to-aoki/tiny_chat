@@ -107,87 +107,32 @@ def sidebar(config_file_path, logger):
         st.session_state.config["uri_processing"] = uri_processing
         logger.info(f"URI処理設定を変更: {uri_processing}")
 
-    if (server_url != st.session_state.config["server_url"] or
-            is_azure != st.session_state.config["is_azure"]) and not st.session_state.is_sending_message:
-        logger.info(f"サーバーURLを変更: {server_url}")
+    # サーバーURL変更または Azure フラグの変更があった場合の処理
+    server_or_azure_changed = (server_url != st.session_state.config["server_url"] or 
+                              is_azure != st.session_state.config["is_azure"])
+    
+    # APIキーの変更をチェック
+    api_key_changed = api_key != st.session_state.config["api_key"]
+    
+    # いずれかの設定変更があった場合
+    if (server_or_azure_changed or api_key_changed) and not st.session_state.is_sending_message:
+        # ログ記録
+        if server_or_azure_changed:
+            logger.info(f"サーバーURLを変更: {server_url}")
+            if is_azure != st.session_state.config["is_azure"]:
+                logger.info(f"Azure設定を変更: {is_azure}")
+
+        if api_key_changed:
+            logger.info("APIキーを変更しました")
+            
+        # 各フィールドの更新
         st.session_state.config["previous_server_url"] = st.session_state.config["server_url"]
         st.session_state.config["server_url"] = server_url
         st.session_state.config["api_key"] = api_key
         st.session_state.config["is_azure"] = is_azure
-
-        logger.info("サーバー変更に伴いモデルリストを更新中...")
-        new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
-            server_url,
-            api_key,
-            st.session_state.config["selected_model"],
-            is_azure=st.session_state.config["is_azure"]
-        )
-
-        st.session_state.available_models = new_models
-        st.session_state.models_api_success = api_success
-
-        # モデルの自動変更通知 (新しいサーバーで現在のモデルが利用できない場合)
-        if selected_model != st.session_state.config["selected_model"] and new_models:
-            old_model = st.session_state.config["selected_model"]
-            st.session_state.config["selected_model"] = selected_model
-            logger.warning(f"モデルを自動変更: {old_model} → {selected_model}")
-            st.info(
-                f"選択したモデル '{old_model}' は新しいサーバーでは利用できません。"
-                f"'{selected_model}' に変更されました。")
-
-        try:
-            logger.info("新しいサーバーでOpenAIクライアントを初期化中...")
-            st.session_state.openai_client = get_llm_client(
-                server_url=server_url,
-                api_key=api_key,
-                is_azure=is_azure
-            )
-            logger.info("OpenAIクライアント初期化完了")
-        except Exception as e:
-            error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
-            logger.error(error_msg)
-            st.error(error_msg)
-            st.session_state.openai_client = None
-
-    else:
-        if api_key != st.session_state.config["api_key"] and not st.session_state.is_sending_message:
-            # サーバURLは同じだがAPIキーだけ変更された場合（かつメッセージ送信中でない場合）
-            logger.info("APIキーを変更しました")
-            st.session_state.config["api_key"] = api_key
-            logger.info("APIキー変更に伴いモデルリストを更新中...")
-            models, api_success = ModelManager.fetch_available_models(
-                server_url,
-                api_key,
-                st.session_state.openai_client,
-                is_azure=is_azure
-            )
-            st.session_state.available_models = models
-            st.session_state.models_api_success = api_success
-
-            try:
-                logger.info("APIキー変更に伴いOpenAIクライアントを再初期化中...")
-                st.session_state.openai_client = get_llm_client(
-                    server_url=server_url,
-                    api_key=api_key,
-                    is_azure=is_azure
-                )
-                logger.info("OpenAIクライアント初期化完了")
-            except Exception as e:
-                error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
-                logger.error(error_msg)
-                st.error(error_msg)
-                st.session_state.openai_client = None
-
-    if st.button("設定を反映", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
-        logger.info("設定反映ボタンがクリックされました")
-        # サーバURLが変更された場合はモデルリストを更新
-        if server_url != st.session_state.config["server_url"] or is_azure != st.session_state.config["is_azure"]:
-            logger.info(f"サーバーURLを変更: {server_url}")
-            st.session_state.config["previous_server_url"] = st.session_state.config["server_url"]
-            st.session_state.config["server_url"] = server_url
-            st.session_state.config["api_key"] = api_key
-            st.session_state.config["is_azure"] = is_azure
-
+        
+        # サーバー変更の場合はモデルリストを更新
+        if server_or_azure_changed:
             logger.info("サーバー変更に伴いモデルリストを更新中...")
             new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
                 server_url,
@@ -207,12 +152,9 @@ def sidebar(config_file_path, logger):
                 st.info(
                     f"選択したモデル '{old_model}' は新しいサーバーでは利用できません。"
                     f"'{selected_model}' に変更されました。")
-        else:
-            # サーバURLは同じだがAPIキーだけ変更された場合
-            if api_key != st.session_state.config["api_key"]:
-                logger.info("APIキーを変更しました")
-            st.session_state.config["api_key"] = api_key
-            logger.info("モデルリストを更新中...")
+        # APIキーだけ変更された場合
+        elif api_key_changed:
+            logger.info("APIキー変更に伴いモデルリストを更新中...")
             models, api_success = ModelManager.fetch_available_models(
                 server_url,
                 api_key,
@@ -222,8 +164,9 @@ def sidebar(config_file_path, logger):
             st.session_state.available_models = models
             st.session_state.models_api_success = api_success
 
+        # クライアントの再初期化
         try:
-            logger.info("OpenAIクライアントを再初期化中...")
+            logger.info("設定変更に伴いOpenAIクライアントを初期化中...")
             st.session_state.openai_client = get_llm_client(
                 server_url=server_url,
                 api_key=api_key,
@@ -236,18 +179,34 @@ def sidebar(config_file_path, logger):
             st.error(error_msg)
             st.session_state.openai_client = None
 
+    # 設定を反映ボタン
+    if st.button("設定を反映", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
+        logger.info("設定反映ボタンがクリックされました")
+        
+        # メタプロンプト、メッセージ長、コンテキスト長の変更を記録
+        settings_changed = False
+        
         if meta_prompt != st.session_state.config["meta_prompt"]:
             logger.info("メタプロンプトを更新しました")
-        st.session_state.config["meta_prompt"] = meta_prompt
+            st.session_state.config["meta_prompt"] = meta_prompt
+            settings_changed = True
 
         if message_length != st.session_state.config["message_length"]:
             logger.info(f"メッセージ長を更新: {message_length}")
-        st.session_state.config["message_length"] = message_length
+            st.session_state.config["message_length"] = message_length
+            settings_changed = True
 
         if context_length != st.session_state.config["context_length"]:
             logger.info(f"コンテキスト長を更新: {context_length}")
-        st.session_state.config["context_length"] = context_length
+            st.session_state.config["context_length"] = context_length
+            settings_changed = True
+            
+        if uri_processing != st.session_state.config["uri_processing"]:
+            logger.info(f"URI処理設定を更新: {uri_processing}")
+            st.session_state.config["uri_processing"] = uri_processing
+            settings_changed = True
 
+        # 設定をファイルに保存
         config = Config(
             server_url=server_url,
             api_key=api_key,
@@ -265,6 +224,53 @@ def sidebar(config_file_path, logger):
         else:
             logger.warning("設定ファイルへの保存に失敗しました")
             st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
+            
+        # モデルリストを更新するためrerunが必要な場合
+        if settings_changed or server_or_azure_changed or api_key_changed:
+            st.experimental_rerun()
+
+    # モデルリスト更新ボタン
+    if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
+        logger.info("モデルリスト更新ボタンがクリックされました")
+        
+        # 現在の設定値を使用
+        current_server = st.session_state.config["server_url"]
+        current_api_key = st.session_state.config["api_key"]
+        current_is_azure = st.session_state.config["is_azure"]
+        
+        try:
+            # モデルリストを再取得
+            models, api_success = ModelManager.fetch_available_models(
+                current_server,
+                current_api_key,
+                st.session_state.openai_client,
+                is_azure=current_is_azure
+            )
+            
+            # 状態を更新
+            st.session_state.available_models = models
+            st.session_state.models_api_success = api_success
+            
+            if api_success:
+                logger.info(f"モデルリストを更新しました: {', '.join(models)}")
+                st.success(f"モデルリストを更新しました。{len(models)}個のモデルが利用可能です。")
+            else:
+                logger.warning("モデルリスト取得に失敗しました")
+                st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
+                
+            # APIクライアントの再初期化
+            st.session_state.openai_client = get_llm_client(
+                server_url=current_server,
+                api_key=current_api_key,
+                is_azure=current_is_azure
+            )
+            
+            # 更新後のUIを表示するためにrerun
+            st.experimental_rerun()
+        except Exception as e:
+            error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
+            logger.error(error_msg)
+            st.error(error_msg)
 
     uploaded_json = st.file_uploader(
         "チャット履歴をインポート",
