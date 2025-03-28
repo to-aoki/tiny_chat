@@ -1,7 +1,8 @@
 import os
+os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+
 import logging
 import streamlit as st
-
 from config_manager import Config, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
 from chat_manager import ChatManager
@@ -12,11 +13,11 @@ from wait_view import spinner
 from copy_botton import copy_button
 from database import show_database_component, search_documents, get_or_create_qdrant_manager
 
-
 # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
 # RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
 import torch
 torch.classes.__path__ = []
+
 
 LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
 st.set_page_config(page_title="チャット", layout="wide")
@@ -116,7 +117,6 @@ with st.sidebar:
 tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
 
-@st.fragment
 def show_chat_component(logger):
 
     # チャット履歴の表示
@@ -324,8 +324,6 @@ def show_chat_component(logger):
             if st.session_state.config["uri_processing"]:
                 uri_processor = URIProcessor()
                 detects_urls = uri_processor.detect_uri(prompt_content)
-
-            # この部分は不要になりました (既に上で処理されています)
 
             # 処理ステータスを更新
             st.session_state.status_message = "LLMにプロンプトを入力中..."
