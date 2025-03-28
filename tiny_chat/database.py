@@ -224,7 +224,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     return added_ids
 
 
-def search_documents(query: str, top_k: int = 10, filter_params: Dict = None, logger=None) -> List:
+def search_documents(query: str, top_k: int = 10, filter_params: Dict = None, logger=None, score_threshold=0.4) -> List:
     """
     ドキュメントを検索します
 
@@ -237,7 +237,8 @@ def search_documents(query: str, top_k: int = 10, filter_params: Dict = None, lo
         results: 検索結果のリスト
     """
     _qdrant_manager = get_or_create_qdrant_manager(logger)
-    results = _qdrant_manager.query_points(query, top_k=top_k, filter_params=filter_params)
+    results = _qdrant_manager.query_points(
+        query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold)
     return results
 
 
@@ -298,7 +299,7 @@ def show_database_component(
                 filter_params = {"source": selected_sources}
 
             with st.spinner("検索中..."):
-                results = search_documents(query, top_k=top_k, filter_params=filter_params)
+                results = search_documents(query, top_k=top_k, filter_params=filter_params, score_threshold=0.)
 
             # 結果の表示
             if results:
@@ -339,51 +340,11 @@ def show_database_component(
                             source_path = metadata['source']
                             filename = metadata.get('filename', 'ファイル')
                             
-                            # URLの処理
+                            # ローカルファイルと外部URLを区別して処理
                             if source_path.startswith(('http://', 'https://')):
-                                # ソースファイルとそのリンクを1つにまとめて表示
-                                st.markdown(
-                                    f"""
-                                    <div style="margin-bottom: 10px;">
-                                        <span><strong>ソースファイル</strong>: {filename}</span>
-                                        <button 
-                                            onclick="window.open('{source_path}', '_blank')" 
-                                            style="margin-left: 10px; padding: 2px 8px; cursor: pointer; background-color: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;"
-                                        >
-                                            URLを開く
-                                        </button>
-                                    </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-                            else:
-                                # /tmp/で始まるパスは表示しない
-                                if not source_path.startswith('/tmp/'):
-                                    # ファイルパスをURLエンコード（スペースや特殊文字をエンコード）
-                                    encoded_path = urllib.parse.quote(source_path, safe='/')
-                                    
-                                # ソースファイルとそのリンクを1つにまとめて表示
-                                if not source_path.startswith(('http://', 'https://', 'file://')):
-                                    file_uri = f"file://{source_path}"
-                                else:
-                                    file_uri = source_path
-                                    
-                                # JavaScriptを使用してファイルを開くリンク
-                                button_type = "URL" if source_path.startswith(('http://', 'https://')) else "ファイル"
-                                st.markdown(
-                                    f"""
-                                    <div style="margin-bottom: 10px;">
-                                        <span><strong>ソースファイル</strong>: {filename}</span>
-                                        <button 
-                                            onclick="window.open('{file_uri}', '_blank')" 
-                                            style="margin-left: 10px; padding: 2px 8px; cursor: pointer; background-color: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;"
-                                        >
-                                            {button_type}を開く
-                                        </button>
-                                    </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
+                                # 外部URLの場合は直接リンクボタンを表示
+                                st.write(f"**ソースファイル**: {filename}")
+                                st.link_button("URLを開く", source_path)
 
                         # テキスト表示
                         st.markdown("**本文:**")
@@ -796,10 +757,10 @@ if __name__ == "__main__":
     import logging
     from logger import get_logger  # ロガーをインポート
 
+    st.set_page_config(page_title="データベース", layout="wide")
     # ロガーの初期化
     LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
     LOGGER.info("単独データベースアプリケーションを起動しました")
-    st.title("データベース")
 
     SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
     # コンポーネントの表示
