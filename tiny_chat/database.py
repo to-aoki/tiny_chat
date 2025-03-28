@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Any, Tuple
 import tempfile
+import urllib.parse
 
 import streamlit as st
 import pandas as pd
@@ -203,7 +204,8 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     for source in sources_to_add:
         if source in existing_sources:
             # ソースに関連するデータを削除
-            filter_params = {"source": source}
+            # ソース名を配列として渡す（単一でも配列として扱う）
+            filter_params = {"source": [source]}
             _qdrant_manager.delete_by_filter(filter_params)
 
     all_texts = []
@@ -292,8 +294,8 @@ def show_database_component(
             # フィルターの作成
             filter_params = {}
             if selected_sources:
-                # 複数ソースをリストとして適切に設定
-                filter_params["source"] = selected_sources
+                # 複数のソースを配列として設定
+                filter_params = {"source": selected_sources}
 
             with st.spinner("検索中..."):
                 results = search_documents(query, top_k=top_k, filter_params=filter_params)
@@ -338,19 +340,50 @@ def show_database_component(
                             filename = metadata.get('filename', 'ファイル')
                             
                             # URLの処理
-                            if source_path.startswith('http'):
-                                source_url = source_path
+                            if source_path.startswith(('http://', 'https://')):
+                                # ソースファイルとそのリンクを1つにまとめて表示
+                                st.markdown(
+                                    f"""
+                                    <div style="margin-bottom: 10px;">
+                                        <span><strong>ソースファイル</strong>: {filename}</span>
+                                        <button 
+                                            onclick="window.open('{source_path}', '_blank')" 
+                                            style="margin-left: 10px; padding: 2px 8px; cursor: pointer; background-color: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;"
+                                        >
+                                            URLを開く
+                                        </button>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
                             else:
                                 # /tmp/で始まるパスは表示しない
                                 if not source_path.startswith('/tmp/'):
-                                    # file://プロトコルの正しい形式
-                                    if source_path.startswith('/'):
-                                        source_url = f"file://{source_path}"
-                                    else:
-                                        source_url = f"file:///{source_path}"
-                                        
-                                    # ソースファイルへのリンクを表示
-                                    st.markdown(f"**ソースファイル**: [{filename}]({source_url})")
+                                    # ファイルパスをURLエンコード（スペースや特殊文字をエンコード）
+                                    encoded_path = urllib.parse.quote(source_path, safe='/')
+                                    
+                                # ソースファイルとそのリンクを1つにまとめて表示
+                                if not source_path.startswith(('http://', 'https://', 'file://')):
+                                    file_uri = f"file://{source_path}"
+                                else:
+                                    file_uri = source_path
+                                    
+                                # JavaScriptを使用してファイルを開くリンク
+                                button_type = "URL" if source_path.startswith(('http://', 'https://')) else "ファイル"
+                                st.markdown(
+                                    f"""
+                                    <div style="margin-bottom: 10px;">
+                                        <span><strong>ソースファイル</strong>: {filename}</span>
+                                        <button 
+                                            onclick="window.open('{file_uri}', '_blank')" 
+                                            style="margin-left: 10px; padding: 2px 8px; cursor: pointer; background-color: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;"
+                                        >
+                                            {button_type}を開く
+                                        </button>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
 
                         # テキスト表示
                         st.markdown("**本文:**")
