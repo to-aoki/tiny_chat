@@ -231,8 +231,16 @@ def show_database_component(
 
     # 検索タブ
     with search_tabs[0]:
-        # 検索フィールド
-        query = st.text_input("検索文字列", "")
+        # 検索のエンターキー対応のためのコールバック関数
+        if "search_query" not in st.session_state:
+            st.session_state.search_query = ""
+            
+        def search_on_enter():
+            # テキスト入力からクエリを取得し、検索実行のフラグを立てる
+            st.session_state.run_search = True
+            
+        # 検索フィールド (Enterキーで検索実行するためにon_changeパラメータを追加)
+        query = st.text_input("検索文字列", "", key="search_query_input", on_change=search_on_enter)
 
         # 詳細設定のエクスパンダー
         with st.expander("詳細設定", expanded=False):
@@ -250,11 +258,17 @@ def show_database_component(
                     key="sources_multiselect_filter"  # 固定のキーを使用
                 )
 
+        # 検索の実行フラグをセットアップ
+        if "run_search" not in st.session_state:
+            st.session_state.run_search = False
+        
         # 検索ボタン
         search_pressed = st.button("検索", key="search_button", type="primary")
 
-        # 検索実行
-        if search_pressed and query:
+        # 検索実行（ボタン押下またはEnterキー押下で実行）
+        if (search_pressed or st.session_state.run_search) and query:
+            # 検索フラグをリセット
+            st.session_state.run_search = False
             # フィルターの作成
             filter_params = {}
             if selected_sources:
