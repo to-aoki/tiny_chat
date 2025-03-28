@@ -3,6 +3,7 @@ os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
 import logging
 import streamlit as st
+import urllib.parse
 from config_manager import Config, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
 from chat_manager import ChatManager
@@ -469,15 +470,20 @@ def show_chat_component(logger):
                             # URLの処理
                             # - httpで始まる場合は、そのままURLとして使用
                             # - それ以外の場合は、file://プロトコルを付加（絶対パスの処理に注意）
+                            
                             if source_path.startswith('http'):
                                 source_url = source_path
                             else:
+                                # ファイルパスをURLエンコード（スペースや特殊文字をエンコード）
+                                # ただしスラッシュ(/)はそのまま保持する
+                                encoded_path = urllib.parse.quote(source_path, safe='/')
+                                
                                 # file://プロトコルの正しい形式：file:///path/to/file（スラッシュ3つ）
                                 # 絶対パスの場合は先頭の / を維持するために注意
-                                if source_path.startswith('/'):
-                                    source_url = f"file://{source_path}"  # '/path/to/file' → 'file:///path/to/file'
+                                if encoded_path.startswith('/'):
+                                    source_url = f"file:///{encoded_path}"  # '/path/to/file' → 'file:///path/to/file'（スラッシュ3つ）
                                 else:
-                                    source_url = f"file:///{source_path}"  # 相対パスの場合
+                                    source_url = f"file:///{encoded_path}"  # 相対パスの場合
 
                             # インデックス付きの参照リンクを追加
                             sources_md += f"- [{refer+1}] [{filename}]({source_url})\n"

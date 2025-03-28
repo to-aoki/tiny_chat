@@ -50,15 +50,16 @@ def get_or_create_qdrant_manager(logger=None):
     return _qdrant_manager
 
 
-def process_file(file_path: str) -> Tuple[str, Dict[str, Any]]:
+def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
     """
     ファイルを処理し、テキストとメタデータを抽出します
+    is_page=Trueで処理するため、テキストは文字列のリストとして返されます
 
     Args:
         file_path: 処理するファイルのパス
 
     Returns:
-        (extracted_text, metadata): 抽出されたテキストとメタデータの辞書
+        (extracted_text_array, metadata): 抽出されたテキスト配列とメタデータの辞書
     """
     # ファイル拡張子を取得
     file_ext = os.path.splitext(file_path)[1].lower()
@@ -81,45 +82,53 @@ def process_file(file_path: str) -> Tuple[str, Dict[str, Any]]:
         "file_type": file_ext[1:],  # 拡張子の.を除去
     }
 
-    # ファイルタイプに応じた処理
+    # ファイルタイプに応じた処理、is_page=Trueで文字列配列として処理
     if file_ext == '.pdf':
-        text, page_count, error = processor.extract_text_from_bytes(file_bytes)
+        text, page_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
         if error:
             st.warning(f"PDFの処理中にエラーが発生しました: {error}")
             return None, {}
         metadata["page_count"] = page_count
 
     elif file_ext in ['.xlsx']:
-        text, sheet_count, error = processor.extract_text_from_bytes(file_bytes)
+        text, sheet_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
         if error:
             st.warning(f"Excelの処理中にエラーが発生しました: {error}")
             return None, {}
         metadata["sheet_count"] = sheet_count
 
     elif file_ext == '.docx':
-        text, error = processor.extract_text_from_bytes(file_bytes)
+        text, para_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
         if error:
             st.warning(f"Wordの処理中にエラーが発生しました: {error}")
             return None, {}
+        metadata["para_count"] = para_count
 
     elif file_ext == '.pptx':
-        text, slide_count, error = processor.extract_text_from_bytes(file_bytes)
+        text, slide_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
         if error:
             st.warning(f"PowerPointの処理中にエラーが発生しました: {error}")
             return None, {}
         metadata["slide_count"] = slide_count
 
     elif file_ext in ['.txt', '.csv', '.json', '.md']:
+        # テキストファイルの場合はページ分割機能がないため従来通り
         text, error = processor.extract_text_from_bytes(file_bytes)
         if error:
             st.warning(f"テキストファイルの処理中にエラーが発生しました: {error}")
             return None, {}
+        # 単一のテキストを配列に変換して1ページとして扱う
+        if text:
+            text = [text]
 
     elif file_ext in ['.html', '.htm']:
         text, message = processor.extract_text_from_bytes(file_bytes)
         if not text:
             st.warning(f"HTMLの処理中にエラーが発生しました: {message}")
             return None, {}
+        # 単一のテキストを配列に変換して1ページとして扱う
+        if text:
+            text = [text]
 
     else:
         st.warning(f"対応していないファイル形式です: {file_ext}")
@@ -134,7 +143,7 @@ def process_file(file_path: str) -> Tuple[str, Dict[str, Any]]:
 def process_directory(directory_path: str,
     extensions: List[str] = None,
     support_extensions: List[str] = ['.pdf', '.xlsx', '.xls', '.docx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
-) -> List[Tuple[str, Dict]]:
+) -> List[Tuple[List[str], Dict]]:
     """
     ディレクトリ内のファイルを処理します
 
@@ -143,7 +152,7 @@ def process_directory(directory_path: str,
         extensions: 処理対象のファイル拡張子リスト (None の場合はすべてのサポートされる形式)
 
     Returns:
-        [(text, metadata), ...]: 抽出されたテキストとメタデータのリスト
+        [(text_array, metadata), ...]: 抽出されたテキスト配列とメタデータのリスト
     """
     results = []
 
@@ -168,13 +177,13 @@ def process_directory(directory_path: str,
     return results
 
 
-def add_files_to_qdrant(texts: List[str], metadatas: List[Dict]) -> List[str]:
+def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[str]:
     """
     テキストとメタデータをQdrantに追加します
     同じソース（ファイル名）が既に存在する場合は、削除してから追加します
 
     Args:
-        texts: テキストのリスト
+        texts: テキスト配列のリスト (is_page=True により、各ファイルのテキストは文字列の配列)
         metadatas: メタデータのリスト
 
     Returns:
@@ -196,9 +205,20 @@ def add_files_to_qdrant(texts: List[str], metadatas: List[Dict]) -> List[str]:
             # ソースに関連するデータを削除
             filter_params = {"source": source}
             _qdrant_manager.delete_by_filter(filter_params)
+
+    all_texts = []
+    all_metadatas = []
     
-    # 新しいデータを追加
-    added_ids = _qdrant_manager.add_documents(texts, metadatas)
+    for i, text_array in enumerate(texts):
+        base_metadata = metadatas[i].copy()
+        for page_index, page_text in enumerate(text_array):
+            all_texts.append(page_text)
+            page_metadata = base_metadata.copy()
+            page_metadata["page"] = page_index + 1  # 配列の添字 + 1 をページとして設定
+            all_metadatas.append(page_metadata)
+    
+    # Qdrantに追加
+    added_ids = _qdrant_manager.add_documents(all_texts, all_metadatas)
     return added_ids
 
 
@@ -272,6 +292,7 @@ def show_database_component(
             # フィルターの作成
             filter_params = {}
             if selected_sources:
+                # 複数ソースをリストとして適切に設定
                 filter_params["source"] = selected_sources
 
             with st.spinner("検索中..."):
@@ -288,8 +309,24 @@ def show_database_component(
                     # メタデータを表示用に整形
                     metadata = {k: v for k, v in result.payload.items() if k != "text"}
 
+                    # ページ情報（あれば）を取得
+                    page_info = ""
+                    if 'page' in metadata:
+                        # ファイル種類に応じて表示を変える
+                        file_type = metadata.get('file_type', '').lower()
+                        if file_type == 'pdf':
+                            page_info = f"(ページ: {metadata['page']})"
+                        elif file_type == 'xlsx':
+                            page_info = f"(シート: {metadata['page']})"
+                        elif file_type == 'docx':
+                            page_info = f"(段落: {metadata['page']})"
+                        elif file_type == 'pptx':
+                            page_info = f"(スライド: {metadata['page']})"
+                        else:
+                            page_info = f"(記載箇所: {metadata['page']})"
+                        
                     # 結果表示
-                    with st.expander(f"#{i + 1}: {metadata.get('filename', 'ドキュメント')} (スコア: {score:.4f})",
+                    with st.expander(f"#{i + 1}: {metadata.get('filename', 'ドキュメント')} {page_info} (スコア: {score:.4f})",
                                      expanded=i == 0):
                         # メタデータテーブル
                         metadata_df = pd.DataFrame([metadata])
@@ -569,8 +606,8 @@ def show_database_component(
                                 if collection_name != _qdrant_manager.collection_name:
                                     _qdrant_manager.get_collection(collection_name)
 
-                                # ソースでフィルタリングして削除
-                                filter_params = {"source": selected_source_to_delete}
+                                # ソースでフィルタリングして削除（ソース名が単一でも配列として渡す）
+                                filter_params = {"source": [selected_source_to_delete]}
                                 _qdrant_manager.delete_by_filter(filter_params)
                                 
                                 # 常に成功メッセージを表示
