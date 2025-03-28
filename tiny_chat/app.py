@@ -4,6 +4,7 @@ os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 import logging
 import streamlit as st
 import urllib.parse
+import webbrowser
 from config_manager import Config, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
 from chat_manager import ChatManager
@@ -105,6 +106,10 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
     # データベースタブが選択されたことを記録するフラグ
     if "database_tab_selected" not in st.session_state:
         st.session_state.database_tab_selected = False
+        
+    # 現在の回答で参照されたファイル情報
+    if "reference_files" not in st.session_state:
+        st.session_state.reference_files = []
 
 
 # セッション状態の初期化
@@ -118,6 +123,21 @@ with st.sidebar:
 tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
 
+# ファイルを開くヘルパー関数
+def open_file(file_path):
+    try:
+        # ファイルパスがHTTP URLでない場合はfile://スキームを追加
+        if not file_path.startswith(('http://', 'https://', 'file://')):
+            file_uri = f"file://{file_path}"
+        else:
+            file_uri = file_path
+        webbrowser.open(file_uri)
+        return True
+    except Exception as e:
+        st.error(f"ファイルを開けませんでした: {str(e)}")
+        return False
+
+
 def show_chat_component(logger):
 
     # チャット履歴の表示
@@ -126,6 +146,30 @@ def show_chat_component(logger):
             st.write(message["content"])
             if message["role"] == "assistant":
                 copy_button(message["content"])
+                
+                # 参照ファイルがある場合、ボタンを表示する
+                if "reference_files" in st.session_state and len(st.session_state.reference_files) > 0 and i == len(st.session_state.chat_manager.messages) - 1:
+                    file_buttons = []
+                    for ref_file in st.session_state.reference_files:
+                        file_buttons.append({
+                            "index": ref_file["index"],
+                            "filename": ref_file["filename"],
+                            "path": ref_file["path"],
+                            "is_web": ref_file.get("is_web", False)
+                        })
+                    
+                    if file_buttons:
+                        with st.container():
+                            st.write("参照情報を開く:")
+                            cols = st.columns(min(len(file_buttons), 3))
+                            for idx, file_info in enumerate(file_buttons):
+                                with cols[idx % len(cols)]:
+                                    if st.button(f"[{file_info['index']}] {file_info['filename']}", 
+                                                key=f"open_ref_{i}_{idx}"):
+                                        if file_info.get("is_web", False) or file_info["path"].startswith("http"):
+                                            webbrowser.open(file_info["path"])
+                                        else:
+                                            open_file(file_info["path"])
 
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
@@ -174,6 +218,8 @@ def show_chat_component(logger):
                     use_container_width=True,
                     key="clear_chat_history_button"):
                 st.session_state.chat_manager = ChatManager()
+                # 参照ファイル情報もクリア
+                st.session_state.reference_files = []
                 st.rerun()
 
         with cols[2]:
@@ -210,6 +256,9 @@ def show_chat_component(logger):
                 st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
             else:
                 st.info("RAGが無効です")
+                # RAGモードが無効になった場合、参照情報をクリア
+                st.session_state.rag_sources = []
+                st.session_state.reference_files = []
         elif use_rag:
             st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
 
@@ -347,7 +396,8 @@ def show_chat_component(logger):
                     uri_processor=uri_processor if st.session_state.config["uri_processing"] else None
                 )
 
-            # RAGモードが有効な場合、検索を実行
+            # RAGモードが有効な場合のみ、検索を実行
+            search_results = None
             if st.session_state.rag_mode:
                 st.session_state.status_message = "関連文書を検索中..."
                 # 最新のユーザーメッセージで検索（共通関数を使用）
@@ -400,8 +450,8 @@ def show_chat_component(logger):
                 # 通常メッセージ
                 content_to_send = prompt_content
 
-                # RAGが有効で検索結果がある場合は、検索結果を含める
-                if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources:
+                # RAGが有効で検索結果がある場合のみ、検索結果を含める
+                if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources and len(st.session_state.rag_sources) > 0:
                     search_context = "\n\n以下は検索システムから取得した関連情報です:\n\n"
                     for source in st.session_state.rag_sources:
                         search_context += f"[{source['index']}] {source['filename']}:\n"
@@ -444,55 +494,31 @@ def show_chat_component(logger):
                                 full_response += delta.content
                                 message_placeholder.markdown(full_response)
 
-                    # RAGモードで検索結果がある場合、参照情報を追加
+                    # RAGモードで検索結果がある場合のみ、参照情報を追加
                     final_response = full_response
-                    if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources:
-                        # 参照情報を表示用に整形
-                        sources_md = "\n\n---\n**参照情報:**\n"
-                        unique_sources = set()
-                        refer = 0
-                        for source in st.session_state.rag_sources:
-                            # ソースパスを表示用テキストとリンク先URLに分ける
+                    if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources and len(st.session_state.rag_sources) > 0:
+                        # 参照ファイル情報を保存するが、マークダウンには表示しない
+                        reference_files = []
+                        for i, source in enumerate(st.session_state.rag_sources):
                             source_path = source["source"]
                             filename = source["filename"]
-
-                            if not source_path:
-                                continue
-
-                            # /tmp/で始まるパスはスキップ（参照情報として表示しない）
-                            if source_path.startswith('/tmp/'):
-                                continue
-
-                            # 重複チェック - 既に同じソースが存在する場合はスキップ
-                            if source_path in unique_sources:
-                                continue
-
-                            # URLの処理
-                            # - httpで始まる場合は、そのままURLとして使用
-                            # - それ以外の場合は、file://プロトコルを付加（絶対パスの処理に注意）
                             
-                            if source_path.startswith('http'):
-                                source_url = source_path
-                            else:
-                                # ファイルパスをURLエンコード（スペースや特殊文字をエンコード）
-                                # ただしスラッシュ(/)はそのまま保持する
-                                encoded_path = urllib.parse.quote(source_path, safe='/')
+                            if not source_path or source_path.startswith('/tmp/'):
+                                continue
                                 
-                                # file://プロトコルの正しい形式：file:///path/to/file（スラッシュ3つ）
-                                # 絶対パスの場合は先頭の / を維持するために注意
-                                if encoded_path.startswith('/'):
-                                    source_url = f"file:///{encoded_path}"  # '/path/to/file' → 'file:///path/to/file'（スラッシュ3つ）
-                                else:
-                                    source_url = f"file:///{encoded_path}"  # 相対パスの場合
-
-                            # インデックス付きの参照リンクを追加
-                            sources_md += f"- [{refer+1}] [{filename}]({source_url})\n"
-                            refer += 1
-
-                        # マークダウンで最終出力を表示（出力＋参照情報）
-                        if refer > 0:
-                            final_response = full_response + sources_md
-                        message_placeholder.markdown(final_response)
+                            # URLの場合とローカルファイルの場合、両方とも参照ボタンとして表示できるようにする
+                            reference_files.append({
+                                "index": i+1,
+                                "filename": filename,
+                                "path": source_path,
+                                "is_web": source_path.startswith('http')
+                            })
+                        
+                        # セッション状態に参照ファイル情報を保存
+                        st.session_state.reference_files = reference_files
+                        
+                        # 参照情報を含めずに最終出力を表示
+                        message_placeholder.markdown(full_response)
                     else:
                         # 通常の出力
                         message_placeholder.markdown(full_response)
