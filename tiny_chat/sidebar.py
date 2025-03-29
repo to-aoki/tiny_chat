@@ -227,7 +227,7 @@ def sidebar(config_file_path, logger):
             
         # モデルリストを更新するためrerunが必要な場合
         if settings_changed or server_or_azure_changed or api_key_changed:
-            st.experimental_rerun()
+            st.rerun()
 
     # モデルリスト更新ボタン
     if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
@@ -265,8 +265,7 @@ def sidebar(config_file_path, logger):
                 is_azure=current_is_azure
             )
             
-            # 更新後のUIを表示するためにrerun
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
             logger.error(error_msg)
