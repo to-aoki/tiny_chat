@@ -14,10 +14,11 @@ class QdrantManager:
     """
 
     def __init__(self,
-                 collection_name: str = "documents",
-                 path: str = "./qdrant_data",
-                 host: Optional[str] = None,
-                 port: Optional[int] = 6333
+         collection_name: str = "documents",
+         path: str = "./qdrant_data",
+         host: Optional[str] = None,
+         port: Optional[int] = 6333,
+         chunk_overlap: Optional[int] = 24,
     ):
         """
         QdrantManagerの初期化
@@ -27,7 +28,6 @@ class QdrantManager:
             path: Qdrantデータベースのローカルパス（ファイルモード）
             host: Qdrantサーバーのホスト（指定された場合はHTTP接続モードになる）
             port: Qdrantサーバーのポート（HTTPモードの場合のみ有効）
-            use_uuid: IDタイプとしてUUIDを使用するかどうか（Falseの場合は文字列IDを使用）
         """
         self.collection_name = collection_name
         
@@ -38,7 +38,7 @@ class QdrantManager:
         # TextChunkerの初期化
         self.chunker = TextChunker(
             chunk_size=self.static_emb_model.dimension,
-            chunk_overlap=24
+            chunk_overlap=chunk_overlap
         )
         
         # ベクトルフィールド名の設定
@@ -312,12 +312,13 @@ class QdrantManager:
                 )
 
         try:
-            # ハイブリッド検索の実行
             response = self.client.query_points(
                 collection_name=self.collection_name,
                 prefetch=[
-                    models.Prefetch(query=sparse_embedding.as_object(), using=self.sparse_vector_field_name, limit=top_k),
-                    models.Prefetch(query=dense_embedding.tolist(), using=self.dense_vector_field_name, limit=top_k),
+                    models.Prefetch(
+                        query=sparse_embedding.as_object(), using=self.sparse_vector_field_name, limit=top_k),
+                    models.Prefetch(
+                        query=dense_embedding.tolist(), using=self.dense_vector_field_name, limit=top_k),
                 ],
                 query=models.FusionQuery(fusion=models.Fusion.RRF),  # RRF (Reciprocal Rank Fusion)を使用して検索結果を結合
                 limit=top_k,
@@ -373,7 +374,6 @@ class QdrantManager:
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
-        # 新しいquery_pointsメソッドを使用
         return self.query_points(query, top_k, filter_params)
 
     def get_collections(self) -> List[str]:
@@ -562,7 +562,7 @@ if __name__ == "__main__":
     for query in queries:
         print(f"\nクエリ: {query}")
         start_time = time.time()
-        results = manager.query_points(query, top_k=2)
+        results = manager.query_points(query, top_k=3, score_threshold=0.)
         
         print(f"検索結果（上位{len(results)}件）:")
         for i, result in enumerate(results):
@@ -576,7 +576,7 @@ if __name__ == "__main__":
     filter_params = {"region": "関西"}
     
     print(f"クエリ: {query}, フィルタ: {filter_params}")
-    results = manager.query_points(query, top_k=3, filter_params=filter_params)
+    results = manager.query_points(query, top_k=3, filter_params=filter_params, score_threshold=0.)
 
     print(manager.get_sources())
 

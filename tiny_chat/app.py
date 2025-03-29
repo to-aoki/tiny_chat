@@ -67,7 +67,6 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
 
     # モデル情報を初期化
     if "available_models" not in st.session_state:
-        logger.info("利用可能なモデルを取得しています...")
         models, success = ModelManager.fetch_available_models(
             st.session_state.config["server_url"],
             st.session_state.config["api_key"],
@@ -76,20 +75,16 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
         )
         st.session_state.available_models = models
         st.session_state.models_api_success = success
-        if success:
-            logger.info(f"利用可能なモデル: {', '.join(models)}")
-        else:
+        if not success:
             logger.warning("モデル取得に失敗しました")
 
     if "openai_client" not in st.session_state:
         try:
-            logger.info("OpenAIクライアントを初期化しています...")
             st.session_state.openai_client = get_llm_client(
                 server_url=st.session_state.config["server_url"],
                 api_key=st.session_state.config["api_key"],
                 is_azure=st.session_state.config["is_azure"]
             )
-            logger.info("OpenAIクライアント初期化完了")
         except Exception as e:
             error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
             logger.error(error_msg)
@@ -155,8 +150,7 @@ def show_chat_component(logger):
                         file_buttons.append({
                             "index": ref_file["index"],
                             "filename": ref_file["filename"],
-                            "path": ref_file["path"],
-                            "is_web": ref_file.get("is_web", False)
+                            "path": ref_file["path"]
                         })
                     
                     if file_buttons:
@@ -239,7 +233,6 @@ def show_chat_component(logger):
                     use_container_width=True,
                     key="export_chat_history_button"
                 )
-                logger.info("メッセージ履歴のJSONエクスポート機能を提供しました")
 
         # RAGモードのチェックボックス
         use_rag = st.checkbox("RAG (データベースを利用した回答)", value=st.session_state.rag_mode,
@@ -254,7 +247,6 @@ def show_chat_component(logger):
                 st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
             else:
                 st.info("RAGが無効です")
-                # RAGモードが無効になった場合、参照情報をクリア
                 st.session_state.rag_sources = []
                 st.session_state.reference_files = []
         elif use_rag:
@@ -316,7 +308,6 @@ def show_chat_component(logger):
                             counter += 1
                             new_name = f"{base_name}_{counter}{ext}"
                         filename = new_name
-                        logger.info(f"ファイル名重複を検出: {prompt['files'][0].name} → {filename}")
 
                     # 添付ファイルリストに追加
                     st.session_state.chat_manager.add_attachment(
@@ -405,7 +396,7 @@ def show_chat_component(logger):
                     # 検索結果を整形
                     search_context = "以下は検索システムから取得した関連情報です:\n\n"
 
-                    # 参照情報をリセット（後でアシスタント出力に表示するため）
+                    # 参照情報をリセット
                     st.session_state.rag_sources = []
 
                     for i, result in enumerate(search_results):
@@ -448,7 +439,7 @@ def show_chat_component(logger):
                 # 通常メッセージ
                 content_to_send = prompt_content
 
-                # RAGが有効で検索結果がある場合のみ、検索結果を含める
+                # RAGが有効で検索結果がある場合のみ検索結果を含める
                 if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources and len(st.session_state.rag_sources) > 0:
                     search_context = "\n\n以下は検索システムから取得した関連情報です:\n\n"
                     for source in st.session_state.rag_sources:
@@ -508,8 +499,7 @@ def show_chat_component(logger):
                             reference_files.append({
                                 "index": i+1,
                                 "filename": filename,
-                                "path": source_path,
-                                "is_web": source_path.startswith('http')
+                                "path": source_path
                             })
                         
                         # セッション状態に参照ファイル情報を保存
@@ -533,9 +523,11 @@ def show_chat_component(logger):
 
                 except Exception as e:
                     error_message = f"APIエラー: {str(e)}"
+                    logger.error(f"APIエラー: {str(e)}")
                     message_placeholder.error(error_message)
 
         except Exception as e:
+            logger.error(f"エラーが発生しました: {str(e)}")
             st.error(f"エラーが発生しました: {str(e)}")
 
         st.session_state.is_sending_message = False
@@ -550,7 +542,7 @@ with tabs[0]:
 
 # データベース機能タブ
 with tabs[1]:
-    # データベースタブが選択されたことを記録
+    # データベースタブが選択
     st.session_state.database_tab_selected = True
     # データベース機能の表示
     show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
