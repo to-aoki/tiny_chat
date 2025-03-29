@@ -6,7 +6,7 @@ os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 import logging
 import streamlit as st
 import webbrowser
-from config_manager import Config, ModelManager
+from chat_config_manager import ChatConfig, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
 from chat_manager import ChatManager
 from logger import get_logger
@@ -35,7 +35,7 @@ SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json'
 def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
     if "config" not in st.session_state:
         # 外部設定ファイルから設定を読み込む
-        file_config = Config.load(config_file_path)
+        file_config = ChatConfig.load(config_file_path)
         logger.info(f"設定ファイルを読み込みました: {config_file_path}")
 
         # セッション状態に設定オブジェクトを初期化
