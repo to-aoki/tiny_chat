@@ -8,15 +8,15 @@ class ChatConfig:
     """
 
     def __init__(
-            self,
-            server_url: str = "http://localhost:11434/v1",
-            api_key: str = "dummy-key",
-            selected_model: str = "hf.co/mmnga/llm-jp-3-980m-instruct3-gguf:Q4_K_M",
-            meta_prompt: str = "",
-            message_length: int = 8000,
-            context_length: int = 1000,
-            uri_processing: bool = True,
-            is_azure: bool = False
+        self,
+        server_url: str = "http://localhost:11434/v1",
+        api_key: str = "dummy-key",
+        selected_model: str = "hf.co/mmnga/llm-jp-3-980m-instruct3-gguf:Q4_K_M",
+        meta_prompt: str = "",
+        message_length: int = 8000,
+        context_length: int = 1000,
+        uri_processing: bool = True,
+        is_azure: bool = False
     ):
         self.server_url = server_url
         self.api_key = api_key
@@ -28,7 +28,7 @@ class ChatConfig:
         self.is_azure = is_azure
 
     @classmethod
-    def load(cls, file_path: str) -> 'Config':
+    def load(cls, file_path: str) -> 'ChatConfig':
         """
         設定ファイルから設定を読み込む
 

@@ -6,7 +6,7 @@ os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 import logging
 import streamlit as st
 import webbrowser
-from chat_config_manager import ChatConfig, ModelManager
+from chat_config import ChatConfig, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
 from chat_manager import ChatManager
 from logger import get_logger
@@ -242,7 +242,6 @@ def show_chat_component(logger):
             st.session_state.rag_mode = use_rag
             if use_rag:
                 # RAGモードが有効になった場合
-                st.info("RAGが有効になりました。データベースを準備しています...")
                 get_or_create_qdrant_manager(logger)
                 st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
             else:
@@ -386,7 +385,6 @@ def show_chat_component(logger):
                 )
 
             # RAGモードが有効な場合のみ、検索を実行
-            search_results = None
             if st.session_state.rag_mode:
                 st.session_state.status_message = "関連文書を検索中..."
                 # 最新のユーザーメッセージで検索（共通関数を使用）
@@ -394,7 +392,7 @@ def show_chat_component(logger):
 
                 if search_results:
                     # 検索結果を整形
-                    search_context = "以下は検索システムから取得した関連情報です:\n\n"
+                    search_context = "関連文書が有効な場合は回答に役立ててください。\n関連文書:\n"
 
                     # 参照情報をリセット
                     st.session_state.rag_sources = []
@@ -488,19 +486,26 @@ def show_chat_component(logger):
                     if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources and len(st.session_state.rag_sources) > 0:
                         # 参照ファイル情報を保存するが、マークダウンには表示しない
                         reference_files = []
-                        for i, source in enumerate(st.session_state.rag_sources):
+                        refer = 0
+                        exist_path = []
+                        for source in st.session_state.rag_sources:
                             source_path = source["source"]
                             filename = source["filename"]
-                            
+
+                            if source_path in exist_path:
+                                continue
+
                             if not source_path or source_path.startswith(tempfile.gettempdir()):
                                 continue
-                                
+
                             # URLの場合とローカルファイルの場合、両方とも参照ボタンとして表示できるようにする
                             reference_files.append({
-                                "index": i+1,
+                                "index": refer+1,
                                 "filename": filename,
                                 "path": source_path
                             })
+                            refer += 1
+                            exist_path.append(source_path)
                         
                         # セッション状態に参照ファイル情報を保存
                         st.session_state.reference_files = reference_files

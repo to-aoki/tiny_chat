@@ -1,6 +1,6 @@
 import streamlit as st
 
-from chat_config_manager import ChatConfig, ModelManager
+from chat_config import ChatConfig, ModelManager
 from llm_utils import get_llm_client
 from database import get_or_create_qdrant_manager
 
@@ -207,7 +207,7 @@ def sidebar(config_file_path, logger):
             settings_changed = True
 
         # 設定をファイルに保存
-        config = Config(
+        config = ChatConfig(
             server_url=server_url,
             api_key=api_key,
             selected_model=st.session_state.config["selected_model"],

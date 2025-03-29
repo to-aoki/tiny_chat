@@ -14,11 +14,12 @@ class QdrantManager:
     """
 
     def __init__(self,
-         collection_name: str = "documents",
-         path: str = "./qdrant_data",
-         host: Optional[str] = None,
-         port: Optional[int] = 6333,
-         chunk_overlap: Optional[int] = 24,
+        collection_name: str = "documents",
+        path: str = "./qdrant_data",
+        host: Optional[str] = None,
+        port: Optional[int] = 6333,
+        api_key: Optional[str] = None,
+        chunk_overlap: Optional[int] = 24,
     ):
         """
         QdrantManagerの初期化
@@ -48,7 +49,7 @@ class QdrantManager:
         self.is_local_file = True
         if host:
             # HTTPモード - サーバーに接続
-            self.client = QdrantClient(host=host, port=port)
+            self.client = QdrantClient(host=host, port=port, api_key=api_key)
             self.is_local_file = False
         elif path == ":memory:":
             # メモリモード - ファイルを使わない
