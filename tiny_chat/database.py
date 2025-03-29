@@ -755,8 +755,10 @@ def show_database_component(
 
 # 単独動作用
 if __name__ == "__main__":
+    import os
     import logging
     from logger import get_logger
+    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
     # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
     # RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
