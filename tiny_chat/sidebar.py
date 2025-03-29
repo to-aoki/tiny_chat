@@ -225,14 +225,12 @@ def sidebar(config_file_path, logger):
             logger.warning("設定ファイルへの保存に失敗しました")
             st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
             
-        # モデルリストを更新するためrerunが必要な場合
         if settings_changed or server_or_azure_changed or api_key_changed:
             st.rerun()
 
     # モデルリスト更新ボタン
     if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
-        logger.info("モデルリスト更新ボタンがクリックされました")
-        
+
         # 現在の設定値を使用
         current_server = st.session_state.config["server_url"]
         current_api_key = st.session_state.config["api_key"]
@@ -251,10 +249,7 @@ def sidebar(config_file_path, logger):
             st.session_state.available_models = models
             st.session_state.models_api_success = api_success
             
-            if api_success:
-                logger.info(f"モデルリストを更新しました: {', '.join(models)}")
-                st.success(f"モデルリストを更新しました。{len(models)}個のモデルが利用可能です。")
-            else:
+            if not api_success:
                 logger.warning("モデルリスト取得に失敗しました")
                 st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
                 
