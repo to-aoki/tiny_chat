@@ -234,22 +234,32 @@ def show_chat_component(logger):
                     key="export_chat_history_button"
                 )
 
-        # RAGモードのチェックボックス
-        use_rag = st.checkbox("RAG (データベースを利用した回答)", value=st.session_state.rag_mode,
-                              key="rag_mode_checkbox")
-        # RAGモードが変更された場合、状態を更新
-        if use_rag != st.session_state.rag_mode:
-            st.session_state.rag_mode = use_rag
-            if use_rag:
+        # RAGモード切り替え用の関数を定義
+        def toggle_rag_mode():
+            # チェックボックスの状態を取得
+            current_state = st.session_state.rag_mode_checkbox
+            # セッション状態を更新
+            st.session_state.rag_mode = current_state
+            
+            if current_state:
                 # RAGモードが有効になった場合
                 get_or_create_qdrant_manager(logger)
-                st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
             else:
-                st.info("RAGが無効です")
+                # RAGモードが無効になった場合、関連情報をクリア
                 st.session_state.rag_sources = []
                 st.session_state.reference_files = []
-        elif use_rag:
+                
+        # RAGモードのチェックボックス
+        st.checkbox("RAG (データベースを利用した回答)", 
+                    value=st.session_state.rag_mode,
+                    key="rag_mode_checkbox", 
+                    on_change=toggle_rag_mode)
+        
+        # 現在のRAG状態に基づいてメッセージを表示
+        if st.session_state.rag_mode:
             st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
+        else:
+            st.info("RAGが無効です")
 
     # ユーザー入力
     # 添付ファイルは streamlit v1.43.2 以降
