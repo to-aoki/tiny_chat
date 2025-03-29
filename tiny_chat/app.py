@@ -1,4 +1,6 @@
 import os
+import tempfile
+
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
 import logging
@@ -165,10 +167,7 @@ def show_chat_component(logger):
                                 with cols[idx % len(cols)]:
                                     if st.button(f"[{file_info['index']}] {file_info['filename']}", 
                                                 key=f"open_ref_{i}_{idx}"):
-                                        if file_info.get("is_web", False) or file_info["path"].startswith("http"):
-                                            webbrowser.open(file_info["path"])
-                                        else:
-                                            open_file(file_info["path"])
+                                        open_file(file_info["path"])
 
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
@@ -502,7 +501,7 @@ def show_chat_component(logger):
                             source_path = source["source"]
                             filename = source["filename"]
                             
-                            if not source_path or source_path.startswith('/tmp/'):
+                            if not source_path or source_path.startswith(tempfile.gettempdir()):
                                 continue
                                 
                             # URLの場合とローカルファイルの場合、両方とも参照ボタンとして表示できるようにする

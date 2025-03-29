@@ -2,6 +2,7 @@ import os
 from typing import List, Dict, Any, Tuple
 import tempfile
 
+import webbrowser
 import streamlit as st
 import pandas as pd
 from file_processor import FileProcessorFactory
@@ -339,13 +340,12 @@ def show_database_component(
                         # ソースファイルへのリンクを追加（あれば）
                         if 'source' in metadata and metadata['source']:
                             source_path = metadata['source']
-                            filename = metadata.get('filename', 'ファイル')
                             
-                            # ローカルファイルと外部URLを区別して処理
                             if source_path.startswith(('http://', 'https://')):
-                                # 外部URLの場合は直接リンクボタンを表示
-                                st.write(f"**ソースファイル**: {filename}")
-                                st.link_button("URLを開く", source_path)
+                                # 外部URLまたはファイルURLの場合は直接リンクボタンを表示（新規タブで開く）
+                                st.markdown(f'<a href="{source_path}" target="_blank" rel="noopener noreferrer">リンクを新規タブで開く</a>', unsafe_allow_html=True)
+
+                        # ローカルファイルを開くはStreamlit expander仕様およびブラウザセキュリティ都合から実装しない（煩雑で危険）
 
                         # テキスト表示
                         st.markdown("**本文:**")
