@@ -2,7 +2,7 @@ import json
 import os
 
 
-class Config:
+class ChatConfig:
     """
     チャットアプリケーションの設定を管理するクラス
     """
