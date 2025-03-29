@@ -1,7 +1,6 @@
 import os
 from typing import List, Dict, Any, Tuple
 import tempfile
-import urllib.parse
 
 import streamlit as st
 import pandas as pd
@@ -224,14 +223,15 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     return added_ids
 
 
-def search_documents(query: str, top_k: int = 10, filter_params: Dict = None, logger=None, score_threshold=0.4) -> List:
+def search_documents(
+        query: str, top_k: int = 10, filter_params: Dict = None, logger=None, score_threshold=0.4) -> List:
     """
     ドキュメントを検索します
 
     Args:
         query: 検索クエリ
         top_k: 返す結果の数
-        filter_params: 検索フィルタ
+        filter_params: 検索フィルタ（Noneの場合はフィルタを適用しない）
 
     Returns:
         results: 検索結果のリスト
@@ -293,7 +293,7 @@ def show_database_component(
             # 検索フラグをリセット
             st.session_state.run_search = False
             # フィルターの作成
-            filter_params = {}
+            filter_params = None
             if selected_sources:
                 # 複数のソースを配列として設定
                 filter_params = {"source": selected_sources}
@@ -329,8 +329,9 @@ def show_database_component(
                             page_info = f"(記載箇所: {metadata['page']})"
                         
                     # 結果表示
-                    with st.expander(f"#{i + 1}: {metadata.get('filename', 'ドキュメント')} {page_info} (スコア: {score:.4f})",
-                                     expanded=i == 0):
+                    with st.expander(
+                            f"#{i + 1}: {metadata.get('filename', 'ドキュメント')} {page_info} (スコア: {score:.4f})",
+                            expanded=i == 0):
                         # メタデータテーブル
                         metadata_df = pd.DataFrame([metadata])
                         st.dataframe(metadata_df, hide_index=True)

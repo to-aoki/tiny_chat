@@ -3,7 +3,6 @@ os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
 import logging
 import streamlit as st
-import urllib.parse
 import webbrowser
 from config_manager import Config, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
@@ -517,7 +516,7 @@ def show_chat_component(logger):
                         # セッション状態に参照ファイル情報を保存
                         st.session_state.reference_files = reference_files
                         
-                        # 参照情報を含めずに最終出力を表示
+                        # 表示
                         message_placeholder.markdown(full_response)
                     else:
                         # 通常の出力

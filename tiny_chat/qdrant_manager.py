@@ -45,9 +45,11 @@ class QdrantManager:
         self.sparse_vector_field_name = "sparse"
         self.dense_vector_field_name = "dense"
 
+        self.is_local_file = True
         if host:
             # HTTPモード - サーバーに接続
             self.client = QdrantClient(host=host, port=port)
+            self.is_local_file = False
         elif path == ":memory:":
             # メモリモード - ファイルを使わない
             self.client = QdrantClient(":memory:")
@@ -284,7 +286,7 @@ class QdrantManager:
 
         # 検索フィルタを作成
         search_filter = None
-        if filter_params:
+        if filter_params and not self.is_local_file:
             filter_conditions = []
             for key, value in filter_params.items():
                 if value:  # 値が空でない場合のみフィルタに追加
@@ -334,9 +336,21 @@ class QdrantManager:
             # 結果をQueryResponseに変換
             results = []
             for point in points:
+                if self.is_local_file and filter_params:
+                    not_match = False
+                    for key, value in filter_params.items():
+                        if isinstance(value, list):
+                            if point.payload[key] not in value:
+                                not_match = True
+                                break
+                        else:
+                            if point.payload[key] != value:
+                                not_match = True
+                                break
+                    if not_match:
+                        continue
                 if score_threshold < point.score:
                     results.append(point)
-            
             return results
             
         except Exception as e:
