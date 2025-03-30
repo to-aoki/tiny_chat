@@ -5,7 +5,6 @@ import tempfile
 
 import webbrowser
 import streamlit as st
-from streamlit.components.v1 import html
 import pandas as pd
 from file_processor import FileProcessorFactory
 
@@ -14,6 +13,7 @@ from file_processor import FileProcessorFactory
 _qdrant_manager = None
 # インスタンス生成のロックに使用
 _qdrant_lock = None
+
 
 # ファイルを開くヘルパー関数
 def open_file(file_path):
@@ -60,6 +60,8 @@ def get_or_create_qdrant_manager(logger=None):
                 _qdrant_manager = QdrantManager(
                     collection_name="default",
                     path="./qdrant_data"
+                    # host="localhost",
+                    # port=6333
                 )
                 if logger:
                     logger.info("QdrantManagerの初期化が完了しました")
