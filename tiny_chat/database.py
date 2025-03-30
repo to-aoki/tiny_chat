@@ -1,9 +1,11 @@
 import os
+import urllib.parse
 from typing import List, Dict, Any, Tuple
 import tempfile
 
 import webbrowser
 import streamlit as st
+from streamlit.components.v1 import html
 import pandas as pd
 from file_processor import FileProcessorFactory
 
@@ -12,6 +14,20 @@ from file_processor import FileProcessorFactory
 _qdrant_manager = None
 # インスタンス生成のロックに使用
 _qdrant_lock = None
+
+# ファイルを開くヘルパー関数
+def open_file(file_path):
+    try:
+        # ファイルパスがHTTP URLでない場合はfile://スキームを追加
+        if not file_path.startswith(('http://', 'https://', 'file://')):
+            file_uri = f"file://{file_path}"
+        else:
+            file_uri = file_path
+        webbrowser.open(file_uri)
+        return True
+    except Exception as e:
+        st.error(f"ファイルを開けませんでした: {str(e)}")
+        return False
 
 
 def get_or_create_qdrant_manager(logger=None):
@@ -255,10 +271,9 @@ def show_database_component(
 
     # 検索タブ
     with search_tabs[0]:
-        # 検索のエンターキー対応のためのコールバック関数
-        if "search_query" not in st.session_state:
-            st.session_state.search_query = ""
-            
+        if "search_results" not in st.session_state:
+            st.session_state.search_results = []
+
         def search_on_enter():
             # テキスト入力からクエリを取得し、検索実行のフラグを立てる
             st.session_state.run_search = True
@@ -300,58 +315,59 @@ def show_database_component(
                 filter_params = {"source": selected_sources}
 
             with st.spinner("検索中..."):
-                results = search_documents(query, top_k=top_k, filter_params=filter_params, score_threshold=0.)
+                st.session_state.search_results = search_documents(
+                    query, top_k=top_k, filter_params=filter_params, score_threshold=0.)
 
-            # 結果の表示
-            if results:
-                st.success(f"{len(results)}件の結果が見つかりました")
+        # 結果の表示
+        if st.session_state.search_results:
+            results = st.session_state.search_results
+            st.success(f"{len(results)}件の結果が見つかりました")
 
-                for i, result in enumerate(results):
-                    score = result.score
-                    text = result.payload.get("text", "")
+            for i, result in enumerate(results):
+                score = result.score
+                text = result.payload.get("text", "")
 
-                    # メタデータを表示用に整形
-                    metadata = {k: v for k, v in result.payload.items() if k != "text"}
+                # メタデータを表示用に整形
+                metadata = {k: v for k, v in result.payload.items() if k != "text"}
 
-                    # ページ情報（あれば）を取得
-                    page_info = ""
-                    if 'page' in metadata:
-                        # ファイル種類に応じて表示を変える
-                        file_type = metadata.get('file_type', '').lower()
-                        if file_type == 'pdf':
-                            page_info = f"(ページ: {metadata['page']})"
-                        elif file_type == 'xlsx':
-                            page_info = f"(シート: {metadata['page']})"
-                        elif file_type == 'docx':
-                            page_info = f"(段落: {metadata['page']})"
-                        elif file_type == 'pptx':
-                            page_info = f"(スライド: {metadata['page']})"
+                # ページ情報（あれば）を取得
+                page_info = ""
+                if 'page' in metadata:
+                    # ファイル種類に応じて表示を変える
+                    file_type = metadata.get('file_type', '').lower()
+                    if file_type == 'pdf':
+                        page_info = f"(ページ: {metadata['page']})"
+                    elif file_type == 'xlsx':
+                        page_info = f"(シート: {metadata['page']})"
+                    elif file_type == 'docx':
+                        page_info = f"(段落: {metadata['page']})"
+                    elif file_type == 'pptx':
+                        page_info = f"(スライド: {metadata['page']})"
+                    else:
+                        page_info = f"(記載箇所: {metadata['page']})"
+
+                # 結果表示
+                with st.expander(
+                        f"#{i + 1}: {metadata.get('filename', 'ドキュメント')} {page_info} (スコア: {score:.4f})",
+                        expanded=i == 0):
+                    # メタデータテーブル
+                    metadata_df = pd.DataFrame([metadata])
+                    st.dataframe(metadata_df, hide_index=True)
+
+                    # ソースファイルへのリンクを追加（あれば）
+                    if 'source' in metadata and metadata['source']:
+                        source_path = metadata['source']
+                        if not source_path.startswith(('http://', 'https://')):
+                            if st.button(f"{source_path}", key=f"open_ref_{source_path}_{i}"):
+                                open_file(source_path)
                         else:
-                            page_info = f"(記載箇所: {metadata['page']})"
-                        
-                    # 結果表示
-                    with st.expander(
-                            f"#{i + 1}: {metadata.get('filename', 'ドキュメント')} {page_info} (スコア: {score:.4f})",
-                            expanded=i == 0):
-                        # メタデータテーブル
-                        metadata_df = pd.DataFrame([metadata])
-                        st.dataframe(metadata_df, hide_index=True)
-                        
-                        # ソースファイルへのリンクを追加（あれば）
-                        if 'source' in metadata and metadata['source']:
-                            source_path = metadata['source']
-                            
-                            if source_path.startswith(('http://', 'https://')):
-                                # 外部URLまたはファイルURLの場合は直接リンクボタンを表示（新規タブで開く）
-                                st.markdown(f'<a href="{source_path}" target="_blank" rel="noopener noreferrer">リンクを新規タブで開く</a>', unsafe_allow_html=True)
+                            st.markdown(
+                                f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
 
-                        # ローカルファイルを開くはStreamlit expander仕様およびブラウザセキュリティ都合から実装しない（煩雑で危険）
-
-                        # テキスト表示
-                        st.markdown("**本文:**")
-                        st.text(text[:500] + "..." if len(text) > 500 else text)
-            else:
-                st.info("検索結果はありません")
+                    # テキスト表示
+                    st.text(text[:500] + "..." if len(text) > 500 else text)
+        else:
+            st.info("検索結果はありません")
 
     # 文書登録タブ
     with (search_tabs[1]):

@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 import tempfile
 
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
@@ -156,12 +157,14 @@ def show_chat_component(logger):
                     if file_buttons:
                         with st.container():
                             st.write("参照情報を開く:")
-                            cols = st.columns(min(len(file_buttons), 3))
                             for idx, file_info in enumerate(file_buttons):
-                                with cols[idx % len(cols)]:
-                                    if st.button(f"[{file_info['index']}] {file_info['filename']}", 
-                                                key=f"open_ref_{i}_{idx}"):
+                                if not file_info["path"].startswith(('http://', 'https://')):
+                                    if st.button(f"[{file_info['index']}] {file_info['filename']}",
+                                                 key=f"open_ref_{i}_{idx}"):
                                         open_file(file_info["path"])
+                                else:
+                                    st.markdown(
+                                        f"[\[{file_info['index']}\] {file_info['path']}]({urllib.parse.quote(file_info['path'], safe=':/')})")
 
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
