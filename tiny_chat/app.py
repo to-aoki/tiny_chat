@@ -15,7 +15,8 @@ from logger import get_logger
 from llm_utils import get_llm_client
 from sidebar import sidebar
 from copy_botton import copy_button
-from database import show_database_component, search_documents, get_or_create_qdrant_manager
+# データベース関連の関数は使用時に都度インポート
+# from database import show_database_component, search_documents, get_or_create_qdrant_manager
 
 # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
 # RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
@@ -109,15 +110,15 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
     # RAGモードのフラグ
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
+        
+    # RAGモードが一度でも有効になったことがあるかを追跡するフラグ
+    if "rag_mode_ever_enabled" not in st.session_state:
+        st.session_state.rag_mode_ever_enabled = False
 
     # RAG参照ソース情報を保存するリスト
     if "rag_sources" not in st.session_state:
         st.session_state.rag_sources = []
 
-    # データベースタブが選択されたことを記録するフラグ
-    if "database_tab_selected" not in st.session_state:
-        st.session_state.database_tab_selected = False
-        
     # 現在の回答で参照されたファイル情報
     if "reference_files" not in st.session_state:
         st.session_state.reference_files = []
@@ -169,20 +170,38 @@ def toggle_rag_mode():
     
     if current_state:
         # RAGモードが有効になった場合
-        get_or_create_qdrant_manager(LOGGER)
+        try:
+            # RAGモードが一度でも有効になったことを記録（この値は保持される）
+            st.session_state.rag_mode_ever_enabled = True
+
+            # DBに接続
+            from database import get_or_create_qdrant_manager
+            get_or_create_qdrant_manager(LOGGER)
+
+        except Exception as e:
+            st.error(f"RAGモード有効化中にエラーが発生しました: {str(e)}")
+            # エラーが発生したらRAGモードを無効化（ただしever_enabledは維持）
+            st.session_state.rag_mode = False
+            st.session_state.rag_mode_checkbox = False
     else:
-        # RAGモードが無効になった場合、関連情報をクリア
+        # RAGモードが無効になった場合、参照情報のみクリア（データベース表示は維持）
         st.session_state.rag_sources = []
         st.session_state.reference_files = []
 
 
-# キャッシュ可能な検索関数
+# キャッシュ可能な検索関数 - RAGモード専用
 @functools.lru_cache(maxsize=32)
 def cached_search_documents(prompt_content, top_k=5):
+    # search_documentsは外部関数なので、都度インポートして実行したRAGモードを確認
+    # これによりサイドバー描画時の不要な呼び出しを防止
+    if not st.session_state.rag_mode:
+        return []
+    
+    # RAGモードが有効な場合のみ検索関数をインポートして実行
+    from database import search_documents
     return search_documents(prompt_content, top_k=top_k, logger=LOGGER)
 
 
-@st.fragment
 def show_chat_component(logger):
     # チャット履歴の表示
     messages = st.session_state.chat_manager.messages
@@ -196,17 +215,14 @@ def show_chat_component(logger):
                 if i == len(messages) - 1 and st.session_state.reference_files:
                     with st.container():
                         st.write("参照情報を開く:")
-                        cols = st.columns(min(3, len(st.session_state.reference_files)))
                         for idx, file_info in enumerate(st.session_state.reference_files):
-                            col_idx = idx % 3
-                            with cols[col_idx]:
-                                if not file_info["path"].startswith(('http://', 'https://')):
-                                    if st.button(f"[{file_info['index']}] {file_info['filename']}",
-                                                key=f"open_ref_{i}_{idx}"):
-                                        open_file(file_info["path"])
-                                else:
-                                    st.markdown(
-                                        f"[\\[{file_info['index']}\\] {file_info['path']}]({urllib.parse.quote(file_info['path'], safe=':/')})")
+                            if not file_info["path"].startswith(('http://', 'https://')):
+                                if st.button(f"[{file_info['index']}] {file_info['filename']}",
+                                            key=f"open_ref_{i}_{idx}"):
+                                    open_file(file_info["path"])
+                            else:
+                                st.markdown(
+                                    f"[\\[{file_info['index']}\\] {file_info['path']}]({urllib.parse.quote(file_info['path'], safe=':/')})")
 
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
@@ -382,50 +398,58 @@ def show_chat_component(logger):
                     uri_processor=uri_processor
                 )
 
-            # RAGモードが有効な場合のみ、検索を実行
+            # RAGモードが有効な場合のみ、DBに接続して検索を実行
             if st.session_state.rag_mode:
-                # 最新のユーザーメッセージで検索（キャッシュ関数を使用）
-                search_results = cached_search_documents(prompt_content, top_k=5)
-
-                if search_results:
-                    # 検索結果を整形
-                    search_context = "関連文書が有効な場合は回答に役立ててください。\n関連文書:\n"
-
-                    # 参照情報をリセット
-                    st.session_state.rag_sources = []
+                try:
+                    # RAGモードが有効な場合のみQdrantマネージャを取得・初期化
+                    from database import get_or_create_qdrant_manager
+                    get_or_create_qdrant_manager(LOGGER)
                     
-                    # 既存のパスを追跡して重複を避ける
-                    exist_path = set()
+                    # 最新のユーザーメッセージで検索（キャッシュ関数を使用）
+                    search_results = cached_search_documents(prompt_content, top_k=5)
 
-                    for i, result in enumerate(search_results):
-                        filename = result.payload.get('filename', '文書')
-                        source = result.payload.get('source', '')
+                    if search_results:
+                        # 検索結果を整形
+                        search_context = "関連文書が有効な場合は回答に役立ててください。\n関連文書:\n"
+
+                        # 参照情報をリセット
+                        st.session_state.rag_sources = []
                         
-                        # 重複チェック
-                        if source in exist_path:
-                            continue
+                        # 既存のパスを追跡して重複を避ける
+                        exist_path = set()
+
+                        for i, result in enumerate(search_results):
+                            filename = result.payload.get('filename', '文書')
+                            source = result.payload.get('source', '')
                             
-                        exist_path.add(source)
-                        
-                        # テキスト内容を取得（長さ制限あり）
-                        text = result.payload.get('text', '')[:st.session_state.config["context_length"]]  
+                            # 重複チェック
+                            if source in exist_path:
+                                continue
+                                
+                            exist_path.add(source)
+                            
+                            # テキスト内容を取得（長さ制限あり）
+                            text = result.payload.get('text', '')[:st.session_state.config["context_length"]]  
 
-                        # 参照情報を保存
-                        source_info = {
-                            "index": i + 1,
-                            "filename": filename,
-                            "source": source,
-                            "text": text  # テキスト内容も保存
-                        }
-                        st.session_state.rag_sources.append(source_info)
+                            # 参照情報を保存
+                            source_info = {
+                                "index": i + 1,
+                                "filename": filename,
+                                "source": source,
+                                "text": text  # テキスト内容も保存
+                            }
+                            st.session_state.rag_sources.append(source_info)
 
-                        search_context += f"[{i + 1}] {filename}:\n{text}\n\n"
+                            search_context += f"[{i + 1}] {filename}:\n{text}\n\n"
 
-                    # 検索結果を含めた拡張プロンプトを作成
-                    if enhanced_prompt:
-                        enhanced_prompt += f"\n\n{search_context}"
-                    else:
-                        enhanced_prompt = prompt_content + f"\n\n{search_context}"
+                        # 検索結果を含めた拡張プロンプトを作成
+                        if enhanced_prompt:
+                            enhanced_prompt += f"\n\n{search_context}"
+                        else:
+                            enhanced_prompt = prompt_content + f"\n\n{search_context}"
+                except Exception as e:
+                    logger.error(f"RAG検索処理中にエラー: {str(e)}")
+                    # エラーが発生しても続行、ただしRAG検索なしで
 
             # 拡張プロンプトがあれば更新
             if enhanced_prompt:
@@ -539,47 +563,48 @@ def show_chat_component(logger):
 
     # ユーザーがメッセージを送信した場合の処理
     if prompt:
-        # ファイルアップロードの処理
-        if prompt["files"]:
-            uploaded_file = prompt["files"][0]  # 先頭1件のみ処理
-            process_uploaded_file(uploaded_file)
-            st.stop()  # ファイル処理後に実行を中断（自動的にリロードされる）
+        with st.spinner("応答中..."):
+            # ファイルアップロードの処理
+            if prompt["files"]:
+                uploaded_file = prompt["files"][0]  # 先頭1件のみ処理
+                process_uploaded_file(uploaded_file)
+                st.stop()  # ファイル処理後に実行を中断（自動的にリロードされる）
 
-        # メッセージ長チェック
-        would_exceed, estimated_length, max_length = st.session_state.chat_manager.would_exceed_message_length(
-            prompt.text,
-            st.session_state.config["message_length"],
-            st.session_state.config["context_length"],
-            st.session_state.config["meta_prompt"],
-            uri_processor=URIProcessor()
-        )
+            # メッセージ長チェック
+            would_exceed, estimated_length, max_length = st.session_state.chat_manager.would_exceed_message_length(
+                prompt.text,
+                st.session_state.config["message_length"],
+                st.session_state.config["context_length"],
+                st.session_state.config["meta_prompt"],
+                uri_processor=URIProcessor()
+            )
 
-        if would_exceed:
-            st.error(f"エラー: メッセージ長が上限を超えています（推定: {estimated_length}文字、上限: {max_length}文字）。\n"
-                     f"- メッセージを短くするか\n"
-                     f"- 添付ファイルを減らすか\n"
-                     f"- サイドバー設定のメッセージ長制限を引き上げてください。")
-        else:
-            # ユーザーメッセージを追加（RAG情報はこの時点ではまだ含まれていない）
-            user_message = st.session_state.chat_manager.add_user_message(prompt.text)
+            if would_exceed:
+                st.error(f"エラー: メッセージ長が上限を超えています（推定: {estimated_length}文字、上限: {max_length}文字）。\n"
+                         f"- メッセージを短くするか\n"
+                         f"- 添付ファイルを減らすか\n"
+                         f"- サイドバー設定のメッセージ長制限を引き上げてください。")
+            else:
+                # ユーザーメッセージを追加（RAG情報はこの時点ではまだ含まれていない）
+                user_message = st.session_state.chat_manager.add_user_message(prompt.text)
 
-            # UIに表示 (UIには元のメッセージだけを表示)
-            with st.chat_message("user"):
-                st.write(user_message["content"])
+                # UIに表示 (UIには元のメッセージだけを表示)
+                with st.chat_message("user"):
+                    st.write(user_message["content"])
 
-            # メッセージ送信中フラグをON
-            st.session_state.is_sending_message = True
-            st.session_state.status_message = "メッセージを処理中..."
-            st.session_state.initial_message_sent = True
-            
-            # 処理を実行
-            process_and_send_message()
-            
-            # 処理終了フラグを設定
-            st.session_state.is_sending_message = False
-            st.session_state.status_message = "処理完了"
-            st.session_state.initial_message_sent = False
-            st.rerun()  # 必須の再描画
+                # メッセージ送信中フラグをON
+                st.session_state.is_sending_message = True
+                st.session_state.status_message = "メッセージを処理中..."
+                st.session_state.initial_message_sent = True
+
+                # 処理を実行
+                process_and_send_message()
+
+                # 処理終了フラグを設定
+                st.session_state.is_sending_message = False
+                st.session_state.status_message = "処理完了"
+                st.session_state.initial_message_sent = False
+                st.rerun()  # 必須の再描画
 
 # チャット機能タブ
 with tabs[0]:
@@ -588,7 +613,28 @@ with tabs[0]:
 
 # データベース機能タブ
 with tabs[1]:
-    # データベースタブが選択
-    st.session_state.database_tab_selected = True
+
     # データベース機能の表示
-    show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+    if st.session_state.rag_mode_ever_enabled:
+        try:
+            from database import get_or_create_qdrant_manager, show_database_component
+
+            if st.session_state.rag_mode:
+                # RAGモードが現在有効な場合、DBに接続
+                get_or_create_qdrant_manager(LOGGER)
+                show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+            else:
+                # 以前RAGモードが有効だったが、現在は無効の場合
+                # RAGが無効でも情報表示はする。ただし「現在RAGは無効」表示も追加
+                st.info("現在RAGモードは無効です。検索機能を使用するには、チャットタブでRAGを有効にしてください。")
+
+                # DBに接続して表示コンポーネントを表示（現状表示のみで検索はできない）
+                get_or_create_qdrant_manager(LOGGER)
+                show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+
+        except Exception as e:
+            LOGGER.error(f"データベース接続エラー: {str(e)}")
+            st.error(f"データベース接続中にエラーが発生しました: {str(e)}")
+    else:
+        # RAGモードが一度も有効になったことがない場合
+        st.warning("RAGモードが無効です。RAGを有効にするとデータベース機能が使えるようになります。")
