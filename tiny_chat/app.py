@@ -108,6 +108,10 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
     if "reference_files" not in st.session_state:
         st.session_state.reference_files = []
 
+    # 初回チャットメッセージ送信フラグ
+    if "initial_message_sent" not in st.session_state:
+        st.session_state.initial_message_sent = False
+
 
 # セッション状態の初期化
 initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
@@ -133,6 +137,29 @@ def open_file(file_path):
     except Exception as e:
         st.error(f"ファイルを開けませんでした: {str(e)}")
         return False
+
+
+# チャットをクリアするコールバック関数
+def clear_chat():
+    st.session_state.chat_manager = ChatManager()
+    # 参照ファイル情報もクリア
+    st.session_state.reference_files = []
+
+
+# RAGモード切り替え用の関数
+def toggle_rag_mode():
+    # チェックボックスの状態を取得
+    current_state = st.session_state.rag_mode_checkbox
+    # セッション状態を更新
+    st.session_state.rag_mode = current_state
+    
+    if current_state:
+        # RAGモードが有効になった場合
+        get_or_create_qdrant_manager(LOGGER)
+    else:
+        # RAGモードが無効になった場合、関連情報をクリア
+        st.session_state.rag_sources = []
+        st.session_state.reference_files = []
 
 
 def show_chat_component(logger):
@@ -164,7 +191,7 @@ def show_chat_component(logger):
                                         open_file(file_info["path"])
                                 else:
                                     st.markdown(
-                                        f"[\[{file_info['index']}\] {file_info['path']}]({urllib.parse.quote(file_info['path'], safe=':/')})")
+                                        f"[\\[{file_info['index']}\\] {file_info['path']}]({urllib.parse.quote(file_info['path'], safe=':/')})")
 
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
@@ -207,15 +234,13 @@ def show_chat_component(logger):
     with st.container():
         cols = st.columns([3, 2, 3])
         with cols[0]:
-            if st.button(
-                    "チャットクリア",
-                    disabled=st.session_state.is_sending_message,
-                    use_container_width=True,
-                    key="clear_chat_history_button"):
-                st.session_state.chat_manager = ChatManager()
-                # 参照ファイル情報もクリア
-                st.session_state.reference_files = []
-                st.rerun()
+            st.button(
+                "チャットクリア",
+                disabled=st.session_state.is_sending_message,
+                use_container_width=True,
+                key="clear_chat_history_button",
+                on_click=clear_chat
+            )
 
         with cols[2]:
             if not st.session_state.chat_manager.messages:
@@ -237,21 +262,6 @@ def show_chat_component(logger):
                     key="export_chat_history_button"
                 )
 
-        # RAGモード切り替え用の関数を定義
-        def toggle_rag_mode():
-            # チェックボックスの状態を取得
-            current_state = st.session_state.rag_mode_checkbox
-            # セッション状態を更新
-            st.session_state.rag_mode = current_state
-            
-            if current_state:
-                # RAGモードが有効になった場合
-                get_or_create_qdrant_manager(logger)
-            else:
-                # RAGモードが無効になった場合、関連情報をクリア
-                st.session_state.rag_sources = []
-                st.session_state.reference_files = []
-                
         # RAGモードのチェックボックス
         st.checkbox("RAG (データベースを利用した回答)", 
                     value=st.session_state.rag_mode,
@@ -273,103 +283,75 @@ def show_chat_component(logger):
         file_type=[ext.lstrip(".") for ext in SUPPORT_EXTENSIONS]
     )
 
-    if prompt:
-        if prompt and prompt["files"]:
-            uploaded_file = prompt["files"][0]  # INFO 先頭1件のみ処理
-            filename = uploaded_file.name
-            _, file_extension = os.path.splitext(filename)
-            processor_class = FileProcessorFactory.get_processor(file_extension)
-            if processor_class is None:
-                st.error(f"エラー: サポートされていないファイル形式です: {file_extension}")
-                logger.error(f"未サポートのファイル形式: {file_extension}")
-
-            else:
-                # 各ファイルタイプに応じた処理方法と結果表示の設定
-                count_value = 1
-                count_type = ""
-
-                # ファイルタイプに応じた処理
-                if file_extension.lower() == '.pdf':
-                    extracted_text, count_value, error = processor_class.extract_pdf_text(uploaded_file)
-                    count_type = "ページ"
-                elif file_extension.lower() in ['.xlsx', '.xls']:
-                    extracted_text, count_value, error = processor_class.extract_excel_text(uploaded_file)
-                    count_type = "シート"
-                elif file_extension.lower() == '.pptx':
-                    extracted_text, count_value, error = processor_class.extract_pptx_text(uploaded_file)
-                    count_type = "スライド"
-                elif file_extension.lower() == '.docx':
-                    extracted_text, count_value, error = processor_class.extract_word_text(uploaded_file)
-                    count_type = "段落"
-                else:  # テキスト、HTMLなど
-                    extracted_text, error = processor_class.extract_text(uploaded_file)
-
-                # エラー処理
-                if error:
-                    # Display error message to the user
-                    st.error(f"ファイル処理エラー: {error}")
-                    logger.error(f"ファイル処理エラー ({filename}): {error}")
-                else:
-                    # ファイル名の重複チェックと処理
-                    existing_files = [a["filename"] for a in st.session_state.chat_manager.attachments]
-                    if filename in existing_files:
-                        base_name, ext = os.path.splitext(filename)
-                        counter = 1
-                        new_name = f"{base_name}_{counter}{ext}"
-                        while new_name in existing_files:
-                            counter += 1
-                            new_name = f"{base_name}_{counter}{ext}"
-                        filename = new_name
-
-                    # 添付ファイルリストに追加
-                    st.session_state.chat_manager.add_attachment(
-                        filename=filename,
-                        content=extracted_text,
-                        num_pages=count_value
-                    )
-                    st.success(f"ファイル '{filename}' を添付しました")
-                    logger.info(f"ファイルを添付: {filename} ({count_value}{count_type})")
-
-        # メッセージ長チェック
-        would_exceed, estimated_length, max_length = st.session_state.chat_manager.would_exceed_message_length(
-            prompt.text,
-            st.session_state.config["message_length"],
-            st.session_state.config["context_length"],
-            st.session_state.config["meta_prompt"],
-            uri_processor=URIProcessor()
-        )
-
-        if would_exceed:
-            st.error(f"エラー: メッセージ長が上限を超えています（推定: {estimated_length}文字、上限: {max_length}文字）。\n"
-                     f"- メッセージを短くするか\n"
-                     f"- 添付ファイルを減らすか\n"
-                     f"- サイドバー設定のメッセージ長制限を引き上げてください。")
-        else:
-            # ユーザーメッセージを追加（RAG情報はこの時点ではまだ含まれていない）
-            user_message = st.session_state.chat_manager.add_user_message(prompt.text)
-
-            # UIに表示 (UIには元のメッセージだけを表示)
-            with st.chat_message("user"):
-                st.write(user_message["content"])
-
-            # メッセージ送信中フラグをON
-            st.session_state.is_sending_message = True
-            st.session_state.status_message = "メッセージを処理中..."
-            st.rerun()  # 状態を更新してUIを再描画
-
+    # メッセージ送信中処理
     if st.session_state.is_sending_message:
         # 処理待機用描画
         spinner()
 
-    if st.session_state.is_sending_message and st.session_state.chat_manager.messages and \
-            st.session_state.chat_manager.messages[-1]["role"] != "assistant":
+    # ファイル処理関数
+    def process_uploaded_file(uploaded_file):
+        filename = uploaded_file.name
+        _, file_extension = os.path.splitext(filename)
+        processor_class = FileProcessorFactory.get_processor(file_extension)
+        if processor_class is None:
+            st.error(f"エラー: サポートされていないファイル形式です: {file_extension}")
+            logger.error(f"未サポートのファイル形式: {file_extension}")
+            return False
+        
+        # 各ファイルタイプに応じた処理方法と結果表示の設定
+        count_value = 1
+        count_type = ""
+
+        # ファイルタイプに応じた処理
+        if file_extension.lower() == '.pdf':
+            extracted_text, count_value, error = processor_class.extract_pdf_text(uploaded_file)
+            count_type = "ページ"
+        elif file_extension.lower() in ['.xlsx', '.xls']:
+            extracted_text, count_value, error = processor_class.extract_excel_text(uploaded_file)
+            count_type = "シート"
+        elif file_extension.lower() == '.pptx':
+            extracted_text, count_value, error = processor_class.extract_pptx_text(uploaded_file)
+            count_type = "スライド"
+        elif file_extension.lower() == '.docx':
+            extracted_text, count_value, error = processor_class.extract_word_text(uploaded_file)
+            count_type = "段落"
+        else:  # テキスト、HTMLなど
+            extracted_text, error = processor_class.extract_text(uploaded_file)
+
+        # エラー処理
+        if error:
+            # Display error message to the user
+            st.error(f"ファイル処理エラー: {error}")
+            logger.error(f"ファイル処理エラー ({filename}): {error}")
+            return False
+        else:
+            # ファイル名の重複チェックと処理
+            existing_files = [a["filename"] for a in st.session_state.chat_manager.attachments]
+            if filename in existing_files:
+                base_name, ext = os.path.splitext(filename)
+                counter = 1
+                new_name = f"{base_name}_{counter}{ext}"
+                while new_name in existing_files:
+                    counter += 1
+                    new_name = f"{base_name}_{counter}{ext}"
+                filename = new_name
+
+            # 添付ファイルリストに追加
+            st.session_state.chat_manager.add_attachment(
+                filename=filename,
+                content=extracted_text,
+                num_pages=count_value
+            )
+            st.success(f"ファイル '{filename}' を添付しました")
+            logger.info(f"ファイルを添付: {filename} ({count_value}{count_type})")
+            return True
+    
+    # メッセージ送信処理関数
+    def process_and_send_message():
         try:
             # 最後のユーザーメッセージを取得
             last_user_message = st.session_state.chat_manager.get_latest_user_message()
             prompt_content = last_user_message["content"].split("\n\n[添付ファイル:")[0]  # 添付ファイル情報を削除
-
-            # 処理ステータスを更新
-            st.session_state.status_message = "メッセージを処理中..."
 
             # URIプロセッサ
             detects_urls = []
@@ -377,19 +359,10 @@ def show_chat_component(logger):
                 uri_processor = URIProcessor()
                 detects_urls = uri_processor.detect_uri(prompt_content)
 
-            # 処理ステータスを更新
-            st.session_state.status_message = "LLMにプロンプトを入力中..."
-
             # 拡張プロンプトの取得
             enhanced_prompt = None
             if st.session_state.chat_manager.attachments or (
                     st.session_state.config["uri_processing"] and len(detects_urls) > 0):
-                # 処理ステータスを更新
-                if st.session_state.chat_manager.attachments:
-                    st.session_state.status_message = "添付ファイルの内容を解析中..."
-                elif len(detects_urls) > 0:
-                    st.session_state.status_message = "URLからコンテンツを取得中..."
-
                 # 拡張プロンプトを生成
                 enhanced_prompt = st.session_state.chat_manager.get_enhanced_prompt(
                     prompt_content,
@@ -399,7 +372,6 @@ def show_chat_component(logger):
 
             # RAGモードが有効な場合のみ、検索を実行
             if st.session_state.rag_mode:
-                st.session_state.status_message = "関連文書を検索中..."
                 # 最新のユーザーメッセージで検索（共通関数を使用）
                 search_results = search_documents(prompt_content, top_k=5, logger=logger)
 
@@ -433,8 +405,6 @@ def show_chat_component(logger):
                     else:
                         enhanced_prompt = prompt_content + f"\n\n{search_context}"
 
-                    st.session_state.status_message = "検索結果を追加しました。LLMにプロンプトを入力中..."
-
             # 拡張プロンプトがあれば更新
             if enhanced_prompt:
                 st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
@@ -463,6 +433,7 @@ def show_chat_component(logger):
 
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
+                message_placeholder.markdown("応答を生成中..._")
 
                 try:
                     # クライアントインスタンスが存在しない場合は初期化
@@ -485,7 +456,6 @@ def show_chat_component(logger):
 
                     # ストリーミング応答をリアルタイムで処理
                     full_response = ""
-                    message_placeholder.markdown("応答を生成中..._")
 
                     for chunk in response:
                         if chunk.choices and len(chunk.choices) > 0:
@@ -548,10 +518,54 @@ def show_chat_component(logger):
             logger.error(f"エラーが発生しました: {str(e)}")
             st.error(f"エラーが発生しました: {str(e)}")
 
+    # ユーザーがメッセージを送信した場合の処理
+    if prompt:
+        # ファイルアップロードの処理
+        if prompt and prompt["files"]:
+            uploaded_file = prompt["files"][0]  # 先頭1件のみ処理
+            process_uploaded_file(uploaded_file)
+            st.stop()  # ファイル処理後に実行を中断（自動的にリロードされる）
+
+        # メッセージ長チェック
+        would_exceed, estimated_length, max_length = st.session_state.chat_manager.would_exceed_message_length(
+            prompt.text,
+            st.session_state.config["message_length"],
+            st.session_state.config["context_length"],
+            st.session_state.config["meta_prompt"],
+            uri_processor=URIProcessor()
+        )
+
+        if would_exceed:
+            st.error(f"エラー: メッセージ長が上限を超えています（推定: {estimated_length}文字、上限: {max_length}文字）。\n"
+                     f"- メッセージを短くするか\n"
+                     f"- 添付ファイルを減らすか\n"
+                     f"- サイドバー設定のメッセージ長制限を引き上げてください。")
+        else:
+            # ユーザーメッセージを追加（RAG情報はこの時点ではまだ含まれていない）
+            user_message = st.session_state.chat_manager.add_user_message(prompt.text)
+
+            # UIに表示 (UIには元のメッセージだけを表示)
+            with st.chat_message("user"):
+                st.write(user_message["content"])
+
+            # メッセージ送信中フラグをON
+            st.session_state.is_sending_message = True
+            st.session_state.status_message = "メッセージを処理中..."
+            st.session_state.initial_message_sent = True
+            st.rerun()  # 状態を更新してUIを再描画（必要な箇所のみ）
+
+    # メッセージ送信中かつ最後のメッセージがユーザーからの場合、処理を行う
+    if st.session_state.is_sending_message and st.session_state.chat_manager.messages and \
+            st.session_state.chat_manager.messages[-1]["role"] != "assistant" and \
+            st.session_state.initial_message_sent:
+        
+        process_and_send_message()
+        
+        # 処理終了フラグを設定
         st.session_state.is_sending_message = False
         st.session_state.status_message = "処理完了"
-        st.rerun()
-
+        st.session_state.initial_message_sent = False
+        st.rerun()  # 状態を更新してUIを再描画（必要な箇所のみ）
 
 # チャット機能タブ
 with tabs[0]:
