@@ -288,40 +288,45 @@ def sidebar(config_file_path, logger):
                 logger.error("メッセージ履歴のインポートに失敗しました: 無効なフォーマット")
                 st.error("JSONのインポートに失敗しました: 無効なフォーマットです")
 
-    # QdrantManagerが必要な部分は遅延ロードで対応
-    # データベースタブが選択されているか、RAGモードがオンの場合のみ表示
-    if st.session_state.database_tab_selected or st.session_state.rag_mode:
-        # 検索用サイドバー設定
-        st.sidebar.markdown("検索")
+    # RAGモードがオンの場合は常にデータベース検索機能を表示する
+    if st.session_state.rag_mode:
+        try:
+            # 検索用サイドバー設定
+            st.sidebar.markdown("検索")
+            
+            # コレクション名の選択（サイドバーに表示）
+            # プロセスレベルで管理されているQdrantManagerを取得（毎回最新の状態を取得）
+            manager = get_or_create_qdrant_manager(logger)
 
-        # コレクション名の選択（サイドバーに表示）
-        # プロセスレベルで管理されているQdrantManagerを取得（毎回最新の状態を取得）
-        manager = get_or_create_qdrant_manager(logger)
+            # コレクション一覧をQdrantManagerから取得
+            # (ファイルシステムから直接取得するのではなく、QdrantManagerのAPIを使用)
+            available_collections = manager.get_collections()
 
-        # コレクション一覧をQdrantManagerから取得
-        # (ファイルシステムから直接取得するのではなく、QdrantManagerのAPIを使用)
-        available_collections = manager.get_collections()
+            # コレクションがなければデフォルトのものを表示
+            if not available_collections:
+                available_collections = ["default"]
 
-        # コレクションがなければデフォルトのものを表示
-        if not available_collections:
-            available_collections = ["default"]
+            # サイドバーにコレクション選択を表示（メインエリアではなく）
+            st.sidebar.markdown("コレクション選択", help="Qdrantデータベースで利用するコレクション（DB空間）を選択します")
+            search_collection = st.sidebar.selectbox(
+                "コレクション",  # 空のラベルから有効なラベルに変更
+                available_collections,
+                index=available_collections.index(
+                    manager.collection_name
+                ) if manager.collection_name in available_collections else 0,
+                label_visibility="collapsed",  # ラベルを視覚的に非表示にする
+                disabled=st.session_state.is_sending_message,
+                key=f"collection_select_{id(available_collections)}"  # 一意のキーを使用して再描画を強制
+            )
 
-        st.markdown("コレクション選択", help="Qdrantデータベースで利用するコレクション（DB空間）を選択します")
-        search_collection = st.sidebar.selectbox(
-            "コレクション",  # 空のラベルから有効なラベルに変更
-            available_collections,
-            index=available_collections.index(
-                manager.collection_name
-            ) if manager.collection_name in available_collections else 0,
-            label_visibility="collapsed",  # ラベルを視覚的に非表示にする
-            disabled=st.session_state.is_sending_message,
-            key=f"collection_select_{id(available_collections)}"  # 一意のキーを使用して再描画を強制
-        )
+            # 選択されたコレクションに切り替え
+            if search_collection != manager.collection_name:
+                manager.get_collection(search_collection)
 
-        # 選択されたコレクションに切り替え
-        if search_collection != manager.collection_name:
-            manager.get_collection(search_collection)
-
-        # サイドバーに現在のコレクション情報を表示（常に最新の情報を取得）
-        doc_count = manager.count_documents()
-        st.sidebar.code(f"登録ドキュメント数: {doc_count}")
+            # サイドバーに現在のコレクション情報を表示（常に最新の情報を取得）
+            doc_count = manager.count_documents()
+            st.sidebar.code(f"登録ドキュメント数: {doc_count}")
+        except Exception as e:
+            # データベース接続時のエラーを表示
+            logger.error(f"データベース接続エラー: {str(e)}")
+            st.sidebar.error("データベース接続エラー")

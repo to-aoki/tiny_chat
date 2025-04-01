@@ -235,6 +235,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     """
     テキストとメタデータをQdrantに追加します
     同じソース（ファイル名）が既に存在する場合は、削除してから追加します
+    注意: この関数を呼び出す前に、QdrantManagerを初期化する必要があります
 
     Args:
         texts: テキスト配列のリスト (is_page=True により、各ファイルのテキストは文字列の配列)
@@ -243,7 +244,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     Returns:
         added_ids: 追加されたドキュメントのIDリスト
     """
-    # QdrantManagerを取得（スレッドセーフな共通関数）
+    # QdrantManagerを使用 (既に初期化されている前提)
     _qdrant_manager = get_or_create_qdrant_manager()
     
     # ソース（ファイル名）の一覧を取得
@@ -283,6 +284,7 @@ def search_documents(
         query: str, top_k: int = 10, filter_params_str: str = None, score_threshold=0.4, logger=None) -> List:
     """
     ドキュメントを検索します（キャッシュ機能付き）
+    注意: この関数を呼び出す前に、QdrantManagerを初期化する必要があります
 
     Args:
         query: 検索クエリ
@@ -299,6 +301,7 @@ def search_documents(
         import json
         filter_params = json.loads(filter_params_str)
     
+    # ここでは外部で初期化されたQdrantManagerを使用する
     _qdrant_manager = get_or_create_qdrant_manager(logger)
     results = _qdrant_manager.query_points(
         query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold)
@@ -332,7 +335,7 @@ def show_database_component(
     # 検索と文書登録のタブを作成
     search_tabs = st.tabs(["🔍 検索", "📁 登録", "🗑️ 削除"])
 
-    # QdrantManagerを取得（必要に応じて初期化）
+    # QdrantManagerを使用
     _qdrant_manager = get_or_create_qdrant_manager(logger)
 
     # 検索タブ
@@ -850,5 +853,9 @@ if __name__ == "__main__":
     LOGGER.info("単独データベースアプリケーションを起動しました")
 
     SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
+    
+    # 単独で起動した場合はQdrantManagerを初期化
+    get_or_create_qdrant_manager(LOGGER)
+    
     # コンポーネントの表示
     show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
