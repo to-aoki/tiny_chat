@@ -604,7 +604,8 @@ def show_chat_component(logger):
                 st.session_state.is_sending_message = False
                 st.session_state.status_message = "処理完了"
                 st.session_state.initial_message_sent = False
-                st.rerun()  # 必須の再描画
+                st.rerun()  # 再描画
+
 
 # チャット機能タブ
 with tabs[0]:

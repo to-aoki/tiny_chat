@@ -517,6 +517,12 @@ def show_database_component(
                             # 登録されたドキュメントの一覧
                             metadata_df = pd.DataFrame(metadatas)
                             st.dataframe(metadata_df, use_container_width=True)
+                            
+                            # ファイルアップロード情報をフォームから削除（セッション状態をクリア）
+                            if "uploaded_files" in st.session_state:
+                                del st.session_state["uploaded_files"]
+                            # 再読み込みして表示を更新
+                            st.rerun()
                         else:
                             st.warning("登録できるドキュメントがありませんでした")
 
@@ -588,6 +594,12 @@ def show_database_component(
                             # 登録されたドキュメントの一覧
                             metadata_df = pd.DataFrame(metadatas)
                             st.dataframe(metadata_df, use_container_width=True)
+                            
+                            # ディレクトリパス情報と拡張子選択情報をクリア
+                            if "directory_path" in st.session_state:
+                                del st.session_state["directory_path"]
+                            # 画面を更新
+                            st.rerun()
                         else:
                             st.warning("指定されたディレクトリに登録可能なファイルが見つかりませんでした")
             elif directory_path:
