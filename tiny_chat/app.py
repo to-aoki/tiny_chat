@@ -1,6 +1,7 @@
 import os
 import urllib.parse
 import tempfile
+import functools
 
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
@@ -13,7 +14,6 @@ from chat_manager import ChatManager
 from logger import get_logger
 from llm_utils import get_llm_client
 from sidebar import sidebar
-from wait_view import spinner
 from copy_botton import copy_button
 from database import show_database_component, search_documents, get_or_create_qdrant_manager
 
@@ -31,6 +31,20 @@ CONFIG_FILE = "chat_app_config.json"
 
 # サポートする拡張子
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
+
+# ファイルタイプと表示単位のキャッシュ
+FILE_TYPES = {
+    '.pdf': ("PDF", "ページ"),
+    '.xlsx': ("Excel", "シート"),
+    '.xls': ("Excel", "シート"),
+    '.docx': ("Word", "段落"),
+    '.pptx': ("PowerPoint", "スライド"),
+    '.txt': ("テキスト", ""),
+    '.csv': ("CSV", ""),
+    '.json': ("JSON", ""),
+    '.md': ("Markdown", ""),
+    '.html': ("HTML", ""),
+}
 
 
 def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
@@ -162,32 +176,33 @@ def toggle_rag_mode():
         st.session_state.reference_files = []
 
 
-def show_chat_component(logger):
+# キャッシュ可能な検索関数
+@functools.lru_cache(maxsize=32)
+def cached_search_documents(prompt_content, top_k=5):
+    return search_documents(prompt_content, top_k=top_k, logger=LOGGER)
 
+
+@st.fragment
+def show_chat_component(logger):
     # チャット履歴の表示
-    for i, message in enumerate(st.session_state.chat_manager.messages):
+    messages = st.session_state.chat_manager.messages
+    for i, message in enumerate(messages):
         with st.chat_message(message["role"]):
             st.write(message["content"])
             if message["role"] == "assistant":
                 copy_button(message["content"])
                 
-                # 参照ファイルがある場合、ボタンを表示する
-                if "reference_files" in st.session_state and len(st.session_state.reference_files) > 0 and i == len(st.session_state.chat_manager.messages) - 1:
-                    file_buttons = []
-                    for ref_file in st.session_state.reference_files:
-                        file_buttons.append({
-                            "index": ref_file["index"],
-                            "filename": ref_file["filename"],
-                            "path": ref_file["path"]
-                        })
-                    
-                    if file_buttons:
-                        with st.container():
-                            st.write("参照情報を開く:")
-                            for idx, file_info in enumerate(file_buttons):
+                # 参照ファイルがある場合、最後の応答に対してのみボタンを表示する
+                if i == len(messages) - 1 and st.session_state.reference_files:
+                    with st.container():
+                        st.write("参照情報を開く:")
+                        cols = st.columns(min(3, len(st.session_state.reference_files)))
+                        for idx, file_info in enumerate(st.session_state.reference_files):
+                            col_idx = idx % 3
+                            with cols[col_idx]:
                                 if not file_info["path"].startswith(('http://', 'https://')):
                                     if st.button(f"[{file_info['index']}] {file_info['filename']}",
-                                                 key=f"open_ref_{i}_{idx}"):
+                                                key=f"open_ref_{i}_{idx}"):
                                         open_file(file_info["path"])
                                 else:
                                     st.markdown(
@@ -196,40 +211,34 @@ def show_chat_component(logger):
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
         with st.expander(f"添付ファイル ({len(st.session_state.chat_manager.attachments)}件)", expanded=True):
+            attachments_grid = []
+            # 3カラムのグリッドに表示するためのデータ準備
             for idx, attachment in enumerate(st.session_state.chat_manager.attachments):
-                cols = st.columns([4, 1])
-                with cols[0]:
-                    filename = attachment['filename']
-                    _, ext = os.path.splitext(filename)
+                filename = attachment['filename']
+                _, ext = os.path.splitext(filename)
+                ext = ext.lower()
 
-                    # ファイルタイプと表示単位
-                    file_types = {
-                        '.pdf': ("PDF", "ページ"),
-                        '.xlsx': ("Excel", "シート"),
-                        '.xls': ("Excel", "シート"),
-                        '.docx': ("Word", "段落"),
-                        '.pptx': ("PowerPoint", "スライド"),
-                        '.txt': ("テキスト", ""),
-                        '.csv': ("CSV", ""),
-                        '.json': ("JSON", ""),
-                        '.md': ("Markdown", ""),
-                        '.html': ("HTML", ""),
-                    }
+                # ファイルタイプと表示単位を取得
+                file_type, count_type = FILE_TYPES.get(ext, ("ファイル", ""))
 
-                    file_type = "ファイル"
-                    count_type = ""
+                # カウント表示
+                count_text = ""
+                if attachment['num_pages'] > 0 and count_type:
+                    count_text = f"（{attachment['num_pages']}{count_type}）"
 
-                    # ファイルタイプとカウントタイプを取得
-                    if ext.lower() in file_types:
-                        file_type, count_type = file_types[ext.lower()]
-
-                    # カウント表示
-                    count_text = ""
-                    if attachment['num_pages'] > 0 and count_type:
-                        count_text = f"（{attachment['num_pages']}{count_type}）"
-
-                    st.text(f"{idx + 1}. [{file_type}] {filename} {count_text}")
-                    logger.debug(f"添付ファイル表示: {filename} {count_text}")
+                attachments_grid.append({
+                    "index": idx + 1,
+                    "file_type": file_type,
+                    "filename": filename,
+                    "count_text": count_text
+                })
+            
+            # 3カラムで表示
+            cols = st.columns(3)
+            for idx, attachment_info in enumerate(attachments_grid):
+                col_idx = idx % 3
+                with cols[col_idx]:
+                    st.text(f"{attachment_info['index']}. [{attachment_info['file_type']}] {attachment_info['filename']} {attachment_info['count_text']}")
 
     with st.container():
         cols = st.columns([3, 2, 3])
@@ -283,15 +292,12 @@ def show_chat_component(logger):
         file_type=[ext.lstrip(".") for ext in SUPPORT_EXTENSIONS]
     )
 
-    # メッセージ送信中処理
-    if st.session_state.is_sending_message:
-        # 処理待機用描画
-        spinner()
-
     # ファイル処理関数
     def process_uploaded_file(uploaded_file):
         filename = uploaded_file.name
         _, file_extension = os.path.splitext(filename)
+        file_extension = file_extension.lower()  # 小文字に変換
+        
         processor_class = FileProcessorFactory.get_processor(file_extension)
         if processor_class is None:
             st.error(f"エラー: サポートされていないファイル形式です: {file_extension}")
@@ -303,20 +309,25 @@ def show_chat_component(logger):
         count_type = ""
 
         # ファイルタイプに応じた処理
-        if file_extension.lower() == '.pdf':
-            extracted_text, count_value, error = processor_class.extract_pdf_text(uploaded_file)
-            count_type = "ページ"
-        elif file_extension.lower() in ['.xlsx', '.xls']:
-            extracted_text, count_value, error = processor_class.extract_excel_text(uploaded_file)
-            count_type = "シート"
-        elif file_extension.lower() == '.pptx':
-            extracted_text, count_value, error = processor_class.extract_pptx_text(uploaded_file)
-            count_type = "スライド"
-        elif file_extension.lower() == '.docx':
-            extracted_text, count_value, error = processor_class.extract_word_text(uploaded_file)
-            count_type = "段落"
-        else:  # テキスト、HTMLなど
-            extracted_text, error = processor_class.extract_text(uploaded_file)
+        try:
+            if file_extension == '.pdf':
+                extracted_text, count_value, error = processor_class.extract_pdf_text(uploaded_file)
+                count_type = "ページ"
+            elif file_extension in ['.xlsx', '.xls']:
+                extracted_text, count_value, error = processor_class.extract_excel_text(uploaded_file)
+                count_type = "シート"
+            elif file_extension == '.pptx':
+                extracted_text, count_value, error = processor_class.extract_pptx_text(uploaded_file)
+                count_type = "スライド"
+            elif file_extension == '.docx':
+                extracted_text, count_value, error = processor_class.extract_word_text(uploaded_file)
+                count_type = "段落"
+            else:  # テキスト、HTMLなど
+                extracted_text, error = processor_class.extract_text(uploaded_file)
+        except Exception as e:
+            st.error(f"ファイル処理エラー: {str(e)}")
+            logger.error(f"ファイル処理中に例外が発生 ({filename}): {str(e)}")
+            return False
 
         # エラー処理
         if error:
@@ -355,6 +366,7 @@ def show_chat_component(logger):
 
             # URIプロセッサ
             detects_urls = []
+            uri_processor = None
             if st.session_state.config["uri_processing"]:
                 uri_processor = URIProcessor()
                 detects_urls = uri_processor.detect_uri(prompt_content)
@@ -362,18 +374,18 @@ def show_chat_component(logger):
             # 拡張プロンプトの取得
             enhanced_prompt = None
             if st.session_state.chat_manager.attachments or (
-                    st.session_state.config["uri_processing"] and len(detects_urls) > 0):
+                    st.session_state.config["uri_processing"] and detects_urls):
                 # 拡張プロンプトを生成
                 enhanced_prompt = st.session_state.chat_manager.get_enhanced_prompt(
                     prompt_content,
                     max_length=st.session_state.config["context_length"],
-                    uri_processor=uri_processor if st.session_state.config["uri_processing"] else None
+                    uri_processor=uri_processor
                 )
 
             # RAGモードが有効な場合のみ、検索を実行
             if st.session_state.rag_mode:
-                # 最新のユーザーメッセージで検索（共通関数を使用）
-                search_results = search_documents(prompt_content, top_k=5, logger=logger)
+                # 最新のユーザーメッセージで検索（キャッシュ関数を使用）
+                search_results = cached_search_documents(prompt_content, top_k=5)
 
                 if search_results:
                     # 検索結果を整形
@@ -381,11 +393,22 @@ def show_chat_component(logger):
 
                     # 参照情報をリセット
                     st.session_state.rag_sources = []
+                    
+                    # 既存のパスを追跡して重複を避ける
+                    exist_path = set()
 
                     for i, result in enumerate(search_results):
                         filename = result.payload.get('filename', '文書')
                         source = result.payload.get('source', '')
-                        text = result.payload.get('text', '')[:st.session_state.config["context_length"]]  # テキスト内容を取得
+                        
+                        # 重複チェック
+                        if source in exist_path:
+                            continue
+                            
+                        exist_path.add(source)
+                        
+                        # テキスト内容を取得（長さ制限あり）
+                        text = result.payload.get('text', '')[:st.session_state.config["context_length"]]  
 
                         # 参照情報を保存
                         source_info = {
@@ -396,8 +419,7 @@ def show_chat_component(logger):
                         }
                         st.session_state.rag_sources.append(source_info)
 
-                        search_context += f"[{i + 1}] {filename}:\n"
-                        search_context += f"{text}\n\n"
+                        search_context += f"[{i + 1}] {filename}:\n{text}\n\n"
 
                     # 検索結果を含めた拡張プロンプトを作成
                     if enhanced_prompt:
@@ -409,6 +431,7 @@ def show_chat_component(logger):
             if enhanced_prompt:
                 st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
 
+            # APIに送信するメッセージの準備
             messages_for_api = st.session_state.chat_manager.prepare_messages_for_api(
                 st.session_state.config["meta_prompt"])
 
@@ -421,7 +444,7 @@ def show_chat_component(logger):
                 content_to_send = prompt_content
 
                 # RAGが有効で検索結果がある場合のみ検索結果を含める
-                if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources and len(st.session_state.rag_sources) > 0:
+                if st.session_state.rag_mode and st.session_state.rag_sources:
                     search_context = "\n\n以下は検索システムから取得した関連情報です:\n\n"
                     for source in st.session_state.rag_sources:
                         search_context += f"[{source['index']}] {source['filename']}:\n"
@@ -458,19 +481,22 @@ def show_chat_component(logger):
                     full_response = ""
 
                     for chunk in response:
-                        if chunk.choices and len(chunk.choices) > 0:
-                            delta = chunk.choices[0].delta
-                            if hasattr(delta, 'content') and delta.content:
-                                full_response += delta.content
+                        if chunk.choices and chunk.choices[0].delta.content:
+                            full_response += chunk.choices[0].delta.content
+                            # 過度な再描画を防ぐため、10文字ごとに更新
+                            if len(full_response) % 10 == 0:
                                 message_placeholder.markdown(full_response)
 
+                    # 最終応答を表示
+                    message_placeholder.markdown(full_response)
+
                     # RAGモードで検索結果がある場合のみ、参照情報を追加
-                    final_response = full_response
-                    if st.session_state.rag_mode and "rag_sources" in st.session_state and st.session_state.rag_sources and len(st.session_state.rag_sources) > 0:
+                    if st.session_state.rag_mode and st.session_state.rag_sources:
                         # 参照ファイル情報を保存するが、マークダウンには表示しない
                         reference_files = []
                         refer = 0
-                        exist_path = []
+                        exist_path = set()
+                        
                         for source in st.session_state.rag_sources:
                             source_path = source["source"]
                             filename = source["filename"]
@@ -488,26 +514,19 @@ def show_chat_component(logger):
                                 "path": source_path
                             })
                             refer += 1
-                            exist_path.append(source_path)
+                            exist_path.add(source_path)
                         
                         # セッション状態に参照ファイル情報を保存
                         st.session_state.reference_files = reference_files
-                        
-                        # 表示
-                        message_placeholder.markdown(full_response)
-                    else:
-                        # 通常の出力
-                        message_placeholder.markdown(full_response)
 
-                    # 応答をメッセージ履歴に追加（参照情報を含む）
-                    st.session_state.chat_manager.add_assistant_message(final_response)
+                    # 応答をメッセージ履歴に追加
+                    st.session_state.chat_manager.add_assistant_message(full_response)
 
                     # 送信後に添付ファイルを削除
                     st.session_state.chat_manager.clear_attachments()
 
                     # rag_sourcesをクリア
-                    if "rag_sources" in st.session_state:
-                        st.session_state.rag_sources = []
+                    st.session_state.rag_sources = []
 
                 except Exception as e:
                     error_message = f"APIエラー: {str(e)}"
@@ -521,7 +540,7 @@ def show_chat_component(logger):
     # ユーザーがメッセージを送信した場合の処理
     if prompt:
         # ファイルアップロードの処理
-        if prompt and prompt["files"]:
+        if prompt["files"]:
             uploaded_file = prompt["files"][0]  # 先頭1件のみ処理
             process_uploaded_file(uploaded_file)
             st.stop()  # ファイル処理後に実行を中断（自動的にリロードされる）
@@ -552,20 +571,15 @@ def show_chat_component(logger):
             st.session_state.is_sending_message = True
             st.session_state.status_message = "メッセージを処理中..."
             st.session_state.initial_message_sent = True
-            st.rerun()  # 状態を更新してUIを再描画（必要な箇所のみ）
-
-    # メッセージ送信中かつ最後のメッセージがユーザーからの場合、処理を行う
-    if st.session_state.is_sending_message and st.session_state.chat_manager.messages and \
-            st.session_state.chat_manager.messages[-1]["role"] != "assistant" and \
-            st.session_state.initial_message_sent:
-        
-        process_and_send_message()
-        
-        # 処理終了フラグを設定
-        st.session_state.is_sending_message = False
-        st.session_state.status_message = "処理完了"
-        st.session_state.initial_message_sent = False
-        st.rerun()  # 状態を更新してUIを再描画（必要な箇所のみ）
+            
+            # 処理を実行
+            process_and_send_message()
+            
+            # 処理終了フラグを設定
+            st.session_state.is_sending_message = False
+            st.session_state.status_message = "処理完了"
+            st.session_state.initial_message_sent = False
+            st.rerun()  # 必須の再描画
 
 # チャット機能タブ
 with tabs[0]:

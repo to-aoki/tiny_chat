@@ -2,6 +2,7 @@ import os
 import urllib.parse
 from typing import List, Dict, Any, Tuple
 import tempfile
+import functools
 
 import webbrowser
 import streamlit as st
@@ -13,6 +14,21 @@ from file_processor import FileProcessorFactory
 _qdrant_manager = None
 # インスタンス生成のロックに使用
 _qdrant_lock = None
+
+# サポートされるファイル拡張子とファイルタイプのマッピング（前計算）
+FILE_TYPE_MAPPING = {
+    '.pdf': ('PDF', 'ページ'),
+    '.xlsx': ('Excel', 'シート'),
+    '.xls': ('Excel', 'シート'),
+    '.docx': ('Word', '段落'),
+    '.pptx': ('PowerPoint', 'スライド'),
+    '.txt': ('テキスト', ''),
+    '.csv': ('CSV', ''),
+    '.json': ('JSON', ''),
+    '.md': ('Markdown', ''),
+    '.html': ('HTML', ''),
+    '.htm': ('HTML', ''),
+}
 
 
 # ファイルを開くヘルパー関数
@@ -91,72 +107,88 @@ def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
         return None, {}
 
     # ファイルを読み込む
-    with open(file_path, 'rb') as f:
-        file_bytes = f.read()
+    try:
+        with open(file_path, 'rb') as f:
+            file_bytes = f.read()
+    except Exception as e:
+        st.warning(f"ファイル読み込みエラー: {str(e)}")
+        return None, {}
 
     # メタデータの初期化
     metadata = {
         "source": file_path,
         "filename": os.path.basename(file_path),
         "file_type": file_ext[1:],  # 拡張子の.を除去
+        "file_size": len(file_bytes),  # 早期にファイルサイズを設定
     }
 
     # ファイルタイプに応じた処理、is_page=Trueで文字列配列として処理
-    if file_ext == '.pdf':
-        text, page_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-        if error:
-            st.warning(f"PDFの処理中にエラーが発生しました: {error}")
-            return None, {}
-        metadata["page_count"] = page_count
+    try:
+        if file_ext == '.pdf':
+            text, page_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+            if error:
+                st.warning(f"PDFの処理中にエラーが発生しました: {error}")
+                return None, {}
+            metadata["page_count"] = page_count
 
-    elif file_ext in ['.xlsx']:
-        text, sheet_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-        if error:
-            st.warning(f"Excelの処理中にエラーが発生しました: {error}")
-            return None, {}
-        metadata["sheet_count"] = sheet_count
+        elif file_ext in ['.xlsx', '.xls']:
+            text, sheet_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+            if error:
+                st.warning(f"Excelの処理中にエラーが発生しました: {error}")
+                return None, {}
+            metadata["sheet_count"] = sheet_count
 
-    elif file_ext == '.docx':
-        text, para_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-        if error:
-            st.warning(f"Wordの処理中にエラーが発生しました: {error}")
-            return None, {}
-        metadata["para_count"] = para_count
+        elif file_ext == '.docx':
+            text, para_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+            if error:
+                st.warning(f"Wordの処理中にエラーが発生しました: {error}")
+                return None, {}
+            metadata["para_count"] = para_count
 
-    elif file_ext == '.pptx':
-        text, slide_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-        if error:
-            st.warning(f"PowerPointの処理中にエラーが発生しました: {error}")
-            return None, {}
-        metadata["slide_count"] = slide_count
+        elif file_ext == '.pptx':
+            text, slide_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+            if error:
+                st.warning(f"PowerPointの処理中にエラーが発生しました: {error}")
+                return None, {}
+            metadata["slide_count"] = slide_count
 
-    elif file_ext in ['.txt', '.csv', '.json', '.md']:
-        # テキストファイルの場合はページ分割機能がないため従来通り
-        text, error = processor.extract_text_from_bytes(file_bytes)
-        if error:
-            st.warning(f"テキストファイルの処理中にエラーが発生しました: {error}")
-            return None, {}
-        # 単一のテキストを配列に変換して1ページとして扱う
-        if text:
-            text = [text]
+        elif file_ext in ['.txt', '.csv', '.json', '.md']:
+            # テキストファイルの場合はページ分割機能がないため従来通り
+            text, error = processor.extract_text_from_bytes(file_bytes)
+            if error:
+                st.warning(f"テキストファイルの処理中にエラーが発生しました: {error}")
+                return None, {}
+            # 単一のテキストを配列に変換して1ページとして扱う
+            if text:
+                text = [text]
 
-    elif file_ext in ['.html', '.htm']:
-        text, message = processor.extract_text_from_bytes(file_bytes)
-        if not text:
-            st.warning(f"HTMLの処理中にエラーが発生しました: {message}")
-            return None, {}
-        # 単一のテキストを配列に変換して1ページとして扱う
-        if text:
-            text = [text]
+        elif file_ext in ['.html', '.htm']:
+            text, message = processor.extract_text_from_bytes(file_bytes)
+            if not text:
+                st.warning(f"HTMLの処理中にエラーが発生しました: {message}")
+                return None, {}
+            # 単一のテキストを配列に変換して1ページとして扱う
+            if text:
+                text = [text]
 
-    else:
-        st.warning(f"対応していないファイル形式です: {file_ext}")
+        else:
+            st.warning(f"対応していないファイル形式です: {file_ext}")
+            return None, {}
+    except Exception as e:
+        st.warning(f"ファイル処理中に例外が発生しました: {str(e)}")
         return None, {}
 
-    # ファイルサイズを追加
-    metadata["file_size"] = len(file_bytes)
-
     return text, metadata
+
+
+@functools.lru_cache(maxsize=16)
+def get_extensions_without_dot(extensions_tuple):
+    """拡張子タプルからドットを除去して返す（キャッシュ機能付き）"""
+    return [ext.lstrip(".") for ext in extensions_tuple]
+
+def convert_extensions(extensions_list):
+    """リストをタプルに変換してキャッシュ可能な関数に渡す"""
+    return get_extensions_without_dot(tuple(extensions_list))
 
 
 def process_directory(directory_path: str,
@@ -177,6 +209,9 @@ def process_directory(directory_path: str,
 
     if extensions is None:
         extensions = support_extensions
+    
+    # セットによる高速ルックアップ
+    extensions_set = set(extensions)
 
     # ファイルを検索
     for root, _, files in os.walk(directory_path):
@@ -184,7 +219,7 @@ def process_directory(directory_path: str,
             file_path = os.path.join(root, file)
             file_ext = os.path.splitext(file_path)[1].lower()
 
-            if file_ext in extensions:
+            if file_ext in extensions_set:
                 text, metadata = process_file(file_path)
                 if text:
                     # 相対パスをメタデータに追加
@@ -229,6 +264,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     all_texts = []
     all_metadatas = []
     
+    # ファイルごとにテキストとメタデータを処理
     for i, text_array in enumerate(texts):
         base_metadata = metadatas[i].copy()
         for page_index, page_text in enumerate(text_array):
@@ -242,25 +278,54 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     return added_ids
 
 
+@functools.lru_cache(maxsize=32)
 def search_documents(
-        query: str, top_k: int = 10, filter_params: Dict = None, logger=None, score_threshold=0.4) -> List:
+        query: str, top_k: int = 10, filter_params_str: str = None, score_threshold=0.4, logger=None) -> List:
     """
-    ドキュメントを検索します
+    ドキュメントを検索します（キャッシュ機能付き）
 
     Args:
         query: 検索クエリ
         top_k: 返す結果の数
-        filter_params: 検索フィルタ（Noneの場合はフィルタを適用しない）
+        filter_params_str: 検索フィルタの文字列表現（キャッシュキーとして使用）
+        score_threshold: 最小スコアしきい値
 
     Returns:
         results: 検索結果のリスト
     """
+    # 文字列からフィルタを復元（もしあれば）
+    filter_params = None
+    if filter_params_str:
+        import json
+        filter_params = json.loads(filter_params_str)
+    
     _qdrant_manager = get_or_create_qdrant_manager(logger)
     results = _qdrant_manager.query_points(
         query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold)
     return results
 
 
+def get_page_info_display(metadata: Dict) -> str:
+    """メタデータからページ情報表示文字列を生成"""
+    if 'page' not in metadata:
+        return ""
+    
+    file_type = metadata.get('file_type', '').lower()
+    page_num = metadata['page']
+    
+    if file_type == 'pdf':
+        return f"(ページ: {page_num})"
+    elif file_type in ['xlsx', 'xls']:
+        return f"(シート: {page_num})"
+    elif file_type == 'docx':
+        return f"(段落: {page_num})"
+    elif file_type == 'pptx':
+        return f"(スライド: {page_num})"
+    else:
+        return f"(記載箇所: {page_num})"
+
+
+@st.fragment
 def show_database_component(
         logger,
         extensions=['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']):
@@ -311,61 +376,60 @@ def show_database_component(
             st.session_state.run_search = False
             # フィルターの作成
             filter_params = None
+            filter_params_str = None
             if selected_sources:
                 # 複数のソースを配列として設定
                 filter_params = {"source": selected_sources}
+                # キャッシュ用に文字列化
+                import json
+                filter_params_str = json.dumps(filter_params)
 
             with st.spinner("検索中..."):
+                # キャッシュ付き検索関数を使用
                 st.session_state.search_results = search_documents(
-                    query, top_k=top_k, filter_params=filter_params, score_threshold=0.)
+                    query, top_k=top_k, filter_params_str=filter_params_str, score_threshold=0.)
 
         # 結果の表示
         if st.session_state.search_results:
             results = st.session_state.search_results
-            st.success(f"{len(results)}件の結果が見つかりました")
+            result_count = len(results)
+            st.success(f"{result_count}件の結果が見つかりました")
 
+            # 結果をグリッド表示に変更
+            result_grid = []
             for i, result in enumerate(results):
                 score = result.score
-                text = result.payload.get("text", "")
-
-                # メタデータを表示用に整形
                 metadata = {k: v for k, v in result.payload.items() if k != "text"}
-
-                # ページ情報（あれば）を取得
-                page_info = ""
-                if 'page' in metadata:
-                    # ファイル種類に応じて表示を変える
-                    file_type = metadata.get('file_type', '').lower()
-                    if file_type == 'pdf':
-                        page_info = f"(ページ: {metadata['page']})"
-                    elif file_type == 'xlsx':
-                        page_info = f"(シート: {metadata['page']})"
-                    elif file_type == 'docx':
-                        page_info = f"(段落: {metadata['page']})"
-                    elif file_type == 'pptx':
-                        page_info = f"(スライド: {metadata['page']})"
-                    else:
-                        page_info = f"(記載箇所: {metadata['page']})"
-
-                # 結果表示
+                page_info = get_page_info_display(metadata)
+                
+                result_grid.append({
+                    "index": i + 1,
+                    "filename": metadata.get('filename', 'ドキュメント'),
+                    "page_info": page_info,
+                    "score": f"{score:.4f}",
+                    "metadata": metadata,
+                    "text": result.payload.get("text", "")
+                })
+            
+            # 一列表示に変更
+            for idx, item in enumerate(result_grid):
                 with st.expander(
-                        f"#{i + 1}: {metadata.get('filename', 'ドキュメント')} {page_info} (スコア: {score:.4f})",
-                        expanded=i == 0):
-                    # メタデータテーブル
-                    metadata_df = pd.DataFrame([metadata])
-                    st.dataframe(metadata_df, hide_index=True)
-
-                    # ソースファイルへのリンクを追加（あれば）
-                    if 'source' in metadata and metadata['source']:
-                        source_path = metadata['source']
+                        f"#{item['index']}: {item['filename']} {item['page_info']} (スコア: {item['score']})",
+                        expanded=idx == 0):
+                    # メタデータをDataFrameとして表示
+                    st.dataframe(pd.DataFrame([item['metadata']]), hide_index=True, use_container_width=True)
+                    
+                    # ソースファイルへのリンク
+                    if 'source' in item['metadata'] and item['metadata']['source']:
+                        source_path = item['metadata']['source']
                         if not source_path.startswith(('http://', 'https://')):
-                            if st.button(f"{source_path}", key=f"open_ref_{source_path}_{i}"):
+                            if st.button(f"{source_path}", key=f"open_ref_{source_path}_{idx}", use_container_width=True):
                                 open_file(source_path)
                         else:
-                            st.markdown(
-                                f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
-
-                    # テキスト表示
+                            st.markdown(f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
+                    
+                    # テキスト表示（長い場合は省略）
+                    text = item['text']
                     st.text(text[:500] + "..." if len(text) > 500 else text)
         else:
             st.info("検索結果はありません")
@@ -397,7 +461,7 @@ def show_database_component(
             uploaded_files = st.file_uploader(
                 "ファイルをアップロード",
                 accept_multiple_files=True,
-                type=[ext.lstrip(".") for ext in extensions]
+                type=convert_extensions(extensions)
             )
 
             if uploaded_files:
@@ -408,6 +472,7 @@ def show_database_component(
                         metadatas = []
 
                         progress_bar = st.progress(0)
+                        total_files = len(uploaded_files)
 
                         for i, uploaded_file in enumerate(uploaded_files):
                             with tempfile.NamedTemporaryFile(
@@ -431,7 +496,7 @@ def show_database_component(
                             os.unlink(temp_path)
 
                             # 進捗を更新
-                            progress_bar.progress((i + 1) / len(uploaded_files))
+                            progress_bar.progress((i + 1) / total_files)
 
                         if texts:
                             # コレクション名を設定して処理
@@ -448,7 +513,7 @@ def show_database_component(
 
                             # 登録されたドキュメントの一覧
                             metadata_df = pd.DataFrame(metadatas)
-                            st.dataframe(metadata_df)
+                            st.dataframe(metadata_df, use_container_width=True)
                         else:
                             st.warning("登録できるドキュメントがありませんでした")
 
@@ -482,7 +547,7 @@ def show_database_component(
                 if st.button("ディレクトリ内のファイルを登録", type="primary"):
                     with st.spinner(f"ディレクトリを処理中: {directory_path}"):
                         results = process_directory(directory_path, selected_extensions,
-                                                    support_extensions=extensions)
+                                                support_extensions=extensions)
 
                         if results:
                             texts = [r[0] for r in results]
@@ -519,7 +584,7 @@ def show_database_component(
 
                             # 登録されたドキュメントの一覧
                             metadata_df = pd.DataFrame(metadatas)
-                            st.dataframe(metadata_df)
+                            st.dataframe(metadata_df, use_container_width=True)
                         else:
                             st.warning("指定されたディレクトリに登録可能なファイルが見つかりませんでした")
             elif directory_path:
@@ -527,13 +592,11 @@ def show_database_component(
 
     # データ管理タブ
     with search_tabs[2]:
-
         # タブを作成
         data_management_tabs = st.tabs(["ソース管理", "コレクション管理"])
 
         # ソース管理タブ
         with data_management_tabs[0]:
-
             # コレクション名の入力
             collection_name = st.text_input(
                 "コレクション名",
@@ -548,7 +611,6 @@ def show_database_component(
             if not sources:
                 st.warning("データベースにソースが見つかりません。先にファイルを登録してください。")
             else:
-
                 # ソースの選択（固定キーを使用）
                 selected_source = st.selectbox(
                     "削除するソースを選択",
@@ -587,7 +649,7 @@ def show_database_component(
                     selected_source_to_delete = st.session_state.selected_source_to_delete
                     
                     # 確認ダイアログ
-                    confirm = st.warning(
+                    st.warning(
                         f"ソース '{selected_source_to_delete}' に関連するすべてのチャンクを削除します。この操作は元に戻せません。"
                     )
                     confirm_cols = st.columns([2, 2, 2])
@@ -635,7 +697,6 @@ def show_database_component(
 
         # コレクション管理タブ
         with data_management_tabs[1]:
-
             # 利用可能なコレクション一覧を取得
             collections = _qdrant_manager.get_collections()
 
@@ -682,7 +743,8 @@ def show_database_component(
                         "doc_count": "文書数",
                         "is_current": "現在使用中"
                     },
-                    hide_index=True
+                    hide_index=True,
+                    use_container_width=True
                 )
 
                 # コレクションの選択（固定キーを使用）
@@ -728,7 +790,7 @@ def show_database_component(
                         st.session_state.delete_collection_confirmation_state = False
                     else:
                         # 確認ダイアログ
-                        confirm = st.warning(
+                        st.warning(
                             f"コレクション '{selected_collection_to_delete}' を完全に削除します。この操作は元に戻せません。"
                         )
                         confirm_cols = st.columns([2, 2, 2])
