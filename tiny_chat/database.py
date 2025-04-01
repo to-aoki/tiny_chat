@@ -261,7 +261,6 @@ def search_documents(
     return results
 
 
-@st.fragment
 def show_database_component(
         logger,
         extensions=['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']):
