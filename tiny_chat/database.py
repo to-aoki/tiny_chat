@@ -30,22 +30,6 @@ FILE_TYPE_MAPPING = {
     '.htm': ('HTML', ''),
 }
 
-
-# ファイルを開くヘルパー関数
-def open_file(file_path):
-    try:
-        # ファイルパスがHTTP URLでない場合はfile://スキームを追加
-        if not file_path.startswith(('http://', 'https://', 'file://')):
-            file_uri = f"file://{file_path}"
-        else:
-            file_uri = file_path
-        webbrowser.open(file_uri)
-        return True
-    except Exception as e:
-        st.error(f"ファイルを開けませんでした: {str(e)}")
-        return False
-
-
 def get_or_create_qdrant_manager(logger=None):
     """
     QdrantManagerを取得または初期化する共通関数
@@ -184,6 +168,7 @@ def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
 def get_extensions_without_dot(extensions_tuple):
     """拡張子タプルからドットを除去して返す（キャッシュ機能付き）"""
     return [ext.lstrip(".") for ext in extensions_tuple]
+
 
 def convert_extensions(extensions_list):
     """リストをタプルに変換してキャッシュ可能な関数に渡す"""
@@ -426,10 +411,14 @@ def show_database_component(
                     if 'source' in item['metadata'] and item['metadata']['source']:
                         source_path = item['metadata']['source']
                         if not source_path.startswith(('http://', 'https://')):
-                            if st.button(f"{source_path}", key=f"open_ref_{source_path}_{idx}", use_container_width=True):
-                                open_file(source_path)
-                        else:
-                            st.markdown(f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
+                            if st.button(f"{source_path}",
+                                         key=f"open_ref_{source_path}_{idx}", use_container_width=True):
+                                try:
+                                    webbrowser.open(source_path)
+                                except Exception as e:
+                                    st.error(f"ファイルを開けませんでした: {str(e)}")
+                            else:
+                                st.markdown(f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
 
                     # テキスト表示（長い場合は省略）
                     text = item['text']

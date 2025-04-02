@@ -138,22 +138,6 @@ with st.sidebar:
 # タブの作成
 tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
-
-# ファイルを開くヘルパー関数
-def open_file(file_path):
-    try:
-        # ファイルパスがHTTP URLでない場合はfile://スキームを追加
-        if not file_path.startswith(('http://', 'https://', 'file://')):
-            file_uri = f"file://{file_path}"
-        else:
-            file_uri = file_path
-        webbrowser.open(file_uri)
-        return True
-    except Exception as e:
-        st.error(f"ファイルを開けませんでした: {str(e)}")
-        return False
-
-
 # チャットをクリアするコールバック関数
 def clear_chat():
     st.session_state.chat_manager = ChatManager()
@@ -217,12 +201,16 @@ def show_chat_component(logger):
                         st.write("参照情報を開く:")
                         for idx, file_info in enumerate(st.session_state.reference_files):
                             if not file_info["path"].startswith(('http://', 'https://')):
-                                if st.button(f"[{file_info['index']}] {file_info['path']}",
-                                            key=f"open_ref_{i}_{idx}"):
-                                    open_file(file_info["path"])
+                                if st.button(
+                                        f"[{file_info['index']}] {file_info['path']}", key=f"open_ref_{i}_{idx}"):
+                                    try:
+                                        webbrowser.open(file_info["path"])
+                                    except Exception as e:
+                                        st.error(f"ファイルを開けませんでした: {str(e)}")
                             else:
                                 st.markdown(
-                                    f"[\\[{file_info['index']}\\] {file_info['path']}]({urllib.parse.quote(file_info['path'], safe=':/')})")
+                                    f"[\\[{file_info['index']}\\] {file_info['path']}]"
+                                    f"({urllib.parse.quote(file_info['path'], safe=':/')})")
 
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
@@ -254,7 +242,9 @@ def show_chat_component(logger):
             for idx, attachment_info in enumerate(attachments_grid):
                 col_idx = idx % 3
                 with cols[col_idx]:
-                    st.text(f"{attachment_info['index']}. [{attachment_info['file_type']}] {attachment_info['filename']} {attachment_info['count_text']}")
+                    st.text(
+                        f"{attachment_info['index']}. [{attachment_info['file_type']}] {attachment_info['filename']} "
+                        f"{attachment_info['count_text']}")
 
     with st.container():
         cols = st.columns([3, 2, 3])
@@ -622,10 +612,7 @@ with tabs[1]:
                 show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
             else:
                 # 以前RAGモードが有効だったが、現在は無効の場合
-                # RAGが無効でも情報表示はする。ただし「現在RAGは無効」表示も追加
                 st.info("現在RAGモードは無効です。検索機能を使用するには、チャットタブでRAGを有効にしてください。")
-
-                # DBに接続して表示コンポーネントを表示（現状表示のみで検索はできない）
                 get_or_create_qdrant_manager(LOGGER)
                 show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
 
