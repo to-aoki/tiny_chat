@@ -217,7 +217,7 @@ def show_chat_component(logger):
                         st.write("参照情報を開く:")
                         for idx, file_info in enumerate(st.session_state.reference_files):
                             if not file_info["path"].startswith(('http://', 'https://')):
-                                if st.button(f"[{file_info['index']}] {file_info['filename']}",
+                                if st.button(f"[{file_info['index']}] {file_info['path']}",
                                             key=f"open_ref_{i}_{idx}"):
                                     open_file(file_info["path"])
                             else:
@@ -419,7 +419,6 @@ def show_chat_component(logger):
                         exist_path = set()
 
                         for i, result in enumerate(search_results):
-                            filename = result.payload.get('filename', '文書')
                             source = result.payload.get('source', '')
                             
                             # 重複チェック
@@ -434,13 +433,12 @@ def show_chat_component(logger):
                             # 参照情報を保存
                             source_info = {
                                 "index": i + 1,
-                                "filename": filename,
                                 "source": source,
                                 "text": text  # テキスト内容も保存
                             }
                             st.session_state.rag_sources.append(source_info)
 
-                            search_context += f"[{i + 1}] {filename}:\n{text}\n\n"
+                            search_context += f"[{i + 1}] {source}:\n{text}\n\n"
 
                         # 検索結果を含めた拡張プロンプトを作成
                         if enhanced_prompt:
@@ -471,7 +469,7 @@ def show_chat_component(logger):
                 if st.session_state.rag_mode and st.session_state.rag_sources:
                     search_context = "\n\n以下は検索システムから取得した関連情報です:\n\n"
                     for source in st.session_state.rag_sources:
-                        search_context += f"[{source['index']}] {source['filename']}:\n"
+                        search_context += f"[{source['index']}] {source['source']}:\n"
                         if 'text' in source:
                             search_context += f"{source['text']}\n\n"
                     content_to_send += search_context
@@ -523,7 +521,6 @@ def show_chat_component(logger):
                         
                         for source in st.session_state.rag_sources:
                             source_path = source["source"]
-                            filename = source["filename"]
 
                             if source_path in exist_path:
                                 continue
@@ -534,7 +531,6 @@ def show_chat_component(logger):
                             # URLの場合とローカルファイルの場合、両方とも参照ボタンとして表示できるようにする
                             reference_files.append({
                                 "index": refer+1,
-                                "filename": filename,
                                 "path": source_path
                             })
                             refer += 1
