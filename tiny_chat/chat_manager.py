@@ -316,6 +316,7 @@ class ChatManager:
                 })
 
         return json.dumps(filtered_messages, ensure_ascii=False, indent=2)
+
     def apply_imported_history(self, json_str):
         """
         JSONからインポートした履歴を適用し、プレースホルダーなどを適切に処理する

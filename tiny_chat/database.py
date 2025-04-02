@@ -1,13 +1,10 @@
 import os
-import urllib.parse
-from typing import List, Dict, Any, Tuple
-import tempfile
-import functools
 
-import webbrowser
 import streamlit as st
 import pandas as pd
-from file_processor import FileProcessorFactory
+
+from search_componet import show_search_componet
+from registration_component import show_registration
 
 
 # プロセスレベルでQdrantManagerインスタンスを保持するためのグローバル変数
@@ -15,20 +12,6 @@ _qdrant_manager = None
 # インスタンス生成のロックに使用
 _qdrant_lock = None
 
-# サポートされるファイル拡張子とファイルタイプのマッピング
-FILE_TYPE_MAPPING = {
-    '.pdf': ('PDF', 'ページ'),
-    '.xlsx': ('Excel', 'シート'),
-    '.xls': ('Excel', 'シート'),
-    '.docx': ('Word', '段落'),
-    '.pptx': ('PowerPoint', 'スライド'),
-    '.txt': ('テキスト', ''),
-    '.csv': ('CSV', ''),
-    '.json': ('JSON', ''),
-    '.md': ('Markdown', ''),
-    '.html': ('HTML', ''),
-    '.htm': ('HTML', ''),
-}
 
 def get_or_create_qdrant_manager(logger=None):
     """
@@ -69,253 +52,8 @@ def get_or_create_qdrant_manager(logger=None):
     return _qdrant_manager
 
 
-def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
-    """
-    ファイルを処理し、テキストとメタデータを抽出します
-    is_page=Trueで処理するため、テキストは文字列のリストとして返されます
-
-    Args:
-        file_path: 処理するファイルのパス
-
-    Returns:
-        (extracted_text_array, metadata): 抽出されたテキスト配列とメタデータの辞書
-    """
-    # ファイル拡張子を取得
-    file_ext = os.path.splitext(file_path)[1].lower()
-
-    # ファイルプロセッサを取得
-    processor = FileProcessorFactory.get_processor(file_ext)
-
-    if not processor:
-        st.warning(f"非対応の形式です: {file_ext}")
-        return None, {}
-
-    # ファイルを読み込む
-    try:
-        with open(file_path, 'rb') as f:
-            file_bytes = f.read()
-    except Exception as e:
-        st.warning(f"ファイル読み込みエラー: {str(e)}")
-        return None, {}
-
-    # メタデータの初期化
-    metadata = {
-        "source": file_path,
-        "file_type": file_ext[1:],  # 拡張子の.を除去
-        "file_size": len(file_bytes),  # 早期にファイルサイズを設定
-    }
-
-    # ファイルタイプに応じた処理、is_page=Trueで文字列配列として処理
-    try:
-        if file_ext == '.pdf':
-            text, page_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-            if error:
-                st.warning(f"PDFの処理中にエラーが発生しました: {error}")
-                return None, {}
-            metadata["page_count"] = page_count
-
-        elif file_ext in ['.xlsx', '.xls']:
-            text, sheet_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-            if error:
-                st.warning(f"Excelの処理中にエラーが発生しました: {error}")
-                return None, {}
-            metadata["sheet_count"] = sheet_count
-
-        elif file_ext == '.docx':
-            text, para_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-            if error:
-                st.warning(f"Wordの処理中にエラーが発生しました: {error}")
-                return None, {}
-            metadata["para_count"] = para_count
-
-        elif file_ext == '.pptx':
-            text, slide_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
-            if error:
-                st.warning(f"PowerPointの処理中にエラーが発生しました: {error}")
-                return None, {}
-            metadata["slide_count"] = slide_count
-
-        elif file_ext in ['.txt', '.csv', '.json', '.md']:
-            # テキストファイルの場合はページ分割機能がないため従来通り
-            text, error = processor.extract_text_from_bytes(file_bytes)
-            if error:
-                st.warning(f"テキストファイルの処理中にエラーが発生しました: {error}")
-                return None, {}
-            # 単一のテキストを配列に変換して1ページとして扱う
-            if text:
-                text = [text]
-
-        elif file_ext in ['.html', '.htm']:
-            text, message = processor.extract_text_from_bytes(file_bytes)
-            if not text:
-                st.warning(f"HTMLの処理中にエラーが発生しました: {message}")
-                return None, {}
-            # 単一のテキストを配列に変換して1ページとして扱う
-            if text:
-                text = [text]
-
-        else:
-            st.warning(f"対応していないファイル形式です: {file_ext}")
-            return None, {}
-    except Exception as e:
-        st.warning(f"ファイル処理中に例外が発生しました: {str(e)}")
-        return None, {}
-
-    return text, metadata
-
-
-@functools.lru_cache(maxsize=16)
-def get_extensions_without_dot(extensions_tuple):
-    """拡張子タプルからドットを除去して返す（キャッシュ機能付き）"""
-    return [ext.lstrip(".") for ext in extensions_tuple]
-
-
-def convert_extensions(extensions_list):
-    """リストをタプルに変換してキャッシュ可能な関数に渡す"""
-    return get_extensions_without_dot(tuple(extensions_list))
-
-
-def process_directory(directory_path: str,
-    extensions: List[str] = None,
-    support_extensions: List[str] = ['.pdf', '.xlsx', '.xls', '.docx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
-) -> List[Tuple[List[str], Dict]]:
-    """
-    ディレクトリ内のファイルを処理します
-
-    Args:
-        directory_path: 処理するディレクトリのパス
-        extensions: 処理対象のファイル拡張子リスト (None の場合はすべてのサポートされる形式)
-
-    Returns:
-        [(text_array, metadata), ...]: 抽出されたテキスト配列とメタデータのリスト
-    """
-    results = []
-
-    if extensions is None:
-        extensions = support_extensions
-
-    # セットによる高速ルックアップ
-    extensions_set = set(extensions)
-
-    # ファイルを検索
-    for root, _, files in os.walk(directory_path):
-        for file in files:
-            file_path = os.path.join(root, file)
-            file_ext = os.path.splitext(file_path)[1].lower()
-
-            if file_ext in extensions_set:
-                text, metadata = process_file(file_path)
-                if text:
-                    # 相対パスをメタデータに追加
-                    rel_path = os.path.relpath(file_path, directory_path)
-                    metadata["rel_path"] = rel_path
-
-                    results.append((text, metadata))
-
-    return results
-
-
-def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[str]:
-    """
-    テキストとメタデータをQdrantに追加します
-    同じソース（ファイル名）が既に存在する場合は、削除してから追加します
-    注意: この関数を呼び出す前に、QdrantManagerを初期化する必要があります
-
-    Args:
-        texts: テキスト配列のリスト (is_page=True により、各ファイルのテキストは文字列の配列)
-        metadatas: メタデータのリスト
-
-    Returns:
-        added_ids: 追加されたドキュメントのIDリスト
-    """
-    # QdrantManagerを使用 (既に初期化されている前提)
-    _qdrant_manager = get_or_create_qdrant_manager()
-
-    # ソース（ファイル名）の一覧を取得
-    sources_to_add = set()
-    for metadata in metadatas:
-        if "source" in metadata:
-            sources_to_add.add(metadata["source"])
-
-    # 既存のソースと照合し、重複があれば削除
-    existing_sources = _qdrant_manager.get_sources()
-    for source in sources_to_add:
-        if source in existing_sources:
-            # ソースに関連するデータを削除
-            # ソース名を配列として渡す（単一でも配列として扱う）
-            filter_params = {"source": [source]}
-            _qdrant_manager.delete_by_filter(filter_params)
-
-    all_texts = []
-    all_metadatas = []
-
-    # ファイルごとにテキストとメタデータを処理
-    for i, text_array in enumerate(texts):
-        base_metadata = metadatas[i].copy()
-        for page_index, page_text in enumerate(text_array):
-            all_texts.append(page_text)
-            page_metadata = base_metadata.copy()
-            page_metadata["page"] = page_index + 1  # 配列の添字 + 1 をページとして設定
-            all_metadatas.append(page_metadata)
-
-    # Qdrantに追加
-    added_ids = _qdrant_manager.add_documents(all_texts, all_metadatas)
-    return added_ids
-
-
-@functools.lru_cache(maxsize=32)
-def search_documents(
-        query: str, top_k: int = 10, filter_params_str: str = None, score_threshold=0.4, logger=None) -> List:
-    """
-    ドキュメントを検索します（キャッシュ機能付き）
-    注意: この関数を呼び出す前に、QdrantManagerを初期化する必要があります
-
-    Args:
-        query: 検索クエリ
-        top_k: 返す結果の数
-        filter_params_str: 検索フィルタの文字列表現（キャッシュキーとして使用）
-        score_threshold: 最小スコアしきい値
-
-    Returns:
-        results: 検索結果のリスト
-    """
-    # 文字列からフィルタを復元（もしあれば）
-    filter_params = None
-    if filter_params_str:
-        import json
-        filter_params = json.loads(filter_params_str)
-
-    # ここでは外部で初期化されたQdrantManagerを使用する
-    _qdrant_manager = get_or_create_qdrant_manager(logger)
-    results = _qdrant_manager.query_points(
-        query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold)
-    return results
-
-
-def get_page_info_display(metadata: Dict) -> str:
-    """メタデータからページ情報表示文字列を生成"""
-    if 'page' not in metadata:
-        return ""
-
-    file_type = metadata.get('file_type', '').lower()
-    page_num = metadata['page']
-
-    if file_type == 'pdf':
-        return f"(ページ: {page_num})"
-    elif file_type in ['xlsx', 'xls']:
-        return f"(シート: {page_num})"
-    elif file_type == 'docx':
-        return f"(段落: {page_num})"
-    elif file_type == 'pptx':
-        return f"(スライド: {page_num})"
-    else:
-        return f"(記載箇所: {page_num})"
-
-
 @st.fragment
-def show_database_component(
-        logger,
-        extensions=['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']):
+def show_database_component(logger):
     # 検索と文書登録のタブを作成
     search_tabs = st.tabs(["🔍 検索", "📁 登録", "🗑️ 削除"])
 
@@ -324,267 +62,13 @@ def show_database_component(
 
     # 検索タブ
     with search_tabs[0]:
-        if "search_results" not in st.session_state:
-            st.session_state.search_results = []
-
-        def search_on_enter():
-            # テキスト入力からクエリを取得し、検索実行のフラグを立てる
-            st.session_state.run_search = True
-
-        # 検索フィールド
-        query = st.text_input(
-            "検索文字列", "", key="search_query_input", on_change=search_on_enter)
-
-        # 詳細設定のエクスパンダー
-        with st.expander("詳細設定", expanded=False):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                top_k = st.slider("表示件数", min_value=1, max_value=50, value=10)
-
-            with col2:
-                # 使用可能なソースを取得（常に最新の状態を取得）
-                sources = _qdrant_manager.get_sources()
-                selected_sources = st.multiselect(
-                    "ソースでフィルタ",
-                    options=sources,
-                    key="sources_multiselect_filter"
-                )
-
-        # 検索の実行フラグをセットアップ
-        if "run_search" not in st.session_state:
-            st.session_state.run_search = False
-
-        # 検索ボタン
-        search_pressed = st.button("検索", key="search_button", type="primary")
-
-        # 検索実行（ボタン押下またはEnterキー押下で実行）
-        if (search_pressed or st.session_state.run_search) and query:
-            # 検索フラグをリセット
-            st.session_state.run_search = False
-            # フィルターの作成
-            filter_params = None
-            filter_params_str = None
-            if selected_sources:
-                # 複数のソースを配列として設定
-                filter_params = {"source": selected_sources}
-                # キャッシュ用に文字列化
-                import json
-                filter_params_str = json.dumps(filter_params)
-
-            with st.spinner("検索中..."):
-                # キャッシュ付き検索関数を使用
-                st.session_state.search_results = search_documents(
-                    query, top_k=top_k, filter_params_str=filter_params_str, score_threshold=0.)
-
-        # 結果の表示
-        if st.session_state.search_results:
-            results = st.session_state.search_results
-            result_count = len(results)
-            st.success(f"{result_count}件の結果が見つかりました")
-
-            # 結果をグリッド表示に変更
-            result_grid = []
-            for i, result in enumerate(results):
-                score = result.score
-                metadata = {k: v for k, v in result.payload.items() if k != "text"}
-                page_info = get_page_info_display(metadata)
-
-                result_grid.append({
-                    "index": i + 1,
-                    "source": metadata.get('source', 'ドキュメント'),
-                    "page_info": page_info,
-                    "score": f"{score:.4f}",
-                    "metadata": metadata,
-                    "text": result.payload.get("text", "")
-                })
-
-            # 一列表示に変更
-            for idx, item in enumerate(result_grid):
-                with st.expander(
-                        f"#{item['index']}: {item['source']} {item['page_info']} (スコア: {item['score']})",
-                        expanded=idx == 0):
-                    # メタデータをDataFrameとして表示
-                    st.dataframe(pd.DataFrame([item['metadata']]), hide_index=True, use_container_width=True)
-
-                    # ソースファイルへのリンク
-                    if 'source' in item['metadata'] and item['metadata']['source']:
-                        source_path = item['metadata']['source']
-                        if not source_path.startswith(('http://', 'https://')):
-                            if st.button(f"{source_path}",
-                                         key=f"open_ref_{source_path}_{idx}", use_container_width=True):
-                                try:
-                                    webbrowser.open(source_path)
-                                except Exception as e:
-                                    st.error(f"ファイルを開けませんでした: {str(e)}")
-                            else:
-                                st.markdown(f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
-
-                    # テキスト表示（長い場合は省略）
-                    text = item['text']
-                    st.text(text[:500] + "..." if len(text) > 500 else text)
-        else:
-            st.info("検索結果はありません")
+        show_search_componet(_qdrant_manager)
 
     # 文書登録タブ
     with (search_tabs[1]):
+        show_registration(_qdrant_manager)
 
-        # コレクション名の入力
-        collection_name = st.text_input(
-            "コレクション名",
-            value=_qdrant_manager.collection_name,
-            help="データを登録するコレクション名を指定します。新しいコレクション名を指定すると自動的に作成されます。"
-        )
-
-        # 登録方法の選択
-        register_method = st.radio(
-            "登録方法を選択",
-            ["ファイルアップロード", "ディレクトリ指定"]
-        )
-
-        if register_method == "ファイルアップロード":
-            # ソースパスのベースディレクトリ設定
-            source_base_dir = st.text_input(
-                "ソースパスのベースディレクトリ（省略可）",
-                "",
-                help="ファイルの「source」として使用するベースディレクトリを指定できます。空の場合はファイル名のみが使用されます。"
-            )
-
-            # ファイルアップローダー
-            uploaded_files = st.file_uploader(
-                "ファイルをアップロード",
-                accept_multiple_files=True,
-                type=convert_extensions(extensions)
-            )
-
-            if uploaded_files:
-                if st.button("選択したファイルを登録", type="primary"):
-                    with st.spinner("ファイルを処理中..."):
-                        # 一時ファイルとして保存してから処理
-                        texts = []
-                        metadatas = []
-
-                        progress_bar = st.progress(0)
-                        total_files = len(uploaded_files)
-
-                        for i, uploaded_file in enumerate(uploaded_files):
-                            with tempfile.NamedTemporaryFile(
-                                    delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as temp_file:
-                                temp_file.write(uploaded_file.getbuffer())
-                                temp_path = temp_file.name
-
-                            text, metadata = process_file(temp_path)
-
-                            # カスタムソースパスを設定（指定があれば）
-                            if text and source_base_dir:
-                                custom_source_path = os.path.join(source_base_dir, uploaded_file.name)
-                                metadata["source"] = custom_source_path
-
-                            if text:
-                                texts.append(text)
-                                metadatas.append(metadata)
-
-                            # 一時ファイルを削除
-                            os.unlink(temp_path)
-
-                            # 進捗を更新
-                            progress_bar.progress((i + 1) / total_files)
-
-                        if texts:
-                            # コレクション名を設定して処理
-                            if collection_name != _qdrant_manager.collection_name:
-                                # コレクションを取得または作成
-                                _qdrant_manager.get_collection(collection_name)
-
-                            # Qdrantに追加
-                            added_ids = add_files_to_qdrant(texts, metadatas)
-
-                            # 結果表示
-                            st.success(
-                                f"{len(added_ids)}件のドキュメントを「{collection_name}」コレクションに登録しました")
-
-                            metadata_df = pd.DataFrame(metadatas)
-                            st.dataframe(metadata_df, use_container_width=True)
-
-
-                        else:
-                            st.warning("登録できるドキュメントがありませんでした")
-
-        else:  # ディレクトリ指定
-            # ディレクトリパス入力
-            directory_path = st.text_input("ディレクトリパスを入力", "")
-
-            # ソースパスのカスタマイズオプション
-            source_path_option = st.radio(
-                "ソースパスの設定方法",
-                ["実際のファイルパスを使用", "Webパス接頭辞を設定"],
-                help="ファイルの「source」として使用するパスの設定方法を選択します"
-            )
-
-            web_prefix_base = ""
-            if source_path_option == "Webパス接頭辞を設定":
-                web_prefix_base = st.text_input(
-                    "Webパス接頭辞",
-                    "",
-                    help="ファイルの「source」として使用するWebパス接頭辞を指定します。入力ディレクトリの末尾名と相対パスがこの接頭辞に追加されます。例: http://example.com/path/to/"
-                )
-
-            # 処理対象のファイル拡張子選択
-            selected_extensions = st.multiselect(
-                "処理対象の拡張子を選択",
-                extensions,
-                default=extensions
-            )
-
-            if directory_path and os.path.isdir(directory_path):
-                if st.button("ディレクトリ内のファイルを登録", type="primary"):
-                    with st.spinner(f"ディレクトリを処理中: {directory_path}"):
-                        results = process_directory(directory_path, selected_extensions,
-                                                support_extensions=extensions)
-
-                        if results:
-                            texts = [r[0] for r in results]
-                            metadatas = [r[1] for r in results]
-
-                            # Webパス接頭辞の設定（指定があれば）
-                            if web_prefix_base:
-                                for metadata in metadatas:
-                                    if "rel_path" in metadata:
-                                        # 元のソースパスを保持
-                                        metadata["original_source"] = metadata["source"]
-                                        # ディレクトリ末尾名を取得
-                                        last_dir_name = os.path.basename(os.path.normpath(directory_path))
-                                        # Webパス接頭辞にディレクトリ末尾名と相対パスを結合
-                                        if web_prefix_base.endswith('/'):
-                                            web_path = f"{web_prefix_base}{last_dir_name}/{metadata['rel_path']}"
-                                        else:
-                                            web_path = f"{web_prefix_base}/{last_dir_name}/{metadata['rel_path']}"
-                                        # URLのパス区切り文字を統一（Windowsの場合のバックスラッシュを置換）
-                                        web_path = web_path.replace('\\', '/')
-                                        metadata["source"] = web_path
-
-                            # コレクション名を設定して処理
-                            if collection_name != _qdrant_manager.collection_name:
-                                # コレクションを取得または作成
-                                _qdrant_manager.get_collection(collection_name)
-
-                            # Qdrantに追加
-                            added_ids = add_files_to_qdrant(texts, metadatas)
-
-                            # 結果表示
-                            st.success(
-                                f"{len(added_ids)}件のドキュメントを「{collection_name}」コレクションに登録しました")
-
-                            # 登録されたドキュメントの一覧をセッションに保存
-                            metadata_df = pd.DataFrame(metadatas)
-                            st.dataframe(metadata_df, use_container_width=True)
-
-                        else:
-                            st.warning("指定されたディレクトリに登録可能なファイルが見つかりませんでした")
-            elif directory_path:
-                st.error("指定されたディレクトリが存在しません")
-
-    # データ管理タブ
+    # 削除タブ
     with search_tabs[2]:
         # タブを作成
         data_management_tabs = st.tabs(["ソース管理", "コレクション管理"])
@@ -826,9 +310,8 @@ def show_database_component(
                                     logger.error(f"コレクション削除エラー: {str(e)}")
 
 
-# 単独動作用
+# 単独動作用LLMLL
 if __name__ == "__main__":
-    import os
     import logging
     from logger import get_logger
     os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
@@ -843,10 +326,8 @@ if __name__ == "__main__":
     LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
     LOGGER.info("単独データベースアプリケーションを起動しました")
 
-    SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
-    
     # 単独で起動した場合はQdrantManagerを初期化
     get_or_create_qdrant_manager(LOGGER)
     
     # コンポーネントの表示
-    show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+    show_database_component(logger=LOGGER)

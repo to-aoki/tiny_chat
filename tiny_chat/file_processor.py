@@ -1,6 +1,9 @@
+import os
 import io
 import re
 from urllib.parse import urlparse
+from typing import List, Dict, Any, Tuple
+
 from bs4 import BeautifulSoup
 
 
@@ -452,6 +455,88 @@ class FileProcessorFactory:
         }
 
         return extension_map.get(file_extension.lower())
+
+
+
+def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
+    """
+    ファイルを処理し、テキストとメタデータを抽出します
+    is_page=Trueで処理するため、テキストは文字列のリストとして返されます
+
+    Args:
+        file_path: 処理するファイルのパス
+
+    Returns:
+        (extracted_text_array, metadata): 抽出されたテキスト配列とメタデータの辞書
+    """
+    # ファイル拡張子を取得
+    file_ext = os.path.splitext(file_path)[1].lower()
+
+    # ファイルプロセッサを取得
+    processor = FileProcessorFactory.get_processor(file_ext)
+
+    if not processor:
+        raise ValueError(f"非対応の形式です: {file_ext}")
+
+    # ファイルを読み込む
+    try:
+        with open(file_path, 'rb') as f:
+            file_bytes = f.read()
+    except Exception as e:
+        raise ValueError(f"ファイル読み込みエラー: {str(e)}")
+
+    # メタデータの初期化
+    metadata = {
+        "source": file_path,
+        "file_type": file_ext[1:],  # 拡張子の.を除去
+        "file_size": len(file_bytes),  # 早期にファイルサイズを設定
+    }
+
+    # ファイルタイプに応じた処理、is_page=Trueで文字列配列として処理
+    if file_ext == '.pdf':
+        text, page_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+        if error:
+            raise ValueError(f"PDFの処理中にエラーが発生しました: {error}")
+        metadata["page_count"] = page_count
+
+    elif file_ext in ['.xlsx', '.xls']:
+        text, sheet_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+        if error:
+            raise ValueError(f"Excelの処理中にエラーが発生しました: {error}")
+        metadata["sheet_count"] = sheet_count
+
+    elif file_ext == '.docx':
+        text, para_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+        if error:
+            raise ValueError(f"Wordの処理中にエラーが発生しました: {error}")
+        metadata["para_count"] = para_count
+
+    elif file_ext == '.pptx':
+        text, slide_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
+        if error:
+            raise ValueError(f"PowerPointの処理中にエラーが発生しました: {error}")
+
+        metadata["slide_count"] = slide_count
+
+    elif file_ext in ['.txt', '.csv', '.json', '.md']:
+        text, error = processor.extract_text_from_bytes(file_bytes)
+        if error:
+            raise ValueError(f"テキストファイルの処理中にエラーが発生しました: {error}")
+        if text:
+            text = [text]
+
+    elif file_ext in ['.html', '.htm']:
+        text, message = processor.extract_text_from_bytes(file_bytes)
+        if not text:
+            raise ValueError(f"HTMLの処理中にエラーが発生しました: {message}")
+        if text:
+            text = [text]
+
+    else:
+        raise ValueError(f"対応していないファイル形式です: {file_ext}")
+
+    return text, metadata
+
 
 
 class URIProcessor:

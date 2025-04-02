@@ -1,13 +1,13 @@
 import os
-import urllib.parse
+import logging
 import tempfile
 import functools
+import webbrowser
+import urllib.parse
 
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-
-import logging
 import streamlit as st
-import webbrowser
+
 from chat_config import ChatConfig, ModelManager
 from file_processor import URIProcessor, FileProcessorFactory
 from chat_manager import ChatManager
@@ -612,7 +612,7 @@ with tabs[1]:
                 show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
             else:
                 # 以前RAGモードが有効だったが、現在は無効の場合
-                st.info("現在RAGモードは無効です。検索機能を使用するには、チャットタブでRAGを有効にしてください。")
+                st.info("現在RAGモードは無効です。")
                 get_or_create_qdrant_manager(LOGGER)
                 show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
 
