@@ -30,7 +30,8 @@ def get_page_info_display(metadata: Dict) -> str:
 
 @functools.lru_cache(maxsize=32)
 def search_documents(
-        query: str, qdrant_manager, top_k: int = 10, filter_params_str: str = None, score_threshold=0.4) -> List:
+        query: str, qdrant_manager, top_k: int = 10, filter_params_str: str = None, 
+        score_threshold=0.4, collection_name: str = None) -> List:
     """
     ドキュメントを検索します（キャッシュ機能付き）
     注意: この関数を呼び出す前に、QdrantManagerを初期化する必要があります
@@ -50,8 +51,12 @@ def search_documents(
         import json
         filter_params = json.loads(filter_params_str)
 
+    if collection_name is None:
+        collection_name = qdrant_manager.collection_name
+
     results = qdrant_manager.query_points(
-        query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold)
+        query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold,
+        collection_name=collection_name)
     return results
 
 
@@ -76,7 +81,9 @@ def show_search_componet(qdrant_manager):
 
         with col2:
             # 使用可能なソースを取得（常に最新の状態を取得）
-            sources = qdrant_manager.get_sources()
+            # 現在のコレクション名を明示的に使用
+            current_collection = qdrant_manager.collection_name
+            sources = qdrant_manager.get_sources(collection_name=current_collection)
             selected_sources = st.multiselect(
                 "ソースでフィルタ",
                 options=sources,
@@ -103,8 +110,11 @@ def show_search_componet(qdrant_manager):
             filter_params_str = json.dumps(filter_params)
 
         with st.spinner("検索中..."):
+            # コレクション名を明示的に渡して検索（キャッシュキーに含める）
+            current_collection = qdrant_manager.collection_name
             st.session_state.search_results = search_documents(
-                query, qdrant_manager, top_k=top_k, filter_params_str=filter_params_str, score_threshold=0.)
+                query, qdrant_manager, top_k=top_k, filter_params_str=filter_params_str, 
+                score_threshold=0., collection_name=current_collection)
 
     # 結果の表示
     if st.session_state.search_results:

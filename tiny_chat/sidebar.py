@@ -2,7 +2,6 @@ import streamlit as st
 
 from chat_config import ChatConfig, ModelManager
 from llm_utils import get_llm_client
-from database import get_or_create_qdrant_manager
 
 
 def sidebar(config_file_path, logger):
@@ -291,9 +290,11 @@ def sidebar(config_file_path, logger):
     # RAGモードがオンの場合は常にデータベース検索機能を表示する
     if st.session_state.rag_mode:
         try:
+            from database import get_or_create_qdrant_manager
+
             # 検索用サイドバー設定
             st.sidebar.markdown("検索")
-            
+
             # コレクション名の選択（サイドバーに表示）
             # プロセスレベルで管理されているQdrantManagerを取得（毎回最新の状態を取得）
             manager = get_or_create_qdrant_manager(logger)
@@ -306,9 +307,17 @@ def sidebar(config_file_path, logger):
             if not available_collections:
                 available_collections = ["default"]
 
+            # コレクション選択の状態管理
+            if "selected_collection" not in st.session_state:
+                st.session_state.selected_collection = manager.collection_name
+                
+            # コレクション変更を検出するための一時フラグ
+            if "collection_changing" not in st.session_state:
+                st.session_state.collection_changing = False
+
             # サイドバーにコレクション選択を表示（メインエリアではなく）
             st.sidebar.markdown("コレクション選択", help="Qdrantデータベースで利用するコレクション（DB空間）を選択します")
-            search_collection = st.sidebar.selectbox(
+            _ = st.sidebar.selectbox(
                 "コレクション",  # 空のラベルから有効なラベルに変更
                 available_collections,
                 index=available_collections.index(
@@ -316,16 +325,30 @@ def sidebar(config_file_path, logger):
                 ) if manager.collection_name in available_collections else 0,
                 label_visibility="collapsed",  # ラベルを視覚的に非表示にする
                 disabled=st.session_state.is_sending_message,
-                key=f"collection_select_{id(available_collections)}"  # 一意のキーを使用して再描画を強制
+                key="collection_select",  # 固定のキーを使用
+                on_change=lambda: setattr(st.session_state, "selected_collection", st.session_state.collection_select)
             )
+            search_collection = st.session_state.collection_select
 
             # 選択されたコレクションに切り替え
-            if search_collection != manager.collection_name:
-                manager.get_collection(search_collection)
+            if (search_collection != manager.collection_name and 
+                not st.session_state.collection_changing):
+                # 変更中フラグを設定
+                st.session_state.collection_changing = True
+                st.sidebar.info(f"コレクション変更: {manager.collection_name} → {search_collection}")
+                logger.info(f"コレクション変更: {manager.collection_name} → {search_collection}")
+                
+                # コレクション名を変更
+                manager.set_collection_name(search_collection)
+                st.session_state.selected_collection = search_collection
 
-            # サイドバーに現在のコレクション情報を表示（常に最新の情報を取得）
+            elif st.session_state.collection_changing:
+                # 再実行後、フラグをリセット
+                st.session_state.collection_changing = False
+
             doc_count = manager.count_documents()
-            st.sidebar.code(f"登録ドキュメント数: {doc_count}")
+            st.sidebar.code(f"現在のコレクション: {search_collection}\n登録ドキュメント数: {doc_count}")
+
         except Exception as e:
             # データベース接続時のエラーを表示
             logger.error(f"データベース接続エラー: {str(e)}")

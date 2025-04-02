@@ -198,7 +198,6 @@ def show_registration(
                         metadata_df = pd.DataFrame(metadatas)
                         st.dataframe(metadata_df, use_container_width=True)
 
-
                     else:
                         st.warning("登録できるドキュメントがありませんでした")
 

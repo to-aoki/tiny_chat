@@ -57,19 +57,25 @@ class QdrantManager:
 
         self._ensure_collection_exists()
 
-    def _ensure_collection_exists(self):
+    def _ensure_collection_exists(self, collection_name: Optional[str] = None):
         """
         コレクションが存在するか確認し、なければ作成する
+
+        Args:
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
         """
+        # コレクション名を確定（引数がNoneの場合はインスタンス変数を使用）
+        collection_name = collection_name if collection_name is not None else self.collection_name
+
         # コレクション一覧を取得
         collections = self.client.get_collections().collections
         collection_names = [c.name for c in collections]
 
         # コレクションが存在しない場合は新規作成
-        if self.collection_name not in collection_names:
+        if collection_name not in collection_names:
             # コレクションの作成
             self.client.create_collection(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 vectors_config=self.strategy.create_vector_config(),
                 sparse_vectors_config=self.strategy.create_sparse_vectors_config(),
                 quantization_config=models.ScalarQuantization(
@@ -91,11 +97,11 @@ class QdrantManager:
         Returns:
             Any: コレクション情報
         """
-        # コレクション名を更新
-        self.collection_name = collection_name
-        # コレクションの存在を確認
-        self._ensure_collection_exists()
-        
+        collections = self.client.get_collections().collections
+        collection_names = [c.name for c in collections]
+        if collection_name not in collection_names:
+            return None
+
         return self.client.get_collection(collection_name=collection_name)
 
     def add(self, collection_name: str, **kwargs):
@@ -106,10 +112,8 @@ class QdrantManager:
             collection_name: コレクション名
             **kwargs: 追加する文書とメタデータ
         """
-        # コレクション名を更新
-        self.collection_name = collection_name
         # コレクションの存在を確認
-        self._ensure_collection_exists()
+        self._ensure_collection_exists(collection_name)
         
         documents = kwargs.get("texts", [])
         metadatas = kwargs.get("metadatas", [])
@@ -129,7 +133,7 @@ class QdrantManager:
                 metadatas[i]["id"] = doc_id
 
         # 文書を追加
-        return self.add_documents(documents, metadatas)
+        return self.add_documents(documents, metadatas, collection_name)
 
     def query(self, collection_name: str, query_text: str, n_results: int = 5, **kwargs) -> List[QueryResponse]:
         """
@@ -144,44 +148,52 @@ class QdrantManager:
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
-        # コレクション名を更新
-        self.collection_name = collection_name
         # コレクションの存在を確認
-        self._ensure_collection_exists()
+        self._ensure_collection_exists(collection_name)
         
         filter_params = kwargs.get("filter", None)
-        return self.query_points(query_text, n_results, filter_params)
+        return self.query_points(query_text, n_results, filter_params, collection_name)
 
     def add_document(self,
                      document: str,
-                     metadata: Dict[str, Any]) -> str:
+                     metadata: Dict[str, Any],
+                     collection_name: Optional[str] = None) -> str:
         """
         単一の文書をチャンク分割してベクトル化しQdrantに追加する
 
         Args:
             document: 文書テキスト
             metadata: 文書のメタデータ（参照元、ページ番号、URL等）
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
 
         Returns:
             str: 追加された文書のID
         """
         # add_documentsを利用して処理を共通化
-        result = self.add_documents([document], [metadata])
+        result = self.add_documents([document], [metadata], collection_name)
         return result[0] if result else None
         
     def add_documents(self,
                       documents: List[str],
-                      metadata_list: List[Dict[str, Any]]) -> List[str]:
+                      metadata_list: List[Dict[str, Any]],
+                      collection_name: Optional[str] = None) -> List[str]:
         """
         複数の文書をチャンク分割してベクトル化しQdrantに追加する
 
         Args:
             documents: 文書テキストのリスト
             metadata_list: 各文書のメタデータのリスト（参照元、ページ番号、URL等）
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
 
         Returns:
             List[str]: 追加された文書のIDリスト（元の文書ごとに1つのID）
         """
+        # コレクション名を確定
+        collection_name = collection_name if collection_name is not None else self.collection_name
+        
+        # コレクションの存在を確認
+        self._ensure_collection_exists(collection_name)
+
         if len(documents) != len(metadata_list):
             raise ValueError("documents と metadata_list の長さが一致しません")
 
@@ -244,7 +256,7 @@ class QdrantManager:
         # ポイントをQdrantに追加
         if points:
             self.client.upsert(
-                collection_name=self.collection_name,
+                collection_name=collection_name,
                 points=points
             )
 
@@ -256,6 +268,7 @@ class QdrantManager:
         query: str,
         top_k: int = 5,
         score_threshold: float = 0.4,
+        collection_name: Optional[str] = None,
         filter_params: Optional[Dict[str, Any]] = None
     ) -> List[QueryResponse]:
         """
@@ -264,11 +277,18 @@ class QdrantManager:
         Args:
             query: 検索クエリ
             top_k: 返す結果の数
+            score_threshold: スコアのしきい値
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
             filter_params: 検索フィルタ（参照元、ページ番号等でフィルタリング）
 
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
+        # コレクション名を確定
+        collection_name = collection_name if collection_name is not None else self.collection_name
+        
+        # コレクションの存在を確認
+        self._ensure_collection_exists(collection_name)
 
         # 検索フィルタを作成
         search_filter = None
@@ -301,7 +321,7 @@ class QdrantManager:
             prefetch = self.strategy.prefetch(query, top_k)
             if prefetch:
                 response = self.client.query_points(
-                    collection_name=self.collection_name,
+                    collection_name=collection_name,
                     prefetch=prefetch,
                     query=self.strategy.query(query),
                     limit=top_k,
@@ -312,13 +332,14 @@ class QdrantManager:
                 )
             else:
                 response = self.client.query_points(
-                    collection_name=self.collection_name,
+                    collection_name=collection_name,
                     query=self.strategy.query(query),
+                    using=self.strategy.use_vector_name(),
                     limit=top_k,
                     with_vectors=False,
                     with_payload=True,
                     query_filter=search_filter,
-                    # score_threshold=score_threshold # 効いてなさそう (qdrant-client 1.13.3 file)
+                    # score_threshold=score_threshold
                 )
 
             # QueryResponseの場合、pointsアトリビュートを取得
@@ -354,6 +375,7 @@ class QdrantManager:
         self,
         query: str,
         top_k: int = 5,
+        collection_name: Optional[str] = None,
         filter_params: Optional[Dict[str, Any]] = None
     ) -> List[QueryResponse]:
         """
@@ -362,13 +384,25 @@ class QdrantManager:
         Args:
             query: 検索クエリ
             top_k: 返す結果の数
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
             filter_params: 検索フィルタ（参照元、ページ番号等でフィルタリング）
 
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
-        return self.query_points(query, top_k, filter_params)
+        return self.query_points(query, top_k, 0.4, collection_name, filter_params)
 
+    def set_collection_name(self, collection_name: str) -> None:
+        """
+        現在のデフォルトコレクション名を変更する
+        
+        Args:
+            collection_name: 新しいコレクション名
+        """
+        self.collection_name = collection_name
+        # 新しいコレクションの存在を確認し、必要に応じて作成
+        self._ensure_collection_exists(collection_name)
+    
     def get_collections(self) -> List[str]:
         """
         利用可能なコレクション一覧を取得する
@@ -380,13 +414,23 @@ class QdrantManager:
         collection_names = [c.name for c in collections]
         return sorted(collection_names)
         
-    def get_sources(self, limit=10000) -> List[str]:
+    def get_sources(self, collection_name: Optional[str] = None, limit=10000) -> List[str]:
         """
         データベース内のすべての参照元（ソース）を取得する
+
+        Args:
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
+            limit: 取得する最大ソース数
 
         Returns:
             List[str]: ユニークな参照元のリスト
         """
+        # コレクション名を確定
+        collection_name = collection_name if collection_name is not None else self.collection_name
+        
+        # コレクションの存在を確認
+        self._ensure_collection_exists(collection_name)
+
         try:
             # scrollメソッドはbatch数を返すのでイテレーションが必要
             sources = set()
@@ -396,7 +440,7 @@ class QdrantManager:
             # 最初は全ペイロードを取得して処理
             while True:
                 batch, next_offset = self.client.scroll(
-                    collection_name=self.collection_name,
+                    collection_name=collection_name,
                     limit=batch_size,
                     offset=offset,
                     with_payload=True,  # 全ペイロードを取得
@@ -419,20 +463,28 @@ class QdrantManager:
                 
             return sorted(list(sources))
         except Exception as e:
-            print(f"ソース取得エラー: {str(e)}")
             return []
 
-    def count_documents(self) -> int:
+    def count_documents(self, collection_name: Optional[str] = None) -> int:
         """
         コレクション内の文書数を取得する
+
+        Args:
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
 
         Returns:
             int: 文書の総数
         """
-        collection_info = self.client.get_collection(collection_name=self.collection_name)
+        # コレクション名を確定
+        collection_name = collection_name if collection_name is not None else self.collection_name
+        
+        # コレクションの存在を確認
+        self._ensure_collection_exists(collection_name)
+
+        collection_info = self.client.get_collection(collection_name=collection_name)
         return collection_info.points_count
         
-    def delete_collection(self, collection_name: str = None) -> bool:
+    def delete_collection(self, collection_name: Optional[str] = None) -> bool:
         """
         コレクションを削除する
 
@@ -442,8 +494,8 @@ class QdrantManager:
         Returns:
             bool: 削除に成功したかどうか
         """
-        if collection_name is None:
-            collection_name = self.collection_name
+        # コレクション名を確定
+        collection_name = collection_name if collection_name is not None else self.collection_name
             
         try:
             # コレクションが存在するか確認
@@ -466,16 +518,23 @@ class QdrantManager:
             print(f"コレクション削除エラー: {str(e)}")
             return False
 
-    def delete_by_filter(self, filter_params: Dict[str, Any]) -> int:
+    def delete_by_filter(self, filter_params: Dict[str, Any], collection_name: Optional[str] = None) -> int:
         """
         フィルタに一致する文書を削除する
 
         Args:
             filter_params: 削除フィルタ
+            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
 
         Returns:
             int: 削除された文書の数
         """
+        # コレクション名を確定
+        collection_name = collection_name if collection_name is not None else self.collection_name
+        
+        # コレクションの存在を確認
+        self._ensure_collection_exists(collection_name)
+
         filter_conditions = []
         for key, value in filter_params.items():
             if value:  # 値が空でない場合のみフィルタに追加
@@ -503,7 +562,7 @@ class QdrantManager:
         )
 
         result = self.client.delete(
-            collection_name=self.collection_name,
+            collection_name=collection_name,
             points_selector=models.FilterSelector(
                 filter=delete_filter
             )
@@ -535,6 +594,10 @@ if __name__ == "__main__":
     manager = QdrantManager(
         collection_name="test",
         rag_strategy=args.strategy, use_gpu=args.use_gpu, path="./qdrant_test_data")
+
+    manager.delete_collection("test")
+    manager.set_collection_name("test")
+
     print(f"初期化時間: {time.time() - start_time:.4f}秒")
 
     # テスト用の文書とメタデータを作成
