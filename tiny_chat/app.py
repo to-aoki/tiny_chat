@@ -138,6 +138,7 @@ with st.sidebar:
 # タブの作成
 tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
+
 # チャットをクリアするコールバック関数
 def clear_chat():
     st.session_state.chat_manager = ChatManager()
@@ -182,8 +183,10 @@ def cached_search_documents(prompt_content, top_k=5):
         return []
     
     # RAGモードが有効な場合のみ検索関数をインポートして実行
-    from database import search_documents
-    return search_documents(prompt_content, top_k=top_k, logger=LOGGER)
+    from database import get_or_create_qdrant_manager
+    from search_componet import search_documents
+    qdrant_manager = get_or_create_qdrant_manager(LOGGER)
+    return search_documents(prompt_content, qdrant_manager=qdrant_manager, top_k=top_k, logger=LOGGER)
 
 
 def show_chat_component(logger):
@@ -605,16 +608,8 @@ with tabs[1]:
     if st.session_state.rag_mode_ever_enabled:
         try:
             from database import get_or_create_qdrant_manager, show_database_component
-
-            if st.session_state.rag_mode:
-                # RAGモードが現在有効な場合、DBに接続
-                get_or_create_qdrant_manager(LOGGER)
-                show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
-            else:
-                # 以前RAGモードが有効だったが、現在は無効の場合
-                st.info("現在RAGモードは無効です。")
-                get_or_create_qdrant_manager(LOGGER)
-                show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+            get_or_create_qdrant_manager(LOGGER)
+            show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
 
         except Exception as e:
             LOGGER.error(f"データベース接続エラー: {str(e)}")
