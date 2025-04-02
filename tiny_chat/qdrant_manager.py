@@ -3,9 +3,8 @@ from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models.models import QueryResponse
-from bm25_text_embedding import BM25TextEmbedding
-from static_embedding import StaticEmbedding
 from text_chunk import TextChunker
+from rag_strategy import RagStrategyFactory
 
 
 class QdrantManager:
@@ -19,7 +18,10 @@ class QdrantManager:
         host: Optional[str] = None,
         port: Optional[int] = 6333,
         api_key: Optional[str] = None,
+        chunk_size: Optional[int] = 1024,
         chunk_overlap: Optional[int] = 24,
+        rag_strategy: Optional[str] = "bm25_static",
+        use_gpu: Optional[bool] = False,
     ):
         """
         QdrantManagerの初期化
@@ -31,20 +33,15 @@ class QdrantManager:
             port: Qdrantサーバーのポート（HTTPモードの場合のみ有効）
         """
         self.collection_name = collection_name
-        
-        # BM25とStaticEmbeddingJapaneseモデルの初期化
-        self.bm25_model = BM25TextEmbedding()
-        self.static_emb_model = StaticEmbedding()
+
+        self.strategy = RagStrategyFactory.get_strategy(
+            strategy_name=rag_strategy, use_gpu=use_gpu)
         
         # TextChunkerの初期化
         self.chunker = TextChunker(
-            chunk_size=self.static_emb_model.dimension,
+            chunk_size=chunk_size,
             chunk_overlap=chunk_overlap
         )
-        
-        # ベクトルフィールド名の設定
-        self.sparse_vector_field_name = "sparse"
-        self.dense_vector_field_name = "dense"
 
         self.is_local_file = True
         if host:
@@ -73,17 +70,15 @@ class QdrantManager:
             # コレクションの作成
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config={
-                    self.dense_vector_field_name: models.VectorParams(
-                        size=self.static_emb_model.dimension,
-                        distance=models.Distance.COSINE,
-                    )
-                },
-                sparse_vectors_config={
-                    self.sparse_vector_field_name: models.SparseVectorParams(
-                        modifier=models.Modifier.IDF,
-                    )
-                }
+                vectors_config=self.strategy.create_vector_config(),
+                sparse_vectors_config=self.strategy.create_sparse_vectors_config(),
+                quantization_config=models.ScalarQuantization(
+                    scalar=models.ScalarQuantizationConfig(
+                        type=models.ScalarType.INT8,
+                        quantile=0.99,
+                        always_ram=True,
+                    ),
+                ),
             )
 
     def get_collection(self, collection_name: str) -> Any:
@@ -230,18 +225,11 @@ class QdrantManager:
                     chunk_metadata["parent_id"] = chunk_metadata["id"]
                 
                 chunk_metadata["id"] = point_id
-                
-                # BM25とStaticEmbeddingJapaneseを使用してチャンクをベクトル化
-                sparse_embedding = list(self.bm25_model.embed(chunk))[0]
-                dense_embedding = list(self.static_emb_model.embed(chunk))[0]
-                
+
                 # Qdrantポイントの作成
                 point = models.PointStruct(
                     id=point_id,
-                    vector={
-                        self.dense_vector_field_name: dense_embedding.tolist(),
-                        self.sparse_vector_field_name: sparse_embedding.as_object(),
-                    },
+                    vector=self.strategy.vector(chunk),
                     payload={
                         "text": chunk,
                         **chunk_metadata
@@ -281,9 +269,6 @@ class QdrantManager:
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
-        # BM25とStaticEmbeddingJapaneseを使用してクエリをベクトル化
-        sparse_embedding = list(self.bm25_model.query_embed(query))[0]
-        dense_embedding = list(self.static_emb_model.query_embed(query))[0]
 
         # 検索フィルタを作成
         search_filter = None
@@ -313,21 +298,28 @@ class QdrantManager:
                 )
 
         try:
-            response = self.client.query_points(
-                collection_name=self.collection_name,
-                prefetch=[
-                    models.Prefetch(
-                        query=sparse_embedding.as_object(), using=self.sparse_vector_field_name, limit=top_k),
-                    models.Prefetch(
-                        query=dense_embedding.tolist(), using=self.dense_vector_field_name, limit=top_k),
-                ],
-                query=models.FusionQuery(fusion=models.Fusion.RRF),  # RRF (Reciprocal Rank Fusion)を使用して検索結果を結合
-                limit=top_k,
-                with_vectors=False,
-                with_payload=True,
-                query_filter=search_filter,
-                # score_threshold=score_threshold # 効いてなさそう (qdrant-client 1.13.3 file)
-            )
+            prefetch = self.strategy.prefetch(query, top_k)
+            if prefetch:
+                response = self.client.query_points(
+                    collection_name=self.collection_name,
+                    prefetch=prefetch,
+                    query=self.strategy.query(query),
+                    limit=top_k,
+                    with_vectors=False,
+                    with_payload=True,
+                    query_filter=search_filter,
+                    # score_threshold=score_threshold # 効いてなさそう (qdrant-client 1.13.3 file)
+                )
+            else:
+                response = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=self.strategy.query(query),
+                    limit=top_k,
+                    with_vectors=False,
+                    with_payload=True,
+                    query_filter=search_filter,
+                    # score_threshold=score_threshold # 効いてなさそう (qdrant-client 1.13.3 file)
+                )
 
             # QueryResponseの場合、pointsアトリビュートを取得
             if hasattr(response, 'points'):
@@ -521,10 +513,28 @@ class QdrantManager:
 
 
 if __name__ == "__main__":
-    # テスト用のインスタンス作成
+    import argparse
     import time
+
+    # コマンドライン引数の設定
+    parser = argparse.ArgumentParser()
+    # 必須引数
+    parser.add_argument(
+        "--strategy", "-s",
+        type=str,
+        default="bm25_static"
+    )
+
+    parser.add_argument(
+        "--use_gpu", "-g",
+        action='store_true',
+    )
+    args = parser.parse_args()
+
     start_time = time.time()
-    manager = QdrantManager(collection_name="test-hybrid", path="./qdrant_test_data")
+    manager = QdrantManager(
+        collection_name="test",
+        rag_strategy=args.strategy, use_gpu=args.use_gpu, path="./qdrant_test_data")
     print(f"初期化時間: {time.time() - start_time:.4f}秒")
 
     # テスト用の文書とメタデータを作成
