@@ -15,7 +15,7 @@ _qdrant_manager = None
 # インスタンス生成のロックに使用
 _qdrant_lock = None
 
-# サポートされるファイル拡張子とファイルタイプのマッピング（前計算）
+# サポートされるファイル拡張子とファイルタイプのマッピング
 FILE_TYPE_MAPPING = {
     '.pdf': ('PDF', 'ページ'),
     '.xlsx': ('Excel', 'シート'),
@@ -117,7 +117,6 @@ def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
     # メタデータの初期化
     metadata = {
         "source": file_path,
-        "filename": os.path.basename(file_path),
         "file_type": file_ext[1:],  # 拡張子の.を除去
         "file_size": len(file_bytes),  # 早期にファイルサイズを設定
     }
@@ -209,7 +208,7 @@ def process_directory(directory_path: str,
 
     if extensions is None:
         extensions = support_extensions
-    
+
     # セットによる高速ルックアップ
     extensions_set = set(extensions)
 
@@ -246,13 +245,13 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
     """
     # QdrantManagerを使用 (既に初期化されている前提)
     _qdrant_manager = get_or_create_qdrant_manager()
-    
+
     # ソース（ファイル名）の一覧を取得
     sources_to_add = set()
     for metadata in metadatas:
         if "source" in metadata:
             sources_to_add.add(metadata["source"])
-    
+
     # 既存のソースと照合し、重複があれば削除
     existing_sources = _qdrant_manager.get_sources()
     for source in sources_to_add:
@@ -264,7 +263,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
 
     all_texts = []
     all_metadatas = []
-    
+
     # ファイルごとにテキストとメタデータを処理
     for i, text_array in enumerate(texts):
         base_metadata = metadatas[i].copy()
@@ -273,7 +272,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict]) -> List[s
             page_metadata = base_metadata.copy()
             page_metadata["page"] = page_index + 1  # 配列の添字 + 1 をページとして設定
             all_metadatas.append(page_metadata)
-    
+
     # Qdrantに追加
     added_ids = _qdrant_manager.add_documents(all_texts, all_metadatas)
     return added_ids
@@ -300,7 +299,7 @@ def search_documents(
     if filter_params_str:
         import json
         filter_params = json.loads(filter_params_str)
-    
+
     # ここでは外部で初期化されたQdrantManagerを使用する
     _qdrant_manager = get_or_create_qdrant_manager(logger)
     results = _qdrant_manager.query_points(
@@ -312,10 +311,10 @@ def get_page_info_display(metadata: Dict) -> str:
     """メタデータからページ情報表示文字列を生成"""
     if 'page' not in metadata:
         return ""
-    
+
     file_type = metadata.get('file_type', '').lower()
     page_num = metadata['page']
-    
+
     if file_type == 'pdf':
         return f"(ページ: {page_num})"
     elif file_type in ['xlsx', 'xls']:
@@ -346,9 +345,10 @@ def show_database_component(
         def search_on_enter():
             # テキスト入力からクエリを取得し、検索実行のフラグを立てる
             st.session_state.run_search = True
-            
-        # 検索フィールド (Enterキーで検索実行するためにon_changeパラメータを追加)
-        query = st.text_input("検索文字列", "", key="search_query_input", on_change=search_on_enter)
+
+        # 検索フィールド
+        query = st.text_input(
+            "検索文字列", "", key="search_query_input", on_change=search_on_enter)
 
         # 詳細設定のエクスパンダー
         with st.expander("詳細設定", expanded=False):
@@ -361,15 +361,15 @@ def show_database_component(
                 # 使用可能なソースを取得（常に最新の状態を取得）
                 sources = _qdrant_manager.get_sources()
                 selected_sources = st.multiselect(
-                    "ソースでフィルタ", 
+                    "ソースでフィルタ",
                     options=sources,
-                    key="sources_multiselect_filter"  # 固定のキーを使用
+                    key="sources_multiselect_filter"
                 )
 
         # 検索の実行フラグをセットアップ
         if "run_search" not in st.session_state:
             st.session_state.run_search = False
-        
+
         # 検索ボタン
         search_pressed = st.button("検索", key="search_button", type="primary")
 
@@ -404,24 +404,24 @@ def show_database_component(
                 score = result.score
                 metadata = {k: v for k, v in result.payload.items() if k != "text"}
                 page_info = get_page_info_display(metadata)
-                
+
                 result_grid.append({
                     "index": i + 1,
-                    "filename": metadata.get('filename', 'ドキュメント'),
+                    "source": metadata.get('source', 'ドキュメント'),
                     "page_info": page_info,
                     "score": f"{score:.4f}",
                     "metadata": metadata,
                     "text": result.payload.get("text", "")
                 })
-            
+
             # 一列表示に変更
             for idx, item in enumerate(result_grid):
                 with st.expander(
-                        f"#{item['index']}: {item['filename']} {item['page_info']} (スコア: {item['score']})",
+                        f"#{item['index']}: {item['source']} {item['page_info']} (スコア: {item['score']})",
                         expanded=idx == 0):
                     # メタデータをDataFrameとして表示
                     st.dataframe(pd.DataFrame([item['metadata']]), hide_index=True, use_container_width=True)
-                    
+
                     # ソースファイルへのリンク
                     if 'source' in item['metadata'] and item['metadata']['source']:
                         source_path = item['metadata']['source']
@@ -430,7 +430,7 @@ def show_database_component(
                                 open_file(source_path)
                         else:
                             st.markdown(f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
-                    
+
                     # テキスト表示（長い場合は省略）
                     text = item['text']
                     st.text(text[:500] + "..." if len(text) > 500 else text)
@@ -439,6 +439,7 @@ def show_database_component(
 
     # 文書登録タブ
     with (search_tabs[1]):
+
         # コレクション名の入力
         collection_name = st.text_input(
             "コレクション名",
@@ -459,7 +460,7 @@ def show_database_component(
                 "",
                 help="ファイルの「source」として使用するベースディレクトリを指定できます。空の場合はファイル名のみが使用されます。"
             )
-            
+
             # ファイルアップローダー
             uploaded_files = st.file_uploader(
                 "ファイルをアップロード",
@@ -484,12 +485,11 @@ def show_database_component(
                                 temp_path = temp_file.name
 
                             text, metadata = process_file(temp_path)
-                            
+
                             # カスタムソースパスを設定（指定があれば）
                             if text and source_base_dir:
                                 custom_source_path = os.path.join(source_base_dir, uploaded_file.name)
                                 metadata["source"] = custom_source_path
-                                metadata["original_filename"] = metadata["filename"]  # 元のファイル名を保持
 
                             if text:
                                 texts.append(text)
@@ -514,9 +514,9 @@ def show_database_component(
                             st.success(
                                 f"{len(added_ids)}件のドキュメントを「{collection_name}」コレクションに登録しました")
 
-                            # 登録されたドキュメントの一覧
                             metadata_df = pd.DataFrame(metadatas)
                             st.dataframe(metadata_df, use_container_width=True)
+
 
                         else:
                             st.warning("登録できるドキュメントがありませんでした")
@@ -524,14 +524,14 @@ def show_database_component(
         else:  # ディレクトリ指定
             # ディレクトリパス入力
             directory_path = st.text_input("ディレクトリパスを入力", "")
-            
+
             # ソースパスのカスタマイズオプション
             source_path_option = st.radio(
                 "ソースパスの設定方法",
                 ["実際のファイルパスを使用", "Webパス接頭辞を設定"],
                 help="ファイルの「source」として使用するパスの設定方法を選択します"
             )
-            
+
             web_prefix_base = ""
             if source_path_option == "Webパス接頭辞を設定":
                 web_prefix_base = st.text_input(
@@ -586,12 +586,9 @@ def show_database_component(
                             st.success(
                                 f"{len(added_ids)}件のドキュメントを「{collection_name}」コレクションに登録しました")
 
-                            # 登録されたドキュメントの一覧
+                            # 登録されたドキュメントの一覧をセッションに保存
                             metadata_df = pd.DataFrame(metadatas)
                             st.dataframe(metadata_df, use_container_width=True)
-                            # ディレクトリパス情報と拡張子選択情報をクリア
-                            if "directory_path" in st.session_state:
-                                del st.session_state["directory_path"]
 
                         else:
                             st.warning("指定されたディレクトリに登録可能なファイルが見つかりませんでした")
