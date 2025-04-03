@@ -296,11 +296,9 @@ def sidebar(config_file_path, logger):
             st.sidebar.markdown("検索")
 
             # コレクション名の選択（サイドバーに表示）
-            # プロセスレベルで管理されているQdrantManagerを取得（毎回最新の状態を取得）
             manager = get_or_create_qdrant_manager(logger)
 
             # コレクション一覧をQdrantManagerから取得
-            # (ファイルシステムから直接取得するのではなく、QdrantManagerのAPIを使用)
             available_collections = manager.get_collections()
 
             # コレクションがなければデフォルトのものを表示
@@ -310,7 +308,7 @@ def sidebar(config_file_path, logger):
             # コレクション選択の状態管理
             if "selected_collection" not in st.session_state:
                 st.session_state.selected_collection = manager.collection_name
-                
+
             # コレクション変更を検出するための一時フラグ
             if "collection_changing" not in st.session_state:
                 st.session_state.collection_changing = False

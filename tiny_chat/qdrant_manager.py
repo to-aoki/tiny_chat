@@ -5,6 +5,7 @@ from qdrant_client.http import models
 from qdrant_client.http.models.models import QueryResponse
 from text_chunk import TextChunker
 from rag_strategy import RagStrategyFactory
+from database_config import DatabaseConfig
 
 
 class QdrantManager:
@@ -14,48 +15,103 @@ class QdrantManager:
 
     def __init__(self,
         collection_name: str = "documents",
-        path: str = "./qdrant_data",
-        host: Optional[str] = None,
-        port: Optional[int] = 6333,
+        file_path: str = "./qdrant_data",
+        server_url: Optional[str] = None,
         api_key: Optional[str] = None,
         chunk_size: Optional[int] = 1024,
         chunk_overlap: Optional[int] = 24,
+        top_k: int = 3,
+        score_threshold: float = 0.4,
         rag_strategy: Optional[str] = "bm25_static",
         use_gpu: Optional[bool] = False,
+        **kwargs
     ):
-        """
-        QdrantManagerの初期化
 
-        Args:
-            collection_name: Qdrantコレクション名
-            path: Qdrantデータベースのローカルパス（ファイルモード）
-            host: Qdrantサーバーのホスト（指定された場合はHTTP接続モードになる）
-            port: Qdrantサーバーのポート（HTTPモードの場合のみ有効）
-        """
+        selected_collection_name = kwargs.get("selected_collection_name", None)
+        if selected_collection_name is not None:
+            collection_name = selected_collection_name
+
         self.collection_name = collection_name
+        self.top_k = top_k
+        self.score_threshold = score_threshold
 
+        self.server_url = None
+        self.api_key = None
+        self.file_path = None
+        if server_url:
+            # サーバーに接続
+            self.client = QdrantClient(url=server_url, api_key=api_key)
+            self.server_url = server_url
+            self.api_key = api_key
+        elif file_path == ":memory:":
+            # メモリモード - ファイルを使わない
+            self.client = QdrantClient(":memory:")
+            self.file_path = file_path
+        else:
+            # ローカルファイルモード
+            self.client = QdrantClient(path=file_path)
+            self.file_path = file_path
+
+        self.rag_strategy = rag_strategy
+        self.use_gpu = use_gpu
         self.strategy = RagStrategyFactory.get_strategy(
             strategy_name=rag_strategy, use_gpu=use_gpu)
-        
-        # TextChunkerの初期化
+        self._ensure_collection_exists()
         self.chunker = TextChunker(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap
         )
 
-        self.is_local_file = True
-        if host:
-            # HTTPモード - サーバーに接続
-            self.client = QdrantClient(host=host, port=port, api_key=api_key)
-            self.is_local_file = False
-        elif path == ":memory:":
-            # メモリモード - ファイルを使わない
-            self.client = QdrantClient(":memory:")
-        else:
-            # ローカルファイルモード
-            self.client = QdrantClient(path=path)
+    def is_need_reconnect(
+        self,
+        file_path: str = None,
+        server_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        **kwargs
+    ):
+        if server_url != self.server_url:
+            return True
+        if self.server_url is not None and api_key != self.api_key:
+            return True
+        if file_path != self.file_path:
+            return True
+        return False
 
-        self._ensure_collection_exists()
+    def update_settings(
+        self,
+        collection_name: str = None,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
+        top_k: Optional[int] = None,
+        score_threshold: Optional[float] = None,
+        rag_strategy: Optional[str] = None,
+        use_gpu: Optional[bool] = None,
+        **kwargs
+    ):
+        selected_collection_name = kwargs.get("selected_collection_name", None)
+        if selected_collection_name is not None:
+            collection_name = selected_collection_name
+        if collection_name is not None and self.collection_name != collection_name:
+            self.set_collection_name(collection_name=collection_name)
+        if (chunk_size is not None and self.chunker.chunk_size != chunk_size) or (
+                chunk_overlap is not None and self.chunker.chunk_overlap != chunk_overlap):
+            update_chunk_size = self.chunker.chunk_size if chunk_size is None else chunk_size
+            update_chunk_overlap = self.chunker.chunk_overlap if chunk_overlap is None else chunk_overlap
+            self.chunker = TextChunker(chunk_size=update_chunk_size, chunk_overlap=update_chunk_overlap)
+        self.top_k = top_k if top_k is not None else self.top_k
+        self.score_threshold = score_threshold if score_threshold is not None else self.score_threshold
+        if (use_gpu is not None and self.use_gpu != use_gpu) or (
+                rag_strategy is not None and self.rag_strategy != rag_strategy):
+            update_rag_strategy = self.rag_strategy if rag_strategy else self.rag_strategy
+            update_use_gpu = self.use_gpu if use_gpu else self.use_gpu
+            update_strategy = RagStrategyFactory.get_strategy(
+                strategy_name=update_rag_strategy, use_gpu=update_use_gpu
+            )
+            if update_strategy is None:
+                raise ValueError(f"{update_rag_strategy} not found.")
+            self.strategy = update_strategy
+            self.rag_strategy = update_rag_strategy
+            self.use_gpu = update_use_gpu
 
     def _ensure_collection_exists(self, collection_name: Optional[str] = None):
         """
@@ -135,24 +191,35 @@ class QdrantManager:
         # 文書を追加
         return self.add_documents(documents, metadatas, collection_name)
 
-    def query(self, collection_name: str, query_text: str, n_results: int = 5, **kwargs) -> List[QueryResponse]:
+    def query(
+            self, collection_name: str, query_text: str,
+            top_k: int, score_threshold: float, **kwargs) -> List[QueryResponse]:
         """
         コレクションにクエリを実行する
 
         Args:
             collection_name: コレクション名
             query_text: クエリテキスト
-            n_results: 結果の数
+            top_k: 結果の数
             **kwargs: その他のパラメータ
 
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
+
+        if top_k:
+            top_k = self.top_k
+        if score_threshold:
+            score_threshold = self.score_threshold
+
         # コレクションの存在を確認
         self._ensure_collection_exists(collection_name)
-        
         filter_params = kwargs.get("filter", None)
-        return self.query_points(query_text, n_results, filter_params, collection_name)
+        return self.query_points(query_text,
+                                 top_k=top_k,
+                                 score_threshold=score_threshold,
+                                 filter_params=filter_params,
+                                 collection_name=collection_name)
 
     def add_document(self,
                      document: str,
@@ -292,7 +359,7 @@ class QdrantManager:
 
         # 検索フィルタを作成
         search_filter = None
-        if filter_params and not self.is_local_file:
+        if filter_params and self.file_path is None:
             filter_conditions = []
             for key, value in filter_params.items():
                 if value:  # 値が空でない場合のみフィルタに追加
@@ -351,7 +418,7 @@ class QdrantManager:
             # 結果をQueryResponseに変換
             results = []
             for point in points:
-                if self.is_local_file and filter_params:
+                if self.file_path is not None and filter_params:
                     not_match = False
                     for key, value in filter_params.items():
                         if isinstance(value, list):
@@ -371,27 +438,6 @@ class QdrantManager:
         except Exception as e:
             return []
 
-    def search(
-        self,
-        query: str,
-        top_k: int = 5,
-        collection_name: Optional[str] = None,
-        filter_params: Optional[Dict[str, Any]] = None
-    ) -> List[QueryResponse]:
-        """
-        クエリに基づいて文書を検索する (下位互換性のため残しています)
-
-        Args:
-            query: 検索クエリ
-            top_k: 返す結果の数
-            collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
-            filter_params: 検索フィルタ（参照元、ページ番号等でフィルタリング）
-
-        Returns:
-            List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
-        """
-        return self.query_points(query, top_k, 0.4, collection_name, filter_params)
-
     def set_collection_name(self, collection_name: str) -> None:
         """
         現在のデフォルトコレクション名を変更する
@@ -400,7 +446,6 @@ class QdrantManager:
             collection_name: 新しいコレクション名
         """
         self.collection_name = collection_name
-        # 新しいコレクションの存在を確認し、必要に応じて作成
         self._ensure_collection_exists(collection_name)
     
     def get_collections(self) -> List[str]:
@@ -414,7 +459,7 @@ class QdrantManager:
         collection_names = [c.name for c in collections]
         return sorted(collection_names)
         
-    def get_sources(self, collection_name: Optional[str] = None, limit=10000) -> List[str]:
+    def get_sources(self, collection_name: Optional[str] = None, limit=1000) -> List[str]:
         """
         データベース内のすべての参照元（ソース）を取得する
 
@@ -435,8 +480,8 @@ class QdrantManager:
             # scrollメソッドはbatch数を返すのでイテレーションが必要
             sources = set()
             offset = None  # Noneを使うとスクロール開始地点から始まる
-            batch_size = min(1000, limit)  # 大きすぎるバッチサイズはパフォーマンス問題を引き起こす可能性がある
-            
+            batch_size = min(1000, limit)
+
             # 最初は全ペイロードを取得して処理
             while True:
                 batch, next_offset = self.client.scroll(
