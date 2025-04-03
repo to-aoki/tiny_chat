@@ -260,7 +260,7 @@ def show_registration(
                             qdrant_manager.get_collection(collection_name)
 
                         # Qdrantに追加
-                        added_ids = add_files_to_qdrant(texts, metadatas)
+                        added_ids = add_files_to_qdrant(texts, metadatas, qdrant_manager)
 
                         # 結果表示
                         st.success(

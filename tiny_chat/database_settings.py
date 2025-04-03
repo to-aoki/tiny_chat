@@ -24,4 +24,5 @@ def show_settings(
         from database import get_or_create_qdrant_manager
         get_or_create_qdrant_manager(
             logger=logger, config_file_path=config_file_path, reconnect=True)
+        st.rerun()
 
