@@ -16,7 +16,8 @@ class ChatConfig:
         message_length: int = 8000,
         context_length: int = 1000,
         uri_processing: bool = True,
-        is_azure: bool = False
+        is_azure: bool = False,
+        **kwargs
     ):
         self.server_url = server_url
         self.api_key = api_key
@@ -75,7 +76,6 @@ class ChatConfig:
             return True
         except Exception:
             return False
-
 
 
 class ModelManager:

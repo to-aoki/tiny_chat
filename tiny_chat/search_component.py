@@ -60,7 +60,7 @@ def search_documents(
     return results
 
 
-def show_search_componet(qdrant_manager):
+def show_search_component(qdrant_manager):
     if "search_results" not in st.session_state:
         st.session_state.search_results = []
 
