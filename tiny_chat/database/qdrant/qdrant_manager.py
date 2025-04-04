@@ -690,7 +690,7 @@ if __name__ == "__main__":
     
     # フィルタリングテスト
     print("\n=== フィルタリングテスト ===")
-    query = "観光"
+    query = "観光が楽しめる都市は？"
     filter_params = {"region": "関西"}
     
     print(f"クエリ: {query}, フィルタ: {filter_params}")

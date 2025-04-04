@@ -277,32 +277,4 @@ class BM42TextEmbedding:
         Returns:
             Iterable[SparseEmbedding]: クエリの埋め込み
         """
-        # 単一クエリの場合
-        if isinstance(query, str):
-            # クエリベクトルを生成
-            token_attentions = self._token_attentions(
-                query,
-                is_query=True,
-            )
-            query_vector = self._rescore_token_weights(token_attentions)
-            indices = np.array(list(query_vector.keys()), dtype=np.int32)
-            values = np.array(list(query_vector.values()), dtype=np.float32)
-            
-            # スパース埋め込みを作成
-            embedding = SparseEmbedding(indices=indices, values=values)
-            yield embedding
-        else:
-            # 複数クエリの場合
-            for q in query:
-                # クエリベクトルを生成
-                token_attentions = self._token_attentions(
-                    q,
-                    is_query=True,
-                )
-                query_vector = self._rescore_token_weights(token_attentions)
-                indices = np.array(list(query_vector.keys()), dtype=np.int32)
-                values = np.array(list(query_vector.values()), dtype=np.float32)
-
-                # スパース埋め込みを作成
-                embedding = SparseEmbedding(indices=indices, values=values)
-                yield embedding
+        return self.embed(query)
