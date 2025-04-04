@@ -3,6 +3,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import datetime
 
+
 class Logger:
     """
     アプリケーションのログを管理するクラス

@@ -21,7 +21,7 @@ def show_settings(
         st.session_state.db_config.selected_collection_name = collection_name
         st.session_state.db_config.top_k = top_k
         st.session_state.db_config.score_threshold = score_threshold
-        from database import get_or_create_qdrant_manager
+        from tiny_chat.database.database import get_or_create_qdrant_manager
         get_or_create_qdrant_manager(
             logger=logger, config_file_path=config_file_path, reconnect=True)
         st.rerun()

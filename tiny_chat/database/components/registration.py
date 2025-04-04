@@ -7,7 +7,7 @@ import functools
 import streamlit as st
 import pandas as pd
 
-from file_processor import process_file
+from tiny_chat.utils.file_processor import process_file
 
 SUPPORT_EXTENSIONS = ['.pdf', '.xlsx', '.docx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
 
