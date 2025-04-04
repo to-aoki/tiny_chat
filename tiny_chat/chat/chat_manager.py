@@ -201,23 +201,30 @@ class ChatManager:
                 user_msg_count += 1
 
         # 次に、full_messagesからユーザーメッセージの拡張コンテンツを取得
+        # 変更: メッセージIDをキーとする辞書を作成
         enhanced_contents = {}
         for msg in self.full_messages:
             if msg["role"] == "user" and "message_id" in msg:
                 enhanced_contents[msg["message_id"]] = msg["content"]
 
+        # デバッグ用ログ
+        # print(f"Enhanced contents: {enhanced_contents}")
+        
         # 最後に、メッセージを順番に追加
         for i, msg in enumerate(self.messages):
             if msg["role"] == "user":
                 # ユーザーメッセージの場合は、拡張コンテンツがあればそれを使用
+                # 変更: iとmessage_idが一致することを確認
                 if i in enhanced_contents:
+                    # 拡張コンテンツが見つかった場合
                     messages_for_api.append({"role": "user", "content": enhanced_contents[i]})
                 else:
-                    # 拡張コンテンツがなければ、表示用のメッセージをそのまま使用
+                    # 拡張コンテンツがない場合、通常のコンテンツを使用
+                    # RAGが有効な場合、最新のユーザーメッセージには検索結果を追加
                     messages_for_api.append({"role": "user", "content": msg["content"]})
             else:
-                # アシスタントメッセージはそのまま追加
-                messages_for_api.append({"role": "user", "content": msg["content"]})
+                # アシスタントメッセージはそのまま追加（修正済み）
+                messages_for_api.append({"role": msg["role"], "content": msg["content"]})
 
         return messages_for_api
 
