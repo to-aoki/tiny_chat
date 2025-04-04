@@ -100,6 +100,7 @@ def _delete_sources(qdrant_manager, logger):
                         st.error(f"削除処理中にエラーが発生しました: {str(e)}")
                         logger.error(f"削除処理エラー: {str(e)}")
 
+
 def _delete_collections(qdrant_manager, logger):
     # 利用可能なコレクション一覧を取得
     collections = qdrant_manager.get_collections()
