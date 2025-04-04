@@ -2,8 +2,8 @@
 from abc import ABC
 from qdrant_client import models
 
-from bm25_text_embedding import BM25TextEmbedding
-from static_embedding import StaticEmbedding
+from tiny_chat.database.embeddings.bm25_embedding import BM25TextEmbedding
+from tiny_chat.database.embeddings.static_embedding import StaticEmbedding
 
 
 class RagStrategyFactory:
@@ -51,7 +51,7 @@ class SparseOnly(RAGStrategy):
         if strategy == 'bm25':
             self.model = BM25TextEmbedding()
         elif strategy == 'bm42':
-            from bm42_text_embedding import BM42TextEmbedding
+            from tiny_chat.database.embeddings.bm42_embedding import BM42TextEmbedding
             self.model = BM42TextEmbedding(device='cuda' if use_gpu else 'cpu')
         else:
             raise ValueError('unknown Strategy: ' + strategy)
@@ -96,7 +96,7 @@ class DenseOnly(RAGStrategy):
             self.model = StaticEmbedding(
                 model_name=strategy, device='cuda' if use_gpu else 'cpu')
         else:
-            from stransformer_embedding import SentenceTransformerEmbedding
+            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.model = SentenceTransformerEmbedding(
                 model_name=strategy, device='cuda' if use_gpu else 'cpu')
 
@@ -139,7 +139,7 @@ class SparceDenseRRF(RAGStrategy):
             self.emb_model = StaticEmbedding(device='cuda' if use_gpu else 'cpu')
         elif self.strategy == 'bm25_sbert':
             self.bm25_model = BM25TextEmbedding()
-            from stransformer_embedding import SentenceTransformerEmbedding
+            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(device='cuda' if use_gpu else 'cpu')
 
     def create_vector_config(self):

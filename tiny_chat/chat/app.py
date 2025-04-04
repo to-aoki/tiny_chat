@@ -8,13 +8,13 @@ import urllib.parse
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 import streamlit as st
 
-from chat_config import ChatConfig, ModelManager
-from file_processor import URIProcessor, FileProcessorFactory
-from chat_manager import ChatManager
-from logger import get_logger
-from llm_utils import get_llm_client
-from sidebar import sidebar
-from copy_botton import copy_button
+from tiny_chat.chat.chat_config import ChatConfig, ModelManager
+from tiny_chat.chat.chat_manager import ChatManager
+from tiny_chat.utils.file_processor import URIProcessor, FileProcessorFactory
+from tiny_chat.utils.logger import get_logger
+from tiny_chat.utils.llm_utils import get_llm_client
+from tiny_chat.chat.sidebar import sidebar
+from tiny_chat.chat.copy_botton import copy_button
 
 # データベース関連の関数は使用時に都度インポート
 # from database import show_database_component, search_documents, get_or_create_qdrant_manager
@@ -24,9 +24,6 @@ from copy_botton import copy_button
 import torch
 torch.classes.__path__ = []
 
-
-LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
-st.set_page_config(page_title="チャット", layout="wide")
 
 # 設定ファイルのパス
 CONFIG_FILE = "chat_app_config.json"
@@ -49,11 +46,12 @@ FILE_TYPES = {
 }
 
 
-def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
+def initialize_session_state(config_file_path=CONFIG_FILE, logger=None):
     if "config" not in st.session_state:
         # 外部設定ファイルから設定を読み込む
         file_config = ChatConfig.load(config_file_path)
-        logger.info(f"設定ファイルを読み込みました: {config_file_path}")
+        if logger is not None:
+            logger.info(f"設定ファイルを読み込みました: {config_file_path}")
 
         # セッション状態に設定オブジェクトを初期化
         st.session_state.config = {
@@ -65,14 +63,11 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
             "context_length": file_config.context_length,
             "uri_processing": file_config.uri_processing,
             "is_azure": file_config.is_azure,
-            "previous_server_url": file_config.server_url
         }
-        logger.info("設定オブジェクトをセッション状態に初期化しました")
 
     # その他のセッション状態を初期化
     if "chat_manager" not in st.session_state:
         st.session_state.chat_manager = ChatManager()
-        logger.info("ChatManagerを初期化しました")
 
     # メッセージ送信中フラグ
     if "is_sending_message" not in st.session_state:
@@ -93,7 +88,8 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
         st.session_state.available_models = models
         st.session_state.models_api_success = success
         if not success:
-            logger.warning("モデル取得に失敗しました")
+            if logger is not None:
+                logger.warning("モデル取得に失敗しました")
 
     if "openai_client" not in st.session_state:
         try:
@@ -103,7 +99,8 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
                 is_azure=st.session_state.config["is_azure"]
             )
         except Exception as e:
-            error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
+            if logger is not None:
+                error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
             logger.error(error_msg)
             st.error(error_msg)
             st.session_state.openai_client = None
@@ -129,17 +126,6 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER):
         st.session_state.initial_message_sent = False
 
 
-# セッション状態の初期化
-initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
-
-# サイドバー
-with st.sidebar:
-    sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
-
-# タブの作成
-tabs = st.tabs(["💬 チャット", "🔍 データベース"])
-
-
 # チャットをクリアするコールバック関数
 def clear_chat():
     st.session_state.chat_manager = ChatManager()
@@ -148,7 +134,7 @@ def clear_chat():
 
 
 # RAGモード切り替え用の関数
-def toggle_rag_mode():
+def toggle_rag_mode(logger):
     # チェックボックスの状態を取得
     current_state = st.session_state.rag_mode_checkbox
     # セッション状態を更新
@@ -161,8 +147,8 @@ def toggle_rag_mode():
             st.session_state.rag_mode_ever_enabled = True
 
             # DBに接続
-            from database import get_or_create_qdrant_manager
-            get_or_create_qdrant_manager(LOGGER)
+            from tiny_chat.database.database import get_or_create_qdrant_manager
+            get_or_create_qdrant_manager(logger)
 
         except Exception as e:
             st.error(f"RAGモード有効化中にエラーが発生しました: {str(e)}")
@@ -177,17 +163,17 @@ def toggle_rag_mode():
 
 # キャッシュ可能な検索関数 - RAGモード専用
 @functools.lru_cache(maxsize=32)
-def cached_search_documents(prompt_content, top_k=5):
+def cached_search_documents(prompt_content, logger, top_k=5):
     # search_documentsは外部関数なので、都度インポートして実行したRAGモードを確認
     # これによりサイドバー描画時の不要な呼び出しを防止
     if not st.session_state.rag_mode:
         return []
     
     # RAGモードが有効な場合のみ検索関数をインポートして実行
-    from database import get_or_create_qdrant_manager
-    from search_componet import search_documents
-    qdrant_manager = get_or_create_qdrant_manager(LOGGER)
-    return search_documents(prompt_content, qdrant_manager=qdrant_manager, top_k=top_k, logger=LOGGER)
+    from tiny_chat.database.database import get_or_create_qdrant_manager
+    from tiny_chat.database.components.search import search_documents
+    qdrant_manager = get_or_create_qdrant_manager(logger)
+    return search_documents(prompt_content, qdrant_manager=qdrant_manager, top_k=top_k, logger=logger)
 
 
 def show_chat_component(logger):
@@ -285,7 +271,8 @@ def show_chat_component(logger):
         st.checkbox("RAG (データベースを利用した回答)", 
                     value=st.session_state.rag_mode,
                     key="rag_mode_checkbox", 
-                    on_change=toggle_rag_mode)
+                    on_change=toggle_rag_mode,
+                    args=(logger,))
         
         # 現在のRAG状態に基づいてメッセージを表示
         if st.session_state.rag_mode:
@@ -396,8 +383,8 @@ def show_chat_component(logger):
             if st.session_state.rag_mode:
                 try:
                     # RAGモードが有効な場合のみQdrantマネージャを取得・初期化
-                    from database import get_or_create_qdrant_manager
-                    get_or_create_qdrant_manager(LOGGER)
+                    from tiny_chat.database.database import get_or_create_qdrant_manager
+                    get_or_create_qdrant_manager(logger)
                     
                     # 最新のユーザーメッセージで検索（キャッシュ関数を使用）
                     search_results = cached_search_documents(prompt_content, top_k=5)
@@ -597,24 +584,41 @@ def show_chat_component(logger):
                 st.rerun()  # 再描画
 
 
-# チャット機能タブ
-with tabs[0]:
-    show_chat_component(logger=LOGGER)
+def run_chat_app():
+    LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
+    st.set_page_config(page_title="チャット", layout="wide")
 
+    # セッション状態の初期化
+    initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
 
-# データベース機能タブ
-with tabs[1]:
+    # サイドバー
+    with st.sidebar:
+        sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
 
-    # データベース機能の表示
-    if st.session_state.rag_mode_ever_enabled:
-        try:
-            from database import get_or_create_qdrant_manager, show_database_component
-            get_or_create_qdrant_manager(LOGGER)
-            show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+    # タブの作成
+    tabs = st.tabs(["💬 チャット", "🔍 データベース"])
 
-        except Exception as e:
-            LOGGER.error(f"データベース接続エラー: {str(e)}")
-            st.error(f"データベース接続中にエラーが発生しました: {str(e)}")
-    else:
-        # RAGモードが一度も有効になったことがない場合
-        st.warning("RAGモードが無効です。RAGを有効にするとデータベース機能が使えるようになります。")
+    # チャット機能タブ
+    with tabs[0]:
+        show_chat_component(logger=LOGGER)
+
+    # データベース機能タブ
+    with tabs[1]:
+        # データベース機能の表示
+        if st.session_state.rag_mode_ever_enabled:
+            try:
+                from tiny_chat.database.database import get_or_create_qdrant_manager, show_database_component
+
+                get_or_create_qdrant_manager(LOGGER)
+                show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+
+            except Exception as e:
+                LOGGER.error(f"データベース接続エラー: {str(e)}")
+                st.error(f"データベース接続中にエラーが発生しました: {str(e)}")
+        else:
+            st.warning("データベース機能を有効にするには以下のボタンをクリックしてください。")
+
+            def enable_database():
+                st.session_state.rag_mode_ever_enabled = True
+
+            st.button("データベースを有効にする", on_click=enable_database, use_container_width=True)

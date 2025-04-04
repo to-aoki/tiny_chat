@@ -2,11 +2,11 @@ import os
 
 import streamlit as st
 
-from database_config import DatabaseConfig
-from search_component import show_search_component
-from registration_component import show_registration
-from delete_component import show_delete_component
-from database_settings import show_settings
+from tiny_chat.database.database_config import DatabaseConfig
+from tiny_chat.database.components.search import show_search_component
+from tiny_chat.database.components.registration import show_registration
+from tiny_chat.database.components.deletion import show_delete_component
+from tiny_chat.database.components.settings import show_settings
 
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
 
@@ -52,7 +52,7 @@ def get_or_create_qdrant_manager(
                     # セッション状態に設定オブジェクトを初期化
                     st.session_state.db_config = db_config
                     logger.info("設定オブジェクトをセッション状態に初期化しました")
-                    from qdrant_manager import QdrantManager
+                    from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
 
                 if logger:
                     logger.info("QdrantManagerを初期化しています...")
@@ -69,7 +69,7 @@ def get_or_create_qdrant_manager(
                     try:
                         if logger:
                             logger.info("QdrantManagerを再初期化しています...")
-                        from qdrant_manager import QdrantManager
+                        from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
                         _qdrant_manager = QdrantManager(
                             **db_config.__dict__
                         )
@@ -121,9 +121,9 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
 
 
 # 単独動作用LLMLL
-if __name__ == "__main__":
+def run_database_app():
     import logging
-    from logger import get_logger
+    from tiny_chat.utils.logger import get_logger
     os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
     # https://discuss.streamlit.io/t/message-error-about-torch/90886/9

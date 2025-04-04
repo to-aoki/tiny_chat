@@ -3,9 +3,8 @@ from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models.models import QueryResponse
-from text_chunk import TextChunker
-from rag_strategy import RagStrategyFactory
-from database_config import DatabaseConfig
+from tiny_chat.database.embeddings.text_chunk import TextChunker
+from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
 
 
 class QdrantManager:

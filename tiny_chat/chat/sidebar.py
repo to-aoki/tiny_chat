@@ -1,7 +1,8 @@
 import streamlit as st
 
-from chat_config import ChatConfig, ModelManager
-from llm_utils import get_llm_client
+
+from tiny_chat.chat.chat_config import ChatConfig, ModelManager
+from tiny_chat.utils.llm_utils import get_llm_client
 
 
 def sidebar(config_file_path, logger):
@@ -125,7 +126,6 @@ def sidebar(config_file_path, logger):
             logger.info("APIキーを変更しました")
             
         # 各フィールドの更新
-        st.session_state.config["previous_server_url"] = st.session_state.config["server_url"]
         st.session_state.config["server_url"] = server_url
         st.session_state.config["api_key"] = api_key
         st.session_state.config["is_azure"] = is_azure
@@ -290,7 +290,7 @@ def sidebar(config_file_path, logger):
     # RAGモードがオンの場合は常にデータベース検索機能を表示する
     if st.session_state.rag_mode:
         try:
-            from database import get_or_create_qdrant_manager
+            from tiny_chat.database.database import get_or_create_qdrant_manager
 
             # 検索用サイドバー設定
             st.sidebar.markdown("検索")

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tiny-chat"
-version = "0.1.0"
+version = "0.1.1"
 description = "A simple chat application"
 authors = [
     { name = "Toshihiko Aoki" }
@@ -20,11 +20,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "streamlit>=1.24.0",
-    "openai>=0.27.0",
-    "python-dotenv>=1.0.0",
-]
+
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 Repository = "https://github.com/to-aoki/tiny_chat"

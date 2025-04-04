@@ -235,12 +235,12 @@ def _delete_collections(qdrant_manager, logger):
 def show_delete_component(qdrant_manager, logger):
 
     # タブを作成
-    data_management_tabs = st.tabs(["ソース管理", "コレクション管理"])
+    data_management_tabs = st.tabs(["ソース", "コレクション"])
     
-    # ソース管理タブ
+    # ソースタブ
     with data_management_tabs[0]:
         _delete_sources(qdrant_manager, logger)
 
-    # コレクション管理タブ
+    # コレクションタブ
     with data_management_tabs[1]:
         _delete_collections(qdrant_manager, logger)
