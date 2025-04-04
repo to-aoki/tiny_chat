@@ -10,15 +10,20 @@ class RagStrategyFactory:
 
     @staticmethod
     def get_strategy(strategy_name, use_gpu=False) -> 'RAGStrategy':
-        extension_map = {
-            'bm25': SparseOnly('bm25'),
-            'bm42': SparseOnly('bm42', use_gpu=use_gpu),
-            'ruri_small': DenseOnly("cl-nagoya/ruri-small-v2", use_gpu=use_gpu),
-            'ja_static': DenseOnly("hotchpotch/static-embedding-japanese", use_gpu=use_gpu),
-            'bm25_static': SparceDenseRRF('bm25_static', use_gpu=use_gpu),
-            'bm25_sbert': SparceDenseRRF('bm25_sbert', use_gpu=use_gpu),
-        }
-        return extension_map.get(strategy_name.lower())
+        strategy_name = strategy_name.lower()
+        if strategy_name == 'bm25':
+            return SparseOnly('bm25')
+        elif strategy_name == 'bm42':
+            return SparseOnly('bm42', use_gpu=use_gpu)
+        elif strategy_name == 'ruri_small':
+            return DenseOnly("cl-nagoya/ruri-small-v2", use_gpu=use_gpu)
+        elif strategy_name == 'ja_static':
+            return DenseOnly("hotchpotch/static-embedding-japanese", use_gpu=use_gpu)
+        elif strategy_name == 'bm25_static':
+            return SparceDenseRRF('bm25_static', use_gpu=use_gpu)
+        elif strategy_name == 'bm25_sbert':
+            return SparceDenseRRF('bm25_sbert', use_gpu=use_gpu)
+        return None
 
 
 class RAGStrategy(ABC):

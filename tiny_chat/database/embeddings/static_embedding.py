@@ -32,6 +32,8 @@ class StaticEmbedding:
             # model_kwargs={"file_name": "onnx/model_int8.onnx"},
             device=device, **kwargs
         )
+        if device.startswith('cuda'):
+            self.model.half()
         self.dimension = self.model.get_sentence_embedding_dimension()
 
     def _batch_process(
