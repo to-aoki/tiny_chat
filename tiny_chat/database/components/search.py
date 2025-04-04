@@ -30,8 +30,8 @@ def get_page_info_display(metadata: Dict) -> str:
 
 @functools.lru_cache(maxsize=32)
 def search_documents(
-        query: str, qdrant_manager, top_k: int = 10, filter_params_str: str = None, 
-        score_threshold=0.4, collection_name: str = None) -> List:
+        query: str, qdrant_manager, top_k: int = None, filter_params_str: str = None,
+        score_threshold=None, collection_name: str = None, logger=None) -> List:
     """
     ドキュメントを検索します（キャッシュ機能付き）
     注意: この関数を呼び出す前に、QdrantManagerを初期化する必要があります
@@ -56,11 +56,11 @@ def search_documents(
 
     results = qdrant_manager.query_points(
         query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold,
-        collection_name=collection_name)
+        collection_name=collection_name, logger=logger)
     return results
 
 
-def show_search_component(qdrant_manager):
+def show_search_component(qdrant_manager, logger=None):
     if "search_results" not in st.session_state:
         st.session_state.search_results = []
 
@@ -114,7 +114,7 @@ def show_search_component(qdrant_manager):
             current_collection = qdrant_manager.collection_name
             st.session_state.search_results = search_documents(
                 query, qdrant_manager, top_k=top_k, filter_params_str=filter_params_str, 
-                score_threshold=0., collection_name=current_collection)
+                score_threshold=0., collection_name=current_collection, logger=logger)
 
     # 結果の表示
     if st.session_state.search_results:

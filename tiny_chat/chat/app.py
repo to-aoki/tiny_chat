@@ -163,7 +163,7 @@ def toggle_rag_mode(logger):
 
 # キャッシュ可能な検索関数 - RAGモード専用
 @functools.lru_cache(maxsize=32)
-def cached_search_documents(prompt_content, logger, top_k=5):
+def cached_search_documents(prompt_content, logger):
     # search_documentsは外部関数なので、都度インポートして実行したRAGモードを確認
     # これによりサイドバー描画時の不要な呼び出しを防止
     if not st.session_state.rag_mode:
@@ -172,8 +172,8 @@ def cached_search_documents(prompt_content, logger, top_k=5):
     # RAGモードが有効な場合のみ検索関数をインポートして実行
     from tiny_chat.database.database import get_or_create_qdrant_manager
     from tiny_chat.database.components.search import search_documents
-    qdrant_manager = get_or_create_qdrant_manager(logger)
-    return search_documents(prompt_content, qdrant_manager=qdrant_manager, top_k=top_k, logger=logger)
+    qdrant_manager = get_or_create_qdrant_manager(logger=logger)
+    return search_documents(prompt_content, qdrant_manager=qdrant_manager, logger=logger)
 
 
 def show_chat_component(logger):
@@ -386,8 +386,11 @@ def show_chat_component(logger):
                     from tiny_chat.database.database import get_or_create_qdrant_manager
                     get_or_create_qdrant_manager(logger)
                     
-                    # 最新のユーザーメッセージで検索（キャッシュ関数を使用）
-                    search_results = cached_search_documents(prompt_content, top_k=5)
+                    # 最新のユーザーメッセージで検索
+                    search_results = cached_search_documents(prompt_content, logger)
+                    
+                    # 検索結果の状態をログに記録
+                    logger.info(f"RAG検索結果: {len(search_results) if search_results else 0}件")
 
                     if search_results:
                         # 検索結果を整形
@@ -473,7 +476,6 @@ def show_chat_component(logger):
                     # 既存のクライアントインスタンスを使用
                     client = st.session_state.openai_client
 
-                    # ストリーミングモードでリクエスト
                     response = client.chat.completions.create(
                         model=st.session_state.config["selected_model"],
                         messages=messages_for_api,
