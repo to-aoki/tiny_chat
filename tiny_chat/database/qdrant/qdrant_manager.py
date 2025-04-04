@@ -335,7 +335,8 @@ class QdrantManager:
         top_k: int = 5,
         score_threshold: float = 0.4,
         collection_name: Optional[str] = None,
-        filter_params: Optional[Dict[str, Any]] = None
+        filter_params: Optional[Dict[str, Any]] = None,
+        logger = None
     ) -> List[QueryResponse]:
         """
         クエリに基づいて文書を検索する (ハイブリッド検索)
@@ -382,6 +383,11 @@ class QdrantManager:
                 search_filter = models.Filter(
                     must=filter_conditions
                 )
+
+        if top_k is None:
+            top_k = self.top_k
+        if score_threshold is None:
+            score_threshold = self.score_threshold
 
         try:
             prefetch = self.strategy.prefetch(query, top_k)
@@ -435,6 +441,7 @@ class QdrantManager:
             return results
             
         except Exception as e:
+            logger.error(str(e))
             return []
 
     def set_collection_name(self, collection_name: str) -> None:
