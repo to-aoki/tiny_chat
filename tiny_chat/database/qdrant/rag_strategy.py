@@ -15,7 +15,7 @@ class RagStrategyFactory:
             return SparseOnly("bm25")
         elif strategy_name == "bm42":
             return SparseOnly("bm4", use_gpu=use_gpu)
-        elif strategy_name == "splide_ja":
+        elif strategy_name == "splade_ja":
             return SparseOnly("hotchpotch/japanese-splade-v2", use_gpu=use_gpu)
         elif strategy_name == "ruri_small":
             return DenseOnly("cl-nagoya/ruri-small-v2", use_gpu=use_gpu)
@@ -27,8 +27,8 @@ class RagStrategyFactory:
             return SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
         elif strategy_name == "bm25_sbert":
             return SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
-        elif strategy_name == "bm25_splide":
-            return SpaceRRF("bm25_splide", use_gpu=use_gpu)
+        elif strategy_name == "bm25_splade":
+            return SpaceRRF("bm25_splade", use_gpu=use_gpu)
         return None
 
 
@@ -160,9 +160,9 @@ class DenseOnly(RAGStrategy):
 
 
 class SpaceRRF(RAGStrategy):
-    def __init__(self, strategy='bm25_splide', use_gpu=False):
-        if strategy == 'bm25_splide':
-            self.sparse_vector_field_names = ["bm25", "splide"]
+    def __init__(self, strategy='bm25_splade', use_gpu=False):
+        if strategy == 'bm25_splade':
+            self.sparse_vector_field_names = ["bm25", "splade"]
             from tiny_chat.database.embeddings.splade_embedding import SpladeEmbedding
             self.models = [BM25TextEmbedding(), SpladeEmbedding(
                 model_name="hotchpotch/japanese-splade-v2", device='cuda' if use_gpu else 'cpu')]
