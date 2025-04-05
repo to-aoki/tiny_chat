@@ -32,6 +32,7 @@ class RagStrategyFactory:
         return None
 
 
+
 class RAGStrategy(ABC):
 
     def use_vector_name(self):
@@ -51,9 +52,6 @@ class RAGStrategy(ABC):
 
     def query(self, text=None):
         return None
-
-    def vector_size(self):
-        return 0
 
 
 class SparseOnly(RAGStrategy):
@@ -113,25 +111,23 @@ class DenseOnly(RAGStrategy):
         if strategy == "hotchpotch/static-embedding-japanese":
             self.model = StaticEmbedding(
                 model_name=strategy, device='cuda' if use_gpu else 'cpu')
-            self.size = self.model.dimension
         elif strategy == "cl-nagoya/ruri-small-v2":
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.model = SentenceTransformerEmbedding(
                 model_name=strategy, device='cuda' if use_gpu else 'cpu')
-            self.size = self.model.dimension
         elif strategy == "intfloat/multilingual-e5-large":
             from fastembed import TextEmbedding
-            self.model = TextEmbedding(model_name=strategy)
-            self.size = 1024
+            self.model = TextEmbedding(model_name=strategy, cache_dir="./multilingual-e5-large")
+            self.model.dimension = 1024  # FIXME patch!
         else:
             from fastembed import TextEmbedding
             self.model = TextEmbedding(model_name=strategy)
-            self.size = 512
+            self.model.dimension = 1024  # FIXME patch!
 
     def create_vector_config(self):
         return {
             self.dense_vector_field_name: models.VectorParams(
-                size=self.vector_size(),
+                size=self.model.dimension,
                 distance=models.Distance.COSINE,
             )
         }
@@ -154,9 +150,6 @@ class DenseOnly(RAGStrategy):
     def query(self, text=None):
         query_embedding = list(self.model.query_embed(text))[0]
         return query_embedding.tolist()
-
-    def vector_size(self):
-        return self.size
 
 
 class SpaceRRF(RAGStrategy):
@@ -202,7 +195,6 @@ class SpaceDenseRRF(RAGStrategy):
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
             self.emb_model = StaticEmbedding(device='cuda' if use_gpu else 'cpu')
-            self.size = self.emb_model.dimension
 
         elif strategy == 'bm25_sbert':
             self.sparse_vector_field_name = "sparse"
@@ -210,7 +202,6 @@ class SpaceDenseRRF(RAGStrategy):
             self.bm25_model = BM25TextEmbedding()
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(device='cuda' if use_gpu else 'cpu')
-            self.size = self.emb_model.dimension
 
         else:
             ValueError("unknown strategy: " + strategy)
@@ -219,7 +210,7 @@ class SpaceDenseRRF(RAGStrategy):
     def create_vector_config(self):
         return {
             self.dense_vector_field_name: models.VectorParams(
-                size=self.vector_size(),
+                size=self.emb_model.dimension,
                 distance=models.Distance.COSINE,
             )
         }
@@ -252,5 +243,3 @@ class SpaceDenseRRF(RAGStrategy):
     def query(self, text=None):
         return models.FusionQuery(fusion=models.Fusion.RRF)
 
-    def vector_size(self):
-        return self.size
