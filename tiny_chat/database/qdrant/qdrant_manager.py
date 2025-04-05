@@ -336,7 +336,6 @@ class QdrantManager:
         score_threshold: float = 0.4,
         collection_name: Optional[str] = None,
         filter_params: Optional[Dict[str, Any]] = None,
-        logger = None
     ) -> List[QueryResponse]:
         """
         クエリに基づいて文書を検索する (ハイブリッド検索)
@@ -389,60 +388,55 @@ class QdrantManager:
         if score_threshold is None:
             score_threshold = self.score_threshold
 
-        try:
-            prefetch = self.strategy.prefetch(query, top_k)
-            if prefetch:
-                response = self.client.query_points(
-                    collection_name=collection_name,
-                    prefetch=prefetch,
-                    query=self.strategy.query(query),
-                    limit=top_k,
-                    with_vectors=False,
-                    with_payload=True,
-                    query_filter=search_filter,
-                    # score_threshold=score_threshold # 効いてなさそう (qdrant-client 1.13.3 file)
-                )
-            else:
-                response = self.client.query_points(
-                    collection_name=collection_name,
-                    query=self.strategy.query(query),
-                    using=self.strategy.use_vector_name(),
-                    limit=top_k,
-                    with_vectors=False,
-                    with_payload=True,
-                    query_filter=search_filter,
-                    # score_threshold=score_threshold
-                )
+        prefetch = self.strategy.prefetch(query, top_k)
+        if prefetch:
+            response = self.client.query_points(
+                collection_name=collection_name,
+                prefetch=prefetch,
+                query=self.strategy.query(query),
+                limit=top_k,
+                with_vectors=False,
+                with_payload=True,
+                query_filter=search_filter,
+                # score_threshold=score_threshold # 効いてなさそう (qdrant-client 1.13.3 file)
+            )
+        else:
+            response = self.client.query_points(
+                collection_name=collection_name,
+                query=self.strategy.query(query),
+                using=self.strategy.use_vector_name(),
+                limit=top_k,
+                with_vectors=False,
+                with_payload=True,
+                query_filter=search_filter,
+                # score_threshold=score_threshold
+            )
 
-            # QueryResponseの場合、pointsアトリビュートを取得
-            if hasattr(response, 'points'):
-                points = response.points
-            else:
-                points = response
-            
-            # 結果をQueryResponseに変換
-            results = []
-            for point in points:
-                if self.file_path is not None and filter_params:
-                    not_match = False
-                    for key, value in filter_params.items():
-                        if isinstance(value, list):
-                            if point.payload[key] not in value:
-                                not_match = True
-                                break
-                        else:
-                            if point.payload[key] != value:
-                                not_match = True
-                                break
-                    if not_match:
-                        continue
-                if score_threshold < point.score:
-                    results.append(point)
-            return results
-            
-        except Exception as e:
-            logger.error(str(e))
-            return []
+        # QueryResponseの場合、pointsアトリビュートを取得
+        if hasattr(response, 'points'):
+            points = response.points
+        else:
+            points = response
+
+        # 結果をQueryResponseに変換
+        results = []
+        for point in points:
+            if self.file_path is not None and filter_params:
+                not_match = False
+                for key, value in filter_params.items():
+                    if isinstance(value, list):
+                        if point.payload[key] not in value:
+                            not_match = True
+                            break
+                    else:
+                        if point.payload[key] != value:
+                            not_match = True
+                            break
+                if not_match:
+                    continue
+            if score_threshold < point.score:
+                results.append(point)
+        return results
 
     def set_collection_name(self, collection_name: str) -> None:
         """
