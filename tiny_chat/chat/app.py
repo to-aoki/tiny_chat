@@ -16,9 +16,6 @@ from tiny_chat.utils.llm_utils import get_llm_client
 from tiny_chat.chat.sidebar import sidebar
 from tiny_chat.chat.copy_botton import copy_button
 
-# データベース関連の関数は使用時に都度インポート
-# from database import show_database_component, search_documents, get_or_create_qdrant_manager
-
 # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
 # RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
 import torch
@@ -173,7 +170,7 @@ def cached_search_documents(prompt_content, logger):
     from tiny_chat.database.database import get_or_create_qdrant_manager
     from tiny_chat.database.components.search import search_documents
     qdrant_manager = get_or_create_qdrant_manager(logger=logger)
-    return search_documents(prompt_content, qdrant_manager=qdrant_manager, logger=logger)
+    return search_documents(prompt_content, qdrant_manager=qdrant_manager)
 
 
 def show_chat_component(logger):

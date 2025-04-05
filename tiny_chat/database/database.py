@@ -8,6 +8,7 @@ from tiny_chat.database.components.registration import show_registration
 from tiny_chat.database.components.deletion import show_delete_component
 from tiny_chat.database.components.settings import show_settings
 
+
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
 
 # プロセスレベルでQdrantManagerインスタンスを保持するためのグローバル変数
