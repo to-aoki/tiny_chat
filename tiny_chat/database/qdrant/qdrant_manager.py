@@ -566,7 +566,6 @@ class QdrantManager:
                 
             return True
         except Exception as e:
-            print(f"コレクション削除エラー: {str(e)}")
             return False
 
     def delete_by_filter(self, filter_params: Dict[str, Any], collection_name: Optional[str] = None) -> int:
