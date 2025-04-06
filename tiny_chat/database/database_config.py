@@ -15,25 +15,13 @@ class DatabaseConfig:
         file_path: str = "./qdrant_data",
         server_url: str = None,
         api_key: str = None,
-        chunk_size: int = 1024,
-        chunk_overlap: int = 24,
-        top_k: int = 3,
-        score_threshold: float = 0.4,
-        selected_collection_name: str = "default",
-        rag_strategy: str = 'bm25_static',
-        ues_gpu: bool = False,
+        selected_collection_name = None,
         **kwargs
     ):
         self.file_path = file_path
         self.server_url = server_url
         self.api_key = api_key
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.top_k = top_k
-        self.score_threshold = score_threshold
         self.selected_collection_name = selected_collection_name
-        self.rag_strategy = rag_strategy
-        self.use_gpu = ues_gpu
 
     @classmethod
     def load(cls, file_path: str) -> 'DatabaseConfig':
@@ -70,13 +58,7 @@ class DatabaseConfig:
             'file_path': self.file_path,
             'server_url': self.server_url,
             'api_key': self.api_key,
-            'chunk_size': self.chunk_size,
-            'chunk_overlap': self.chunk_overlap,
-            'top_k': self.top_k,
-            'score_threshold': self.score_threshold,
             'selected_collection_name': self.selected_collection_name,
-            'rag_strategy': self.rag_strategy,
-            'use_gpu': self.use_gpu,
         }
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(config_data, f, ensure_ascii=False, indent=2)

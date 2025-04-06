@@ -632,13 +632,10 @@ class QdrantManager:
         self._ensure_collection_exists(collection_name)
         
         # 既存のコレクション情報があれば読み込む
-        try:
-            loaded_collection = Collection.load(collection_name, self)
-            if loaded_collection:
-                self.active_collection = loaded_collection
-        except Exception:
-            # 読み込みに失敗しても続行
-            pass
+        loaded_collection = Collection.load(collection_name, self)
+        if loaded_collection:
+            self.active_collection = loaded_collection
+
     
     def get_collections(self) -> List[str]:
         """
