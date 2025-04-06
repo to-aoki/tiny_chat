@@ -115,7 +115,7 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
 
     # 削除タブ
     with search_tabs[2]:
-        show_delete_component(_qdrant_manager, logger=logger)
+        show_manage_component(_qdrant_manager, logger=logger)
     # 設定タブ
     with search_tabs[3]:
         show_settings(logger=logger, config_file_path=CONFIG_FILE)
