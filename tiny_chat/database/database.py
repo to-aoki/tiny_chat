@@ -5,7 +5,7 @@ import streamlit as st
 from tiny_chat.database.database_config import DatabaseConfig
 from tiny_chat.database.components.search import show_search_component
 from tiny_chat.database.components.registration import show_registration
-from tiny_chat.database.components.deletion import show_delete_component
+from tiny_chat.database.components.manage import show_manage_component
 from tiny_chat.database.components.settings import show_settings
 
 
