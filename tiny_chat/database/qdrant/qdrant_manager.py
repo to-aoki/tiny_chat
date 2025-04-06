@@ -1,18 +1,26 @@
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
+
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models.models import QueryResponse
+
 from tiny_chat.database.embeddings.text_chunk import TextChunker
 from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
+
+# 型チェック時のみインポートして循環参照を避ける
+if TYPE_CHECKING:
+    from tiny_chat.database.qdrant.collection import Collection
 
 
 class QdrantManager:
     """
     Qdrantベクターデータベースとの連携を管理するクラス
+    Collectionインスタンスを活用して各コレクションの設定を管理する
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         collection_name: str = "documents",
         file_path: str = "./qdrant_data",
         server_url: Optional[str] = None,
@@ -25,18 +33,35 @@ class QdrantManager:
         use_gpu: Optional[bool] = False,
         **kwargs
     ):
+        """
+        QdrantManagerの初期化
 
+        Args:
+            collection_name: 初期コレクション名
+            file_path: Qdrantのデータファイルパス
+            server_url: QdrantサーバーのURL（指定した場合はサーバー接続モード）
+            api_key: Qdrantサーバーのアクセスキー
+            chunk_size: テキストチャンクの最大サイズ
+            chunk_overlap: テキストチャンクのオーバーラップ
+            top_k: デフォルトの検索結果上位件数
+            score_threshold: デフォルトのスコアしきい値
+            rag_strategy: デフォルトのRAG戦略
+            use_gpu: GPUを使用するかどうか
+            **kwargs: その他の引数
+        """
+        # 循環インポートを避けるために遅延インポート
+        from tiny_chat.database.qdrant.collection import Collection
+        
         selected_collection_name = kwargs.get("selected_collection_name", None)
         if selected_collection_name is not None:
             collection_name = selected_collection_name
 
-        self.collection_name = collection_name
-        self.top_k = top_k
-        self.score_threshold = score_threshold
-
+        # クライアント接続情報を設定
         self.server_url = None
         self.api_key = None
         self.file_path = None
+        
+        # Qdrantクライアントを初期化
         if server_url:
             # サーバーに接続
             self.client = QdrantClient(url=server_url, api_key=api_key)
@@ -51,15 +76,96 @@ class QdrantManager:
             self.client = QdrantClient(path=file_path)
             self.file_path = file_path
 
-        self.rag_strategy = rag_strategy
-        self.use_gpu = use_gpu
-        self.strategy = RagStrategyFactory.get_strategy(
-            strategy_name=rag_strategy, use_gpu=use_gpu)
-        self._ensure_collection_exists()
-        self.chunker = TextChunker(
-            chunk_size=chunk_size,
+        # RAG戦略を初期化
+        self._strategy = RagStrategyFactory.get_strategy(
+            strategy_name=rag_strategy, 
+            use_gpu=use_gpu
+        )
+        
+        # チャンカーを初期化
+        self._chunker = TextChunker(
+            chunk_size=chunk_size, 
             chunk_overlap=chunk_overlap
         )
+        
+        # 現在アクティブなコレクション
+        self.active_collection = Collection(
+            collection_name=collection_name,
+            qdrant_manager=self,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            top_k=top_k,
+            score_threshold=score_threshold,
+            rag_strategy=rag_strategy,
+            use_gpu=use_gpu
+        )
+        
+        # コレクションの存在を確認
+        self._ensure_collection_exists()
+
+        # 既存のコレクション情報があれば読み込む
+        self._load_collection_info()
+
+    def _load_collection_info(self):
+        """
+        既存のコレクション情報がある場合は読み込む
+        """
+        # 循環インポートを避けるために遅延インポート
+        from tiny_chat.database.qdrant.collection import Collection
+        
+        try:
+            # collection_descriptionsコレクションが存在するか確認
+            collections = self.client.get_collections().collections
+            collection_names = [c.name for c in collections]
+            
+            if "collection_descriptions" in collection_names:
+                # 現在のコレクション名を保存
+                current_collection_name = self.active_collection.collection_name
+                
+                # 情報を読み込み
+                loaded_collection = Collection.load(current_collection_name, self)
+                
+                # 情報が存在する場合は更新
+                if loaded_collection:
+                    self.active_collection = loaded_collection
+        except Exception:
+            # エラーが発生しても処理を続行
+            pass
+
+    @property
+    def collection_name(self) -> str:
+        """現在アクティブなコレクション名"""
+        return self.active_collection.collection_name
+
+    @property
+    def top_k(self) -> int:
+        """現在のtop_k設定"""
+        return self.active_collection.top_k
+
+    @property
+    def score_threshold(self) -> float:
+        """現在のscore_threshold設定"""
+        return self.active_collection.score_threshold
+
+    @property
+    def rag_strategy(self) -> str:
+        """現在のRAG戦略名"""
+        return self.active_collection.rag_strategy
+
+    @property
+    def use_gpu(self) -> bool:
+        """GPUを使用するかどうか"""
+        return self.active_collection.use_gpu
+
+    @property
+    def strategy(self):
+        """現在のRAG戦略オブジェクト"""
+        return self._strategy
+
+    @property
+    def chunker(self) -> TextChunker:
+        """テキストチャンカー"""
+        return self._chunker
 
     def is_need_reconnect(
         self,
@@ -67,7 +173,19 @@ class QdrantManager:
         server_url: Optional[str] = None,
         api_key: Optional[str] = None,
         **kwargs
-    ):
+    ) -> bool:
+        """
+        接続の再確立が必要かどうかを確認する
+
+        Args:
+            file_path: 新しいファイルパス
+            server_url: 新しいサーバーURL
+            api_key: 新しいAPIキー
+            **kwargs: その他の引数
+
+        Returns:
+            bool: 再接続が必要かどうか
+        """
         if server_url != self.server_url:
             return True
         if self.server_url is not None and api_key != self.api_key:
@@ -87,30 +205,73 @@ class QdrantManager:
         use_gpu: Optional[bool] = None,
         **kwargs
     ):
+        """
+        設定を更新する
+
+        Args:
+            collection_name: 新しいコレクション名
+            chunk_size: 新しいチャンクサイズ
+            chunk_overlap: 新しいチャンクオーバーラップ
+            top_k: 新しいtop_k
+            score_threshold: 新しいスコアしきい値
+            rag_strategy: 新しいRAG戦略
+            use_gpu: GPUを使用するかどうか
+            **kwargs: その他の引数
+        """
         selected_collection_name = kwargs.get("selected_collection_name", None)
         if selected_collection_name is not None:
             collection_name = selected_collection_name
+
+        # コレクション名の変更があれば切り替え
         if collection_name is not None and self.collection_name != collection_name:
             self.set_collection_name(collection_name=collection_name)
-        if (chunk_size is not None and self.chunker.chunk_size != chunk_size) or (
-                chunk_overlap is not None and self.chunker.chunk_overlap != chunk_overlap):
-            update_chunk_size = self.chunker.chunk_size if chunk_size is None else chunk_size
-            update_chunk_overlap = self.chunker.chunk_overlap if chunk_overlap is None else chunk_overlap
-            self.chunker = TextChunker(chunk_size=update_chunk_size, chunk_overlap=update_chunk_overlap)
-        self.top_k = top_k if top_k is not None else self.top_k
-        self.score_threshold = score_threshold if score_threshold is not None else self.score_threshold
-        if (use_gpu is not None and self.use_gpu != use_gpu) or (
-                rag_strategy is not None and self.rag_strategy != rag_strategy):
-            update_rag_strategy = self.rag_strategy if rag_strategy else self.rag_strategy
-            update_use_gpu = self.use_gpu if use_gpu else self.use_gpu
-            update_strategy = RagStrategyFactory.get_strategy(
-                strategy_name=update_rag_strategy, use_gpu=update_use_gpu
+
+        # チャンクサイズとオーバーラップを更新
+        if chunk_size is not None or chunk_overlap is not None:
+            new_chunk_size = chunk_size if chunk_size is not None else self._chunker.chunk_size
+            new_chunk_overlap = chunk_overlap if chunk_overlap is not None else self._chunker.chunk_overlap
+            self._chunker = TextChunker(
+                chunk_size=new_chunk_size, 
+                chunk_overlap=new_chunk_overlap
             )
-            if update_strategy is None:
-                raise ValueError(f"{update_rag_strategy} not found.")
-            self.strategy = update_strategy
-            self.rag_strategy = update_rag_strategy
-            self.use_gpu = update_use_gpu
+        
+        # RAG戦略を更新
+        if rag_strategy is not None or use_gpu is not None:
+            new_rag_strategy = rag_strategy if rag_strategy is not None else self.active_collection.rag_strategy
+            new_use_gpu = use_gpu if use_gpu is not None else self.active_collection.use_gpu
+            
+            # 戦略オブジェクトを更新
+            new_strategy = RagStrategyFactory.get_strategy(
+                strategy_name=new_rag_strategy, 
+                use_gpu=new_use_gpu
+            )
+            
+            if new_strategy is None:
+                raise ValueError(f"{new_rag_strategy} not found.")
+            
+            self._strategy = new_strategy
+            
+        # Collectionの設定を更新
+        current_collection = self.active_collection
+        
+        # 設定を更新
+        if top_k is not None:
+            current_collection.top_k = top_k
+        if score_threshold is not None:
+            current_collection.score_threshold = score_threshold
+        if rag_strategy is not None:
+            current_collection.rag_strategy = rag_strategy
+        if use_gpu is not None:
+            current_collection.use_gpu = use_gpu
+        if chunk_size is not None:
+            current_collection.chunker = self._chunker
+        
+        # 更新後にコレクション情報を保存（可能であれば）
+        try:
+            current_collection.save()
+        except Exception:
+            # 保存に失敗しても続行
+            pass
 
     def _ensure_collection_exists(self, collection_name: Optional[str] = None):
         """
@@ -119,7 +280,7 @@ class QdrantManager:
         Args:
             collection_name: コレクション名（Noneの場合はself.collection_nameを使用）
         """
-        # コレクション名を確定（引数がNoneの場合はインスタンス変数を使用）
+        # コレクション名を確定
         collection_name = collection_name if collection_name is not None else self.collection_name
 
         # コレクション一覧を取得
@@ -192,7 +353,7 @@ class QdrantManager:
 
     def query(
             self, collection_name: str, query_text: str,
-            top_k: int, score_threshold: float, **kwargs) -> List[QueryResponse]:
+            top_k: int = None, score_threshold: float = None, **kwargs) -> List[QueryResponse]:
         """
         コレクションにクエリを実行する
 
@@ -200,30 +361,36 @@ class QdrantManager:
             collection_name: コレクション名
             query_text: クエリテキスト
             top_k: 結果の数
+            score_threshold: スコアのしきい値
             **kwargs: その他のパラメータ
 
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
-
-        if top_k:
+        # デフォルト値を使用
+        if top_k is None:
             top_k = self.top_k
-        if score_threshold:
+        if score_threshold is None:
             score_threshold = self.score_threshold
 
         # コレクションの存在を確認
         self._ensure_collection_exists(collection_name)
         filter_params = kwargs.get("filter", None)
-        return self.query_points(query_text,
-                                 top_k=top_k,
-                                 score_threshold=score_threshold,
-                                 filter_params=filter_params,
-                                 collection_name=collection_name)
+        
+        return self.query_points(
+            query_text,
+            top_k=top_k,
+            score_threshold=score_threshold,
+            filter_params=filter_params,
+            collection_name=collection_name
+        )
 
-    def add_document(self,
-                     document: str,
-                     metadata: Dict[str, Any],
-                     collection_name: Optional[str] = None) -> str:
+    def add_document(
+        self,
+        document: str,
+        metadata: Dict[str, Any],
+        collection_name: Optional[str] = None
+    ) -> str:
         """
         単一の文書をチャンク分割してベクトル化しQdrantに追加する
 
@@ -239,10 +406,12 @@ class QdrantManager:
         result = self.add_documents([document], [metadata], collection_name)
         return result[0] if result else None
         
-    def add_documents(self,
-                      documents: List[str],
-                      metadata_list: List[Dict[str, Any]],
-                      collection_name: Optional[str] = None) -> List[str]:
+    def add_documents(
+        self,
+        documents: List[str],
+        metadata_list: List[Dict[str, Any]],
+        collection_name: Optional[str] = None
+    ) -> List[str]:
         """
         複数の文書をチャンク分割してベクトル化しQdrantに追加する
 
@@ -281,7 +450,7 @@ class QdrantManager:
                 original_ids.append(original_id)
             
             # 文書をチャンク分割
-            doc_chunks = self.chunker.split_text(doc)
+            doc_chunks = self._chunker.split_text(doc)
 
             # 各チャンクを処理
             for chunk_idx, chunk in enumerate(doc_chunks):
@@ -332,8 +501,8 @@ class QdrantManager:
     def query_points(
         self,
         query: str,
-        top_k: int = 5,
-        score_threshold: float = 0.4,
+        top_k: int = None,
+        score_threshold: float = None,
         collection_name: Optional[str] = None,
         filter_params: Optional[Dict[str, Any]] = None,
     ) -> List[QueryResponse]:
@@ -355,6 +524,12 @@ class QdrantManager:
         
         # コレクションの存在を確認
         self._ensure_collection_exists(collection_name)
+
+        # デフォルト値を設定
+        if top_k is None:
+            top_k = self.top_k
+        if score_threshold is None:
+            score_threshold = self.score_threshold
 
         # 検索フィルタを作成
         search_filter = None
@@ -382,11 +557,6 @@ class QdrantManager:
                 search_filter = models.Filter(
                     must=filter_conditions
                 )
-
-        if top_k is None:
-            top_k = self.top_k
-        if score_threshold is None:
-            score_threshold = self.score_threshold
 
         prefetch = self.strategy.prefetch(query, top_k)
         if prefetch:
@@ -445,8 +615,30 @@ class QdrantManager:
         Args:
             collection_name: 新しいコレクション名
         """
-        self.collection_name = collection_name
+        # 循環インポートを避けるために遅延インポート
+        from tiny_chat.database.qdrant.collection import Collection
+        
+        # 現在のコレクション設定を取得
+        current_collection = self.active_collection
+        
+        # すでに同じコレクション名の場合は何もしない
+        if current_collection.collection_name == collection_name:
+            return
+            
+        # 新しいコレクション名で設定を更新
+        current_collection.collection_name = collection_name
+        
+        # コレクションの存在を確認
         self._ensure_collection_exists(collection_name)
+        
+        # 既存のコレクション情報があれば読み込む
+        try:
+            loaded_collection = Collection.load(collection_name, self)
+            if loaded_collection:
+                self.active_collection = loaded_collection
+        except Exception:
+            # 読み込みに失敗しても続行
+            pass
     
     def get_collections(self) -> List[str]:
         """
@@ -555,8 +747,7 @@ class QdrantManager:
             
             # 削除後、現在のコレクション名が一致する場合はデフォルトに戻す
             if self.collection_name == collection_name:
-                self.collection_name = "default"
-                self._ensure_collection_exists()
+                self.set_collection_name("default")
                 
             return True
         except Exception as e:
@@ -614,7 +805,29 @@ class QdrantManager:
 
         return result.operation_id
 
+    def get_active_collection(self):
+        """
+        現在アクティブなコレクションを取得する
 
+        Returns:
+            Collection: 現在アクティブなコレクションオブジェクト
+        """
+        return self.active_collection
+    
+    def set_active_collection(self, collection) -> None:
+        """
+        アクティブなコレクションを設定する
+
+        Args:
+            collection: 新しいアクティブコレクション
+        """
+        self.active_collection = collection
+        
+        # コレクションの存在を確認
+        self._ensure_collection_exists(collection.collection_name)
+
+
+# 実行時にのみ実行されるコード
 if __name__ == "__main__":
     import argparse
     import time
@@ -637,7 +850,10 @@ if __name__ == "__main__":
     start_time = time.time()
     manager = QdrantManager(
         collection_name="test",
-        rag_strategy=args.strategy, use_gpu=args.use_gpu, path="./qdrant_test_data")
+        rag_strategy=args.strategy, 
+        use_gpu=args.use_gpu, 
+        file_path="./qdrant_test_data"
+    )
 
     manager.delete_collection("test")
     manager.set_collection_name("test")
@@ -703,3 +919,18 @@ if __name__ == "__main__":
         print(f"  {i+1}. スコア: {result.score:.4f}")
         print(f"     文書: {result.payload.get('text')}")
         print(f"     メタデータ: {', '.join([f'{k}={v}' for k, v in result.payload.items() if k != 'text'])}")
+    
+    # コレクション情報を保存
+    print("\n=== コレクション情報の保存 ===")
+    manager.active_collection.description = "テスト用コレクションです"
+    manager.active_collection.save()
+    
+    # 別のコレクションに切り替え
+    print("\n=== コレクション切り替え ===")
+    manager.set_collection_name("another_test")
+    print(f"現在のコレクション名: {manager.collection_name}")
+    
+    # 元のコレクションを読み込み
+    print("\n=== コレクション情報の読み込み ===")
+    manager.set_collection_name("test")
+    print(f"コレクション説明: {manager.active_collection.description}")
