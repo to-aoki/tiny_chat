@@ -110,6 +110,8 @@ class ModelManager:
 
             # モデル一覧を取得
             models = openai_client.models.list()
+            if models.data is None:
+                return [], True
             model_ids = [model.id for model in models.data]
 
             if model_ids:
