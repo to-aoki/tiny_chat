@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 
-def _delete_sources(qdrant_manager, logger):
+def _manage_sources(qdrant_manager, logger):
     # コレクション名の入力
     collection_name = st.text_input(
         "コレクション名",
@@ -101,7 +101,7 @@ def _delete_sources(qdrant_manager, logger):
                         logger.error(f"削除処理エラー: {str(e)}")
 
 
-def _delete_collections(qdrant_manager, logger):
+def _manage_collections(qdrant_manager, logger):
     # 利用可能なコレクション一覧を取得
     collections = qdrant_manager.get_collections()
 
@@ -240,8 +240,8 @@ def show_delete_component(qdrant_manager, logger):
     
     # ソースタブ
     with data_management_tabs[0]:
-        _delete_sources(qdrant_manager, logger)
+        _manage_sources(qdrant_manager, logger)
 
     # コレクションタブ
     with data_management_tabs[1]:
-        _delete_collections(qdrant_manager, logger)
+        _manage_collections(qdrant_manager, logger)
