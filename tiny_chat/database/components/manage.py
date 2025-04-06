@@ -233,7 +233,7 @@ def _manage_collections(qdrant_manager, logger):
                             logger.error(f"コレクション削除エラー: {str(e)}")
 
 
-def show_delete_component(qdrant_manager, logger):
+def show_manage_component(qdrant_manager, logger):
 
     # タブを作成
     data_management_tabs = st.tabs(["ソース", "コレクション"])
