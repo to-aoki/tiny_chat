@@ -82,7 +82,7 @@ def get_or_create_qdrant_manager(
                         raise e
             else:
                 try:
-                    _qdrant_manager.set_collection_name(collection_name=db_config.collection_name)
+                    _qdrant_manager.set_collection_name(collection_name=db_config.selected_collection_name)
                 except Exception as e:
                     if logger:
                         logger.error(f"QdrantManagerの情報更新に失敗しました: {str(e)}")
