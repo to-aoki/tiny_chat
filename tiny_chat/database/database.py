@@ -100,7 +100,7 @@ def get_or_create_qdrant_manager(
 @st.fragment
 def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
     # 検索と文書登録のタブを作成
-    search_tabs = st.tabs(["🔍 検索", "📁 登録", "🪣 管理", "⚙️ 設定"])
+    search_tabs = st.tabs(["🔍 検索", "📁 登録", "📚 管理", "⚙️ 設定"])
 
     # QdrantManagerを使用
     _qdrant_manager = get_or_create_qdrant_manager(logger)
