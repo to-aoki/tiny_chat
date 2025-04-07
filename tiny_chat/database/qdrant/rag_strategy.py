@@ -29,8 +29,9 @@ class RagStrategyFactory:
             return SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
         elif strategy_name == "bm25_splade":
             return SpaceRRF("bm25_splade", use_gpu=use_gpu)
+        else:
+            return NoopRAGStrategy()
         return None
-
 
 
 class RAGStrategy(ABC):
@@ -39,19 +40,24 @@ class RAGStrategy(ABC):
         return None
 
     def create_vector_config(self):
-        return None
+        return {}
 
     def create_sparse_vectors_config(self):
-        return None
+        return {}
 
     def vector(self, text):
         return {}
 
-    def prefetch(self, text):
+    def prefetch(self, text, top_k: int = 0):
         return []
 
     def query(self, text=None):
         return None
+
+
+class NoopRAGStrategy(RAGStrategy):
+    def __init__(self):
+        pass
 
 
 class SparseOnly(RAGStrategy):
@@ -71,10 +77,6 @@ class SparseOnly(RAGStrategy):
         self.strategy = strategy
         self.sparse_vector_field_name = "sparse"
 
-
-    def create_vector_config(self):
-        return {}
-
     def use_vector_name(self):
         return self.sparse_vector_field_name
 
@@ -91,8 +93,6 @@ class SparseOnly(RAGStrategy):
             self.sparse_vector_field_name: sparse_embedding.as_object(),
         }
 
-    def prefetch(self, text, top_k):
-        return []
 
     def query(self, text=None):
         query_embedding = list(self.model.query_embed(text))[0]
@@ -135,17 +135,11 @@ class DenseOnly(RAGStrategy):
     def use_vector_name(self):
         return self.dense_vector_field_name
 
-    def create_sparse_vectors_config(self):
-        return {}
-
     def vector(self, text):
         dense_embedding = list(self.model.embed(text))[0]
         return {
             self.dense_vector_field_name: dense_embedding.tolist()
         }
-
-    def prefetch(self, text, top_k):
-        return []
 
     def query(self, text=None):
         query_embedding = list(self.model.query_embed(text))[0]
@@ -162,9 +156,6 @@ class SpaceRRF(RAGStrategy):
         else:
             ValueError("unknown strategy: " + strategy)
         self.strategy = strategy
-
-    def create_vector_config(self):
-        return {}
 
     def _get_embeddings(self, text):
         return [list(model.embed(text))[0] for model in self.models]

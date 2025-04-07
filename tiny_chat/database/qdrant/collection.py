@@ -1,4 +1,5 @@
 from typing import Optional
+from tiny_chat.database.qdrant.rag_strategy import NoopRAGStrategy
 
 
 class Collection:
@@ -12,7 +13,7 @@ class Collection:
 
     def __init__(
         self,
-        collection_name: str = "documents",
+        collection_name: str = "defaults",
         description: str = "Default documents",
         chunk_size: Optional[int] = 1024,
         chunk_overlap: Optional[int] = 24,
@@ -20,6 +21,7 @@ class Collection:
         score_threshold: float = 0.4,
         rag_strategy: Optional[str] = "bm25_static",
         use_gpu: Optional[bool] = False,
+        **kwargs
     ):
         """
         コレクションの初期化
@@ -58,8 +60,9 @@ class Collection:
         if qdrant_manager is None:
             raise ValueError("QdrantManagerが設定されていません")
 
+        current_strategy = qdrant_manager.rag_strategy
+        qdrant_manager.rag_strategy = NoopRAGStrategy()
         qdrant_manager.ensure_collection_exists(self.STORED_COLLECTION_NAME)
-        qdrant_manager.ensure_collection_exists(self.collection_name)
 
         # コレクション情報をメタデータとして保存
         qdrant_manager.add_document(
@@ -76,6 +79,9 @@ class Collection:
             },
             use_chunker=False
         )
+        qdrant_manager.rag_strategy = current_strategy
+        qdrant_manager.ensure_collection_exists(self.collection_name)
+
 
     @classmethod
     def load(cls, collection_name: str, qdrant_manager=None):
@@ -118,3 +124,9 @@ class Collection:
             use_gpu=payload.get("use_gpu", False)
         )
 
+    @classmethod
+    def ensure_collection_descriptions_exists(cls, qdrant_manager):
+        current_strategy = qdrant_manager.rag_strategy
+        qdrant_manager.rag_strategy = NoopRAGStrategy()
+        qdrant_manager.ensure_collection_exists(cls.STORED_COLLECTION_NAME)
+        qdrant_manager.rag_strategy = current_strategy
