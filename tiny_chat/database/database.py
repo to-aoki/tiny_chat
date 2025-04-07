@@ -41,19 +41,20 @@ def get_or_create_qdrant_manager(
         import threading
         _qdrant_lock = threading.Lock()
 
+    if "db_config" not in st.session_state:
+        # 外部設定ファイルから設定を読み込む
+        db_config = DatabaseConfig.load(config_file_path)
+        logger.info(f"DB設定ファイルを読み込みました: {config_file_path}")
+        # セッション状態に設定オブジェクトを初期化
+        st.session_state.db_config = db_config
+        logger.info("設定オブジェクトをセッション状態に初期化しました")
+
     # ロックを取得して排他制御
     with _qdrant_lock:
         # プロセスレベルでQdrantManagerがまだ初期化されていない場合は初期化
         if _qdrant_manager is None:
             with st.spinner("データベースを初期化中..."):
-                if "db_config" not in st.session_state:
-                    # 外部設定ファイルから設定を読み込む
-                    db_config = DatabaseConfig.load(config_file_path)
-                    logger.info(f"DB設定ファイルを読み込みました: {config_file_path}")
-                    # セッション状態に設定オブジェクトを初期化
-                    st.session_state.db_config = db_config
-                    logger.info("設定オブジェクトをセッション状態に初期化しました")
-                    from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
+                from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
 
                 if logger:
                     logger.info("QdrantManagerを初期化しています...")
