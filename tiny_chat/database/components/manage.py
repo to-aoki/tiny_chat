@@ -111,6 +111,8 @@ def _manage_collections(qdrant_manager, logger):
     else:
         from tiny_chat.database.qdrant.collection import Collection
 
+        Collection.ensure_collection_descriptions_exists(qdrant_manager=qdrant_manager)
+
         # コレクション情報を表示
         st.write(f"利用可能なコレクション: {len(collections)}個")
 
@@ -121,7 +123,7 @@ def _manage_collections(qdrant_manager, logger):
 
             while True:
                 batch, next_offset = qdrant_manager.client.scroll(
-                    collection_name="collection_descriptions",
+                    collection_name=Collection.STORED_COLLECTION_NAME,
                     limit=100,
                     offset=offset,
                     with_payload=True,
@@ -366,19 +368,13 @@ def _manage_collections(qdrant_manager, logger):
                     try:
                         # Collection.STORED_COLLECTION_NAMEを使用して適切なコレクション名を指定
                         from tiny_chat.database.qdrant.collection import Collection
-                        metadata = {"collection_name": update_collection}
-                        
+                        target_collection = Collection.load(
+                            collection_name=update_collection, qdrant_manager=qdrant_manager)
                         # 既存のエントリを削除
                         filter_params = {"collection_name": update_collection}
                         qdrant_manager.delete_by_filter(filter_params, collection_name=Collection.STORED_COLLECTION_NAME)
-                        
-                        # 新しい説明を追加
-                        result = qdrant_manager.add_document(
-                            document=new_description, 
-                            metadata=metadata,
-                            collection_name=Collection.STORED_COLLECTION_NAME,
-                            use_chunker=False
-                        )
+                        target_collection.description = new_collection_description
+                        target_collection.save(qdrant_manager=qdrant_manager)
                         st.success(f"コレクション '{update_collection}' の説明を更新しました")
                         # 更新後に画面を更新して表示を最新化
                         st.rerun()
@@ -386,9 +382,6 @@ def _manage_collections(qdrant_manager, logger):
                     except Exception as e:
                         st.error(f"説明の更新中にエラーが発生しました: {str(e)}")
                         logger.error(f"コレクション説明更新エラー: {str(e)}")
-
-        # 削除機能
-        st.divider()
 
         # コレクションの選択（固定キーを使用）
         selected_collection = st.selectbox(

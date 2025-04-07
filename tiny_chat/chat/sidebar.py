@@ -151,6 +151,7 @@ def sidebar(config_file_path, logger):
                 st.info(
                     f"選択したモデル '{old_model}' は新しいサーバーでは利用できません。"
                     f"'{selected_model}' に変更されました。")
+                
         # APIキーだけ変更された場合
         elif api_key_changed:
             logger.info("APIキー変更に伴いモデルリストを更新中...")

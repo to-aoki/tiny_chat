@@ -5,6 +5,7 @@ from qdrant_client.http import models
 from qdrant_client.http.models.models import QueryResponse
 from tiny_chat.database.embeddings.text_chunk import TextChunker
 from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
+from tiny_chat.database.qdrant.collection import Collection
 
 
 class QdrantManager:
@@ -152,7 +153,7 @@ class QdrantManager:
             Any: コレクション情報
         """
         collections = self.client.get_collections().collections
-        collection_names = [c.name for c in collections]
+        collection_names = [c.name for c in collections if c != Collection.STORED_COLLECTION_NAME]
         if collection_name not in collection_names:
             return None
 
@@ -443,11 +444,11 @@ class QdrantManager:
                 not_match = False
                 for key, value in filter_params.items():
                     if isinstance(value, list):
-                        if point.payload[key] not in value:
+                        if value not in point.payload[key]:
                             not_match = True
                             break
                     else:
-                        if point.payload[key] != value:
+                        if value != point.payload[key]:
                             not_match = True
                             break
                 if not_match:
@@ -711,11 +712,11 @@ if __name__ == "__main__":
     
     # フィルタリングテスト
     print("\n=== フィルタリングテスト ===")
-    query = "観光が楽しめる都市は？"
+    query = ""
     filter_params = {"region": "関西"}
     
     print(f"クエリ: {query}, フィルタ: {filter_params}")
-    results = manager.query_points(query, top_k=3, filter_params=filter_params, score_threshold=0.)
+    results = manager.query_points(query, top_k=3, filter_params=filter_params, score_threshold=-1)
 
     print(manager.get_sources())
 

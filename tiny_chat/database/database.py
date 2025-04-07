@@ -72,9 +72,12 @@ def get_or_create_qdrant_manager(
                         if logger:
                             logger.info("QdrantManagerを再初期化しています...")
                         from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
+                        from tiny_chat.database.qdrant.collection import Collection
                         _qdrant_manager = QdrantManager(
                             **db_config.__dict__
                         )
+                        collection = Collection(**db_config.__dict__)
+                        collection.save(qdrant_manager=_qdrant_manager)
                         if logger:
                             logger.info("QdrantManagerの再初期化が完了しました")
                     except Exception as e:
