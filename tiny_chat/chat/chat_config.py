@@ -17,6 +17,7 @@ class ChatConfig:
         context_length: int = 1000,
         uri_processing: bool = True,
         is_azure: bool = False,
+        session_only_mode: bool = False,
         **kwargs
     ):
         self.server_url = server_url
@@ -27,6 +28,7 @@ class ChatConfig:
         self.context_length = context_length
         self.uri_processing = uri_processing
         self.is_azure = is_azure
+        self.session_only_mode = session_only_mode
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -59,6 +61,10 @@ class ChatConfig:
         Returns:
             bool: 保存が成功したかどうか
         """
+        # セッションのみモードが有効な場合はファイル保存しない
+        if self.session_only_mode:
+            return True
+            
         try:
             config_data = {
                 'server_url': self.server_url,
@@ -68,7 +74,8 @@ class ChatConfig:
                 'message_length': self.message_length,
                 'context_length': self.context_length,
                 'uri_processing': self.uri_processing,
-                'is_azure': self.is_azure
+                'is_azure': self.is_azure,
+                'session_only_mode': self.session_only_mode
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:
