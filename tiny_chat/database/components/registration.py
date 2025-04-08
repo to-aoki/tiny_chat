@@ -8,6 +8,8 @@ import streamlit as st
 import pandas as pd
 
 from tiny_chat.utils.file_processor import process_file
+from tiny_chat.database.qdrant.collection import Collection
+
 
 SUPPORT_EXTENSIONS = ['.pdf', '.xlsx', '.docx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
 
@@ -66,7 +68,7 @@ def process_directory(directory_path: str,
     return results
 
 
-def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict], qdrant_manager) -> List[str]:
+def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict], qdrant_manager, collection_name: str = None) -> List[str]:
     """
     テキストとメタデータをQdrantに追加します
     同じソース（ファイル名）が既に存在する場合は、削除してから追加します
@@ -87,7 +89,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict], qdrant_ma
             sources_to_add.add(metadata["source"])
 
     # 既存のソースと照合し、重複があれば削除
-    existing_sources = qdrant_manager.get_sources()
+    existing_sources = qdrant_manager.get_sources(collection_name=collection_name)
     for source in sources_to_add:
         if source in existing_sources:
             # ソースに関連するデータを削除
@@ -108,7 +110,7 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict], qdrant_ma
             all_metadatas.append(page_metadata)
 
     # Qdrantに追加
-    added_ids = qdrant_manager.add_documents(all_texts, all_metadatas)
+    added_ids = qdrant_manager.add_documents(all_texts, all_metadatas, collection_name=collection_name)
     return added_ids
 
 
@@ -185,11 +187,20 @@ def show_registration(
                     if texts:
                         # コレクション名を設定して処理
                         if collection_name != qdrant_manager.collection_name:
-                            # コレクションを取得または作成
-                            qdrant_manager.get_collection(collection_name)
+                            collection = Collection(
+                                collection_name=collection_name,
+                                chunk_size=qdrant_manager.chunk_size,
+                                chunk_overlap=qdrant_manager.chunk_overlap,
+                                top_k=qdrant_manager.top_k,
+                                score_threshold=qdrant_manager.score_threshold,
+                                rag_strategy=qdrant_manager.rag_strategy,
+                                use_gpu=qdrant_manager.use_gpu,
+                            )
+                            collection.save(qdrant_manager=qdrant_manager)
 
                         # Qdrantに追加
-                        added_ids = add_files_to_qdrant(texts, metadatas, qdrant_manager)
+                        added_ids = add_files_to_qdrant(
+                            texts, metadatas, qdrant_manager, collection_name=collection_name)
 
                         # 結果表示
                         st.success(
@@ -256,11 +267,20 @@ def show_registration(
 
                         # コレクション名を設定して処理
                         if collection_name != qdrant_manager.collection_name:
-                            # コレクションを取得または作成
-                            qdrant_manager.get_collection(collection_name)
+                            collection = Collection(
+                                collection_name=collection_name,
+                                chunk_size=qdrant_manager.chunk_size,
+                                chunk_overlap=qdrant_manager.chunk_overlap,
+                                top_k=qdrant_manager.top_k,
+                                score_threshold=qdrant_manager.score_threshold,
+                                rag_strategy=qdrant_manager.rag_strategy,
+                                use_gpu=qdrant_manager.use_gpu,
+                            )
+                            collection.save(qdrant_manager=qdrant_manager)
 
                         # Qdrantに追加
-                        added_ids = add_files_to_qdrant(texts, metadatas, qdrant_manager)
+                        added_ids = add_files_to_qdrant(
+                            texts, metadatas, qdrant_manager, collection_name=collection_name)
 
                         # 結果表示
                         st.success(

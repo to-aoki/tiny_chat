@@ -60,6 +60,8 @@ class QdrantManager:
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap
         )
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
 
     def is_need_reconnect(
         self,
