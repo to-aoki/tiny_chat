@@ -43,13 +43,16 @@ FILE_TYPES = {
 }
 
 
-def initialize_session_state(config_file_path=CONFIG_FILE, logger=None):
+def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_only_mode=False):
     if "config" not in st.session_state:
         # 外部設定ファイルから設定を読み込む
         file_config = ChatConfig.load(config_file_path)
         if logger is not None:
             logger.info(f"設定ファイルを読み込みました: {config_file_path}")
 
+        # サーバーモードが指定されていれば上書き
+        file_config.session_only_mode = session_only_mode
+        
         # セッション状態に設定オブジェクトを初期化
         st.session_state.config = {
             "server_url": file_config.server_url,
@@ -60,6 +63,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None):
             "context_length": file_config.context_length,
             "uri_processing": file_config.uri_processing,
             "is_azure": file_config.is_azure,
+            "session_only_mode": file_config.session_only_mode,
         }
 
     # その他のセッション状態を初期化
@@ -583,12 +587,17 @@ def show_chat_component(logger):
                 st.rerun()  # 再描画
 
 
-def run_chat_app():
+def run_chat_app(server_mode=False):
     LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
+    
+    # サーバーモードが有効な場合はログに記録
+    if server_mode:
+        LOGGER.info("サーバーモードで起動しました。設定はファイルに保存されません。")
+    
     st.set_page_config(page_title="チャット", layout="wide")
 
     # セッション状態の初期化
-    initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER)
+    initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER, session_only_mode=server_mode)
 
     # サイドバー
     with st.sidebar:

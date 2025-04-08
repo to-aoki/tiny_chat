@@ -103,8 +103,16 @@ def get_or_create_qdrant_manager(
 
 @st.fragment
 def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
+
+    mode = ["🔍 検索", "📁 登録", "📚 管理"]
+
+    is_server_mode = True
+    if st.session_state.get("config") is None or st.session_state.get("config").get("session_only_mode") is not True:
+        mode.append("⚙️ 設定")
+        is_server_mode = False
+
     # 検索と文書登録のタブを作成
-    search_tabs = st.tabs(["🔍 検索", "📁 登録", "📚 管理", "⚙️ 設定"])
+    search_tabs = st.tabs(mode)
 
     # QdrantManagerを使用
     _qdrant_manager = get_or_create_qdrant_manager(logger)
@@ -120,9 +128,11 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
     # 削除タブ
     with search_tabs[2]:
         show_manage_component(_qdrant_manager, logger=logger)
-    # 設定タブ
-    with search_tabs[3]:
-        show_settings(logger=logger, config_file_path=CONFIG_FILE)
+
+    if not is_server_mode:
+        # 設定タブ
+        with search_tabs[3]:
+            show_settings(logger=logger, config_file_path=CONFIG_FILE)
 
 
 # 単独動作用LLMLL
