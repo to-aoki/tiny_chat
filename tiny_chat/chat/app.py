@@ -545,11 +545,16 @@ def show_chat_component(logger):
     if prompt:
         with st.spinner("応答中..."):
             # ファイルアップロードの処理
+            file_processed = False
             if prompt["files"]:
                 uploaded_file = prompt["files"][0]  # 先頭1件のみ処理
-                process_uploaded_file(uploaded_file)
-                st.stop()  # ファイル処理後に実行を中断（自動的にリロードされる）
+                file_processed = process_uploaded_file(uploaded_file)
+                # ファイル処理後、テキストがなければ再描画して終了
+                if not prompt.text:
+                    st.rerun()
+                    return
 
+            # テキストメッセージ処理（ファイルアップロードがあってもなくても続行）
             # メッセージ長チェック
             would_exceed, estimated_length, max_length = st.session_state.chat_manager.would_exceed_message_length(
                 prompt.text,
