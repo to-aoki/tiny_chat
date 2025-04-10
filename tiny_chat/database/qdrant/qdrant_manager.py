@@ -14,7 +14,7 @@ class QdrantManager:
     """
 
     def __init__(self,
-        collection_name: str = "documents",
+        collection_name: str = "default",
         file_path: str = "./qdrant_data",
         server_url: Optional[str] = None,
         api_key: Optional[str] = None,
