@@ -13,7 +13,7 @@ class Collection:
 
     def __init__(
         self,
-        collection_name: str = "defaults",
+        collection_name: str = "default",
         description: str = "Default documents",
         chunk_size: Optional[int] = 1024,
         chunk_overlap: Optional[int] = 24,
@@ -79,6 +79,8 @@ class Collection:
             },
             use_chunker=False
         )
+
+        # その後コレクションを作成
         qdrant_manager.rag_strategy = current_strategy
         qdrant_manager.ensure_collection_exists(self.collection_name)
 

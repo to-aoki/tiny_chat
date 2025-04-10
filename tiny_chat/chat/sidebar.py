@@ -315,11 +315,14 @@ def sidebar(config_file_path, logger):
             # コレクション一覧をQdrantManagerから取得
             available_collections = manager.get_collections()
 
-            # コレクションがなければデフォルトのものを表示
+            # コレクションがなければデフォルトを作成・表示
             if not available_collections:
                 available_collections = ["default"]
+                collection = Collection(collection_name="default")
+                collection.save(qdrant_manager=manager)
 
-            available_collections = [collection for collection in available_collections if collection != Collection.STORED_COLLECTION_NAME]
+            available_collections = [collection for collection in available_collections
+                                     if collection != Collection.STORED_COLLECTION_NAME]
 
             # コレクション選択の状態管理
             if "selected_collection" not in st.session_state:

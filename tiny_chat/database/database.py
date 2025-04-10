@@ -1,4 +1,5 @@
 import os
+import threading
 
 import streamlit as st
 
@@ -14,8 +15,14 @@ SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json'
 # プロセスレベルでQdrantManagerインスタンスを保持するためのグローバル変数
 _qdrant_manager = None
 
-# インスタンス生成のロックに使用
-_qdrant_lock = None
+
+@st.cache_resource
+def get_lock():
+    # インスタンス生成のロックに使用
+    return threading.Lock()
+
+
+my_lock = get_lock()
 
 # 設定ファイルのパス
 CONFIG_FILE = "database_config.json"
@@ -34,13 +41,6 @@ def get_or_create_qdrant_manager(
     Returns:
         QdrantManager: 初期化されたQdrantManagerオブジェクト
     """
-    global _qdrant_manager, _qdrant_lock
-
-    # ロックオブジェクトがなければ作成
-    if _qdrant_lock is None:
-        import threading
-        _qdrant_lock = threading.Lock()
-
     if "db_config" not in st.session_state:
         # 外部設定ファイルから設定を読み込む
         db_config = DatabaseConfig.load(config_file_path)
@@ -49,8 +49,9 @@ def get_or_create_qdrant_manager(
         st.session_state.db_config = db_config
         logger.info("設定オブジェクトをセッション状態に初期化しました")
 
-    # ロックを取得して排他制御
-    with _qdrant_lock:
+    global _qdrant_manager
+
+    with my_lock:
         # プロセスレベルでQdrantManagerがまだ初期化されていない場合は初期化
         if _qdrant_manager is None:
             with st.spinner("データベースを初期化中..."):
@@ -78,6 +79,7 @@ def get_or_create_qdrant_manager(
                         )
                         collection = Collection(**db_config.__dict__)
                         collection.save(qdrant_manager=_qdrant_manager)
+
                         if logger:
                             logger.info("QdrantManagerの再初期化が完了しました")
                     except Exception as e:
@@ -91,12 +93,13 @@ def get_or_create_qdrant_manager(
                     if logger:
                         logger.error(f"QdrantManagerの情報更新に失敗しました: {str(e)}")
                     raise e
-            try:
-                db_config.save(CONFIG_FILE)
-            except Exception as e:
-                if logger:
-                    logger.error(f"DB設定情報の保存に失敗しました: {str(e)}")
-                raise e
+    if reconnect:
+        try:
+            db_config.save(CONFIG_FILE)
+        except Exception as e:
+            if logger:
+                logger.error(f"DB設定情報の保存に失敗しました: {str(e)}")
+            raise e
 
     return _qdrant_manager
 
@@ -135,7 +138,7 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
             show_settings(logger=logger, config_file_path=CONFIG_FILE)
 
 
-# 単独動作用LLMLL
+# 単独動作用
 def run_database_app():
     import logging
     from tiny_chat.utils.logger import get_logger
