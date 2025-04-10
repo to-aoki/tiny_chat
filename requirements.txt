@@ -12,3 +12,5 @@ fastembed==0.6.0
 sudachidict_core
 sudachipy
 stopwordsiso
+torch
+sentence-transformers
