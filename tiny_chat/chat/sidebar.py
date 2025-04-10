@@ -5,7 +5,6 @@ from tiny_chat.utils.llm_utils import get_llm_client
 from tiny_chat.chat.chat_config import ChatConfig, ModelManager
 
 
-
 def sidebar(config_file_path, logger):
     st.header("設定")
 
@@ -77,14 +76,6 @@ def sidebar(config_file_path, logger):
             disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
         )
 
-        meta_prompt = st.text_area(
-            "メタプロンプト",
-            value=st.session_state.config["meta_prompt"],
-            height=150,
-            help="LLMへのsystem指示を入力してください",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
-
         message_length = st.number_input(
             "メッセージ長",
             min_value=1000,
@@ -123,6 +114,14 @@ def sidebar(config_file_path, logger):
 
         # APIキーの変更をチェック
         api_key_changed = api_key != st.session_state.config["api_key"]
+
+    meta_prompt = st.text_area(
+        "メタプロンプト",
+        value=st.session_state.config["meta_prompt"],
+        height=150,
+        help="LLMへのsystem指示を入力してください",
+        disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+    )
 
     if not server_mode:
         # いずれかの設定変更があった場合
@@ -190,95 +189,96 @@ def sidebar(config_file_path, logger):
                 st.error(error_msg)
                 st.session_state.openai_client = None
 
-    # 設定を反映ボタン
-    if st.button("設定を反映", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
-        logger.info("設定反映ボタンがクリックされました")
-        
-        # メタプロンプト、メッセージ長、コンテキスト長の変更を記録
-        settings_changed = False
-        
-        if meta_prompt != st.session_state.config["meta_prompt"]:
-            logger.info("メタプロンプトを更新しました")
-            st.session_state.config["meta_prompt"] = meta_prompt
-            settings_changed = True
-        if not server_mode:
-            if message_length != st.session_state.config["message_length"]:
-                logger.info(f"メッセージ長を更新: {message_length}")
-                st.session_state.config["message_length"] = message_length
+        # 設定を反映ボタン
+        if st.button("設定を反映", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
+            logger.info("設定反映ボタンがクリックされました")
+
+            # メタプロンプト、メッセージ長、コンテキスト長の変更を記録
+            settings_changed = False
+
+            if meta_prompt != st.session_state.config["meta_prompt"]:
+                logger.info("メタプロンプトを更新しました")
+                st.session_state.config["meta_prompt"] = meta_prompt
                 settings_changed = True
 
-            if context_length != st.session_state.config["context_length"]:
-                logger.info(f"コンテキスト長を更新: {context_length}")
-                st.session_state.config["context_length"] = context_length
+            if not server_mode:
+                if message_length != st.session_state.config["message_length"]:
+                    logger.info(f"メッセージ長を更新: {message_length}")
+                    st.session_state.config["message_length"] = message_length
+                    settings_changed = True
+
+                if context_length != st.session_state.config["context_length"]:
+                    logger.info(f"コンテキスト長を更新: {context_length}")
+                    st.session_state.config["context_length"] = context_length
+                    settings_changed = True
+
+            if uri_processing != st.session_state.config["uri_processing"]:
+                logger.info(f"URI処理設定を更新: {uri_processing}")
+                st.session_state.config["uri_processing"] = uri_processing
                 settings_changed = True
-            
-        if uri_processing != st.session_state.config["uri_processing"]:
-            logger.info(f"URI処理設定を更新: {uri_processing}")
-            st.session_state.config["uri_processing"] = uri_processing
-            settings_changed = True
 
-        # 設定をファイルに保存
-        config = ChatConfig(
-            server_url=server_url,
-            api_key=api_key,
-            selected_model=st.session_state.config["selected_model"],
-            meta_prompt=meta_prompt,
-            message_length=message_length,
-            context_length=context_length,
-            uri_processing=uri_processing,
-            is_azure=is_azure,
-            session_only_mode=server_mode
-        )
+            # 設定をファイルに保存
+            config = ChatConfig(
+                server_url=server_url,
+                api_key=api_key,
+                selected_model=st.session_state.config["selected_model"],
+                meta_prompt=meta_prompt,
+                message_length=message_length,
+                context_length=context_length,
+                uri_processing=uri_processing,
+                is_azure=is_azure,
+                session_only_mode=server_mode
+            )
 
-        if st.session_state.config["session_only_mode"]:
-            st.success("設定を更新しました (サーバーモード)")
-        elif config.save(config_file_path):
-            logger.info("設定をファイルに保存しました")
-            st.success("設定を更新し、ファイルに保存しました")
-        else:
-            logger.warning("設定ファイルへの保存に失敗しました")
-            st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
-            
-        if settings_changed or server_or_azure_changed or api_key_changed:
-            st.rerun()
+            if st.session_state.config["session_only_mode"]:
+                st.success("設定を更新しました (サーバーモード)")
+            elif config.save(config_file_path):
+                logger.info("設定をファイルに保存しました")
+                st.success("設定を更新し、ファイルに保存しました")
+            else:
+                logger.warning("設定ファイルへの保存に失敗しました")
+                st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
 
-        # モデルリスト更新ボタン
-        if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
-
-            # 現在の設定値を使用
-            current_server = st.session_state.config["server_url"]
-            current_api_key = st.session_state.config["api_key"]
-            current_is_azure = st.session_state.config["is_azure"]
-
-            try:
-                # モデルリストを再取得
-                models, api_success = ModelManager.fetch_available_models(
-                    current_server,
-                    current_api_key,
-                    st.session_state.openai_client,
-                    is_azure=current_is_azure
-                )
-
-                # 状態を更新
-                st.session_state.available_models = models
-                st.session_state.models_api_success = api_success
-
-                if not api_success:
-                    logger.warning("モデルリスト取得に失敗しました")
-                    st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
-
-                # APIクライアントの再初期化
-                st.session_state.openai_client = get_llm_client(
-                    server_url=current_server,
-                    api_key=current_api_key,
-                    is_azure=current_is_azure
-                )
-
+            if settings_changed or server_or_azure_changed or api_key_changed:
                 st.rerun()
-            except Exception as e:
-                error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
-                logger.error(error_msg)
-                st.error(error_msg)
+
+            # モデルリスト更新ボタン
+            if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
+
+                # 現在の設定値を使用
+                current_server = st.session_state.config["server_url"]
+                current_api_key = st.session_state.config["api_key"]
+                current_is_azure = st.session_state.config["is_azure"]
+
+                try:
+                    # モデルリストを再取得
+                    models, api_success = ModelManager.fetch_available_models(
+                        current_server,
+                        current_api_key,
+                        st.session_state.openai_client,
+                        is_azure=current_is_azure
+                    )
+
+                    # 状態を更新
+                    st.session_state.available_models = models
+                    st.session_state.models_api_success = api_success
+
+                    if not api_success:
+                        logger.warning("モデルリスト取得に失敗しました")
+                        st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
+
+                    # APIクライアントの再初期化
+                    st.session_state.openai_client = get_llm_client(
+                        server_url=current_server,
+                        api_key=current_api_key,
+                        is_azure=current_is_azure
+                    )
+
+                    st.rerun()
+                except Exception as e:
+                    error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
+                    logger.error(error_msg)
+                    st.error(error_msg)
 
     uploaded_json = st.file_uploader(
         "チャット履歴をインポート",
@@ -306,6 +306,7 @@ def sidebar(config_file_path, logger):
     if st.session_state.rag_mode:
         try:
             from tiny_chat.database.database import get_or_create_qdrant_manager
+            from tiny_chat.database.qdrant.collection import Collection
 
             # 検索用サイドバー設定
             st.sidebar.markdown("検索")
@@ -319,6 +320,8 @@ def sidebar(config_file_path, logger):
             # コレクションがなければデフォルトのものを表示
             if not available_collections:
                 available_collections = ["default"]
+
+            available_collections = [collection for collection in available_collections if collection != Collection.STORED_COLLECTION_NAME]
 
             # コレクション選択の状態管理
             if "selected_collection" not in st.session_state:
