@@ -122,6 +122,9 @@ def sidebar(config_file_path, logger):
         help="LLMへのsystem指示を入力してください",
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
+    if meta_prompt != st.session_state.config["meta_prompt"]:
+        logger.info("メタプロンプトを更新しました")
+        st.session_state.config["meta_prompt"] = meta_prompt
 
     if not server_mode:
         # いずれかの設定変更があった場合
@@ -195,11 +198,6 @@ def sidebar(config_file_path, logger):
 
             # メタプロンプト、メッセージ長、コンテキスト長の変更を記録
             settings_changed = False
-
-            if meta_prompt != st.session_state.config["meta_prompt"]:
-                logger.info("メタプロンプトを更新しました")
-                st.session_state.config["meta_prompt"] = meta_prompt
-                settings_changed = True
 
             if not server_mode:
                 if message_length != st.session_state.config["message_length"]:
