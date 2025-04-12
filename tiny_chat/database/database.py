@@ -149,7 +149,6 @@ def run_database_app():
     import torch
     torch.classes.__path__ = []
 
-    st.set_page_config(page_title="データベース", layout="wide")
     # ロガーの初期化
     LOGGER = get_logger(log_dir="logs", log_level=logging.INFO)
     LOGGER.info("単独データベースアプリケーションを起動しました")

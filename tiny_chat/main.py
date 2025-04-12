@@ -13,10 +13,14 @@ def main():
     # データベースモードかチャットモードかを判定
     if args.database:
         # データベースモード
+        import streamlit as st
+        st.set_page_config(page_title="データベース", layout="wide")  # stの他コンポーネントの利用都合が不透明なので真っ先に呼ぶ
         from tiny_chat.database.database import run_database_app
         run_database_app()
     else:
         # チャットモード（デフォルト）
+        import streamlit as st
+        st.set_page_config(page_title="チャット", layout="wide")
         from tiny_chat.chat.app import run_chat_app
         run_chat_app(server_mode=args.server_mode)
 
