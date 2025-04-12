@@ -3,9 +3,18 @@ from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models.models import QueryResponse
-from tiny_chat.database.embeddings.text_chunk import TextChunker
-from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
-from tiny_chat.database.qdrant.collection import Collection
+
+try:
+    from tiny_chat.database.embeddings.text_chunk import TextChunker
+    from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
+    from tiny_chat.database.qdrant.collection import Collection
+except:
+    import os
+    import sys
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+    from tiny_chat.database.embeddings.text_chunk import TextChunker
+    from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
+    from tiny_chat.database.qdrant.collection import Collection
 
 
 class QdrantManager:
@@ -433,13 +442,7 @@ class QdrantManager:
                 # score_threshold=score_threshold
             )
 
-        # QueryResponseの場合、pointsアトリビュートを取得
-        if hasattr(response, 'points'):
-            points = response.points
-        else:
-            points = response
-
-        # 結果をQueryResponseに変換
+        points = response.points
         results = []
         for point in points:
             if self.file_path is not None and filter_params:
@@ -457,6 +460,10 @@ class QdrantManager:
                     continue
             if score_threshold < point.score:
                 results.append(point)
+
+        for result in results:
+            print(result.payload['text'])
+
         return results
 
     def set_collection_name(self, collection_name: str) -> None:
@@ -714,7 +721,7 @@ if __name__ == "__main__":
     
     # フィルタリングテスト
     print("\n=== フィルタリングテスト ===")
-    query = ""
+    query = "観光が楽しめるところは？"
     filter_params = {"region": "関西"}
     
     print(f"クエリ: {query}, フィルタ: {filter_params}")

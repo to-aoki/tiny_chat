@@ -14,7 +14,7 @@ class RagStrategyFactory:
         if strategy_name == "bm25":
             return SparseOnly("bm25")
         elif strategy_name == "bm42":
-            return SparseOnly("bm4", use_gpu=use_gpu)
+            return SparseOnly("bm42", use_gpu=use_gpu)
         elif strategy_name == "splade_ja":
             return SparseOnly("hotchpotch/japanese-splade-v2", use_gpu=use_gpu)
         elif strategy_name == "ruri_small":
