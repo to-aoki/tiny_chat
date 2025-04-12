@@ -14,3 +14,4 @@ sudachipy
 stopwordsiso
 torch
 sentence-transformers
+mcp
