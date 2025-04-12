@@ -598,8 +598,6 @@ def run_chat_app(server_mode=False):
     # サーバーモードが有効な場合はログに記録
     if server_mode:
         LOGGER.info("サーバーモードで起動しました。設定はファイルに保存されません。")
-    
-    st.set_page_config(page_title="チャット", layout="wide")
 
     # セッション状態の初期化
     initialize_session_state(config_file_path=CONFIG_FILE, logger=LOGGER, session_only_mode=server_mode)
@@ -622,6 +620,7 @@ def run_chat_app(server_mode=False):
             try:
                 from tiny_chat.database.database import get_or_create_qdrant_manager, show_database_component
 
+                # チャットアプリからの呼び出しなので、ページ設定を重複して行わない（set_config=False）
                 get_or_create_qdrant_manager(LOGGER)
                 show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
 
