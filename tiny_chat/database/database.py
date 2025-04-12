@@ -3,7 +3,7 @@ import threading
 
 import streamlit as st
 
-from tiny_chat.database.database_config import DatabaseConfig
+from tiny_chat.database.database_config import DatabaseConfig, DEFAULT_CONFIG_PATH
 from tiny_chat.database.components.search import show_search_component
 from tiny_chat.database.components.registration import show_registration
 from tiny_chat.database.components.manage import show_manage_component
@@ -24,12 +24,8 @@ def get_lock():
 
 my_lock = get_lock()
 
-# 設定ファイルのパス
-CONFIG_FILE = "database_config.json"
-
-
 def get_or_create_qdrant_manager(
-        logger=None, config_file_path=CONFIG_FILE, reconnect=False):
+        logger=None, config_file_path=DEFAULT_CONFIG_PATH, reconnect=False):
     """
     QdrantManagerを取得または初期化する共通関数
     プロセスレベルで一つのインスタンスを共有するよう修正
