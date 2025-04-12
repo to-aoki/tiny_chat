@@ -21,16 +21,36 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-dynamic = ["dependencies"]
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+dependencies = [
+    "pypdf",
+    "openpyxl",
+    "python-docx", 
+    "python-pptx",
+    "beautifulsoup4",
+    "openai",
+    "streamlit>=v1.43.2",
+    "fugashi",
+    "unidic-lite",
+    "qdrant-client==1.13.3",
+    "fastembed==0.6.0",
+    "sudachidict_core",
+    "sudachipy",
+    "stopwordsiso",
+    "torch",
+    "sentence-transformers",
+    "mcp",
+]
 
 [project.urls]
 Repository = "https://github.com/to-aoki/tiny_chat"
 
-[tool.hatch.build.targets.wheel]
-packages = ["tiny_chat"]
-
 [project.scripts]
 tiny-chat = "tiny_chat:main"
+tiny-chat-search-mcp = "tiny_chat.mcp.search_mcp:main"
+
+[tool.hatch.build]
+exclude = [".git", ".env", ".venv", "venv", "__pycache__"]
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["tiny_chat"]
