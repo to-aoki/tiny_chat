@@ -91,7 +91,7 @@ def get_or_create_qdrant_manager(
                     raise e
     if reconnect:
         try:
-            db_config.save(CONFIG_FILE)
+            db_config.save(DEFAULT_CONFIG_PATH)
         except Exception as e:
             if logger:
                 logger.error(f"DB設定情報の保存に失敗しました: {str(e)}")
