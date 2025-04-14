@@ -131,7 +131,7 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
     if not is_server_mode:
         # 設定タブ
         with search_tabs[3]:
-            show_settings(logger=logger, config_file_path=CONFIG_FILE)
+            show_settings(logger=logger, config_file_path=DEFAULT_CONFIG_PATH)
 
 
 # 単独動作用
