@@ -1,3 +1,4 @@
+import os.path
 from typing import List, Union, Iterable, Optional, Any, Sequence
 
 from sudachipy import tokenizer
@@ -6,13 +7,31 @@ import stopwordsiso
 from fastembed import SparseEmbedding, SparseTextEmbedding
 from fastembed.common import OnnxProvider
 
+from fastembed.common.model_description import SparseModelDescription, ModelSource
+from fastembed.sparse.bm25 import supported_bm25_models
+
+
+# qdrant bm25は日本語以外のSTEM辞書が配布される。日本語は未対応で自前でやるのでダウンロードは不要
+supported_bm25_models.append(
+    SparseModelDescription(
+        model="bm25-ja",
+        vocab_size=0,
+        description="BM25 japanese model (only support japanese)",
+        license="MIT",
+        sources=ModelSource(url="dummy"),
+        size_in_GB=0.01,
+        requires_idf=True,
+        model_file="mock.file",
+    )
+)
+
 
 class BM25TextEmbedding(SparseTextEmbedding):
 
     def __init__(
         self,
-        model_name: str = "Qdrant/bm25",
-        cache_dir: Optional[str] = "./qdrant_bm25_dict",
+        model_name: str = "bm25-ja",
+        cache_dir: Optional[str] = os.path.dirname(__file__) + "/model",
         threads: Optional[int] = None,
         providers: Optional[Sequence[OnnxProvider]] = None,
         cuda: bool = False,
@@ -48,7 +67,7 @@ class BM25TextEmbedding(SparseTextEmbedding):
         kwargs["b"] = b
         kwargs["avg_len"] = avg_len
         kwargs["token_max_length"] = token_max_length
-
+        kwargs["local_files_only"] = True
         # SparseTextEmbeddingのコンストラクタを呼び出し
         super().__init__(
             model_name=model_name,
