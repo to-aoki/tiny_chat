@@ -461,9 +461,6 @@ class QdrantManager:
             if score_threshold < point.score:
                 results.append(point)
 
-        for result in results:
-            print(result.payload['text'])
-
         return results
 
     def set_collection_name(self, collection_name: str) -> None:
