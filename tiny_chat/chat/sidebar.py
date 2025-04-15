@@ -10,11 +10,7 @@ def sidebar(config_file_path, logger):
 
     server_mode = st.session_state.config["session_only_mode"]
 
-    # サーバーモードの状態を表示
-    if server_mode:
-        st.info("サーバーモードが有効です")
-
-    else:
+    if not server_mode:
         # モデル選択または入力
         # APIに接続できる場合はドロップダウンリストを表示し、できない場合はテキスト入力欄を表示
         if st.session_state.models_api_success and st.session_state.available_models:

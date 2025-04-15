@@ -103,10 +103,12 @@ def get_or_create_qdrant_manager(
 @st.fragment
 def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
 
-    mode = ["🔍 検索", "📁 登録", "📚 管理"]
+    mode = ["🔍 検索"]
 
     is_server_mode = True
-    if st.session_state.get("config") is None or st.session_state.get("config").get("session_only_mode") is not True:
+    if st.session_state.get("config") is not None and st.session_state.get("config").get("session_only_mode") is not True:
+        mode.append("📁 登録")
+        mode.append("📚 管理")
         mode.append("⚙️ 設定")
         is_server_mode = False
 
@@ -119,16 +121,15 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
     # 検索タブ
     with search_tabs[0]:
         show_search_component(_qdrant_manager)
-
-    # 文書登録タブ
-    with (search_tabs[1]):
-        show_registration(_qdrant_manager, extensions=extensions)
-
-    # 削除タブ
-    with search_tabs[2]:
-        show_manage_component(_qdrant_manager, logger=logger)
-
     if not is_server_mode:
+        # 文書登録タブ
+        with (search_tabs[1]):
+            show_registration(_qdrant_manager, extensions=extensions)
+
+        # 削除タブ
+        with search_tabs[2]:
+            show_manage_component(_qdrant_manager, logger=logger)
+
         # 設定タブ
         with search_tabs[3]:
             show_settings(logger=logger, config_file_path=DEFAULT_CONFIG_PATH)
