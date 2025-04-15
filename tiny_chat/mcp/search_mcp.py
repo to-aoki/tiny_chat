@@ -1,7 +1,8 @@
 import os
 import sys
 import argparse
-from typing import Dict, Any
+import threading
+from typing import Dict, Any, Optional
 
 from mcp.server.fastmcp import FastMCP, Context
 from contextlib import asynccontextmanager
@@ -12,6 +13,42 @@ from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
 from tiny_chat.database.qdrant.collection import Collection
 from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
 from tiny_chat.database.database_config import DatabaseConfig, DEFAULT_CONFIG_PATH
+
+
+# シングルトンとしてQdrantManagerを管理するグローバルインスタンス
+_qdrant_manager_instance: Optional[QdrantManager] = None
+# スレッドセーフな操作のためのロックオブジェクト
+_qdrant_manager_lock = threading.RLock()
+# 利用可能なコレクションリスト
+available_collections = {}
+
+
+def get_qdrant_manager() -> QdrantManager:
+    """
+    QdrantManagerのシングルトンインスタンスを取得する関数（スレッドセーフ実装）
+    
+    既にインスタンスが初期化されている場合はそれを返し、
+    まだ初期化されていない場合は新しいインスタンスを作成して返します。
+    排他ロックを使用してマルチスレッド環境でも安全に動作します。
+    
+    Returns:
+        QdrantManager: シングルトンインスタンス
+    """
+    global _qdrant_manager_instance
+    
+    # Double-checked locking pattern
+    # 最初のチェックはロック外で行うことで、インスタンスが既にある場合のパフォーマンスを向上
+    if _qdrant_manager_instance is None:
+        # ロックを取得してから二重確認
+        with _qdrant_manager_lock:
+            # 2回目のチェック - 他のスレッドが初期化を完了していないか確認
+            if _qdrant_manager_instance is None:
+                # 初期化がまだ行われていない場合は設定を読み込んでインスタンスを作成
+                config_file_path = os.environ.get("DB_CONFIG", DEFAULT_CONFIG_PATH)
+                db_config = DatabaseConfig.load(config_file_path)
+                _qdrant_manager_instance = QdrantManager(**db_config.__dict__)
+    
+    return _qdrant_manager_instance
 
 
 # Parse command line arguments
@@ -44,29 +81,25 @@ def parse_args():
 
 # Define lifespan context manager
 @asynccontextmanager
-async def lifespan_manager(fastmcp_app: FastMCP, qdrant_mgr):
+async def lifespan_manager(fastmcp_app: FastMCP):
     """Lifespan handler for FastMCP - setup that runs on app startup"""
     # Register search tools for all collections
+    qdrant_mgr = get_qdrant_manager()
     await register_search_tools(fastmcp_app, qdrant_mgr)
     yield {}  # This is required for the lifespan context manager
 
-# FastMCP instance will be created in main()
 
-# Global variables
-available_collections = {}
-
-
-def get_collection_description(collection_name: str, qdrant_mgr) -> str:
+def get_collection_description(collection_name: str) -> str:
     """
     Get the description of a collection from the collection_descriptions collection
     
     Args:
         collection_name: Name of the collection
-        qdrant_mgr: Instance of QdrantManager
         
     Returns:
         str: Description of the collection, or default description if not found
     """
+    qdrant_mgr = get_qdrant_manager()
     # Try to load the collection information
     collection_info = Collection.load(collection_name, qdrant_mgr)
     
@@ -85,7 +118,7 @@ async def register_search_tools(app, qdrant_mgr):
     collections = [c for c in collections if c != Collection.STORED_COLLECTION_NAME]
     
     for collection_name in collections:
-        collection_info = get_collection_description(collection_name, qdrant_mgr)
+        collection_info = get_collection_description(collection_name)
 
         if isinstance(collection_info, str):
             collection = type('Collection', (), {
@@ -104,7 +137,7 @@ async def register_search_tools(app, qdrant_mgr):
             tool_description = getattr(coll, 'description', f"Search {coll_name} collection")
             
             @app.tool(
-                name=f"search-{coll_name}",  # Use hyphen instead of underscore
+                name=f"search-{coll_name}",
                 description=tool_description
             )
             async def search_collection_tool(
@@ -121,7 +154,7 @@ async def register_search_tools(app, qdrant_mgr):
                     "query": query,
                     "top_k": top_k,
                     "score_threshold": score_threshold
-                }, qdrant_mgr)
+                })
             
             # Each tool needs a unique name in the module scope
             search_collection_tool.__name__ = f"search_{coll_name}_tool"
@@ -134,8 +167,7 @@ async def register_search_tools(app, qdrant_mgr):
 
 async def search_collection(
     collection_name: str, 
-    arguments: Dict[str, Any],
-    qdrant_mgr
+    arguments: Dict[str, Any]
 ) -> str:
     """
     Search a collection with the given query and parameters
@@ -143,17 +175,17 @@ async def search_collection(
     Args:
         collection_name: Name of the collection to search
         arguments: Search parameters including query, top_k, etc.
-        qdrant_mgr: Instance of QdrantManager
         
     Returns:
         str: Search results formatted as text
     """
+    qdrant_mgr = get_qdrant_manager()
     query = arguments.get("query", "")
     collection = available_collections.get(collection_name)
     top_k = arguments.get("top_k", getattr(collection, 'top_k', 3))
     score_threshold = arguments.get("score_threshold", getattr(collection, 'score_threshold', 0.4))
-    rag_strategy = arguments.get("rag_strategy", getattr(collection, 'rag_strategy', "bm25_sbert"))
-    use_gpu = arguments.get("use_gpu", getattr(collection, 'use_gpu', False))
+    rag_strategy = getattr(collection, 'rag_strategy', "bm25_sbert")
+    use_gpu = getattr(collection, 'use_gpu', False)
 
     try:
         results = qdrant_mgr.query_points(
@@ -163,7 +195,7 @@ async def search_collection(
             score_threshold=score_threshold,
             strategy=RagStrategyFactory.get_strategy(rag_strategy, use_gpu)
         )
-        # Format the results
+
         formatted_results = []
         for i, result in enumerate(results):
             text = result.payload.get("text", "")
@@ -191,21 +223,10 @@ def main():
     """
     Main function to start the TinyChat Search MCP Server
     """
-    # Parse command line arguments
     args = parse_args()
     
-    # Initialize database config and Qdrant manager
-    config_file_path = os.environ.get("DB_CONFIG", DEFAULT_CONFIG_PATH)
-    db_config = DatabaseConfig.load(config_file_path)
-    qdrant_mgr = QdrantManager(**db_config.__dict__)
-    
-    # Create a custom lifespan function that includes qdrant_mgr
-    @asynccontextmanager
-    async def app_lifespan(fastmcp_app):
-        # FastMCP expects a direct async generator as lifespan
-        # Register search tools for all collections
-        await register_search_tools(fastmcp_app, qdrant_mgr)
-        yield {}
+    # シングルトンインスタンスを事前に初期化して取得
+    get_qdrant_manager()
     
     # Create FastMCP instance
     app = FastMCP(
@@ -214,7 +235,7 @@ def main():
         host=args.host,       # Listen on specified host
         port=args.port,       # Port for the server
         debug=args.debug,     # Debug mode based on args
-        lifespan=app_lifespan  # Assign lifespan function
+        lifespan=lifespan_manager  # Assign lifespan function
     )
 
     # Set binary mode for stdin/stdout on Windows if running in local mode
