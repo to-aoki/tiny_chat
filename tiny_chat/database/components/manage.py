@@ -93,7 +93,6 @@ def _manage_collections(qdrant_manager, logger):
         st.warning("データベースにコレクションが見つかりません。")
     else:
         from tiny_chat.database.qdrant.collection import Collection
-        Collection.ensure_collection_descriptions_exists(qdrant_manager=qdrant_manager)
         # コレクション情報を表示
         st.write(f"利用可能なコレクション: {len(collections)}個")
         try:
@@ -376,15 +375,10 @@ def _manage_collections(qdrant_manager, logger):
             if update_pressed and update_collection:
                 with st.spinner(f"コレクション '{update_collection}' の説明を更新中..."):
                     try:
-                        # Collection.STORED_COLLECTION_NAMEを使用して適切なコレクション名を指定
                         from tiny_chat.database.qdrant.collection import Collection
-                        target_collection = Collection.load(
-                            collection_name=update_collection, qdrant_manager=qdrant_manager)
-                        # 既存のエントリを削除
-                        filter_params = {"collection_name": update_collection}
-                        qdrant_manager.delete_by_filter(filter_params, collection_name=Collection.STORED_COLLECTION_NAME)
-                        target_collection.description = new_description
-                        target_collection.save(qdrant_manager=qdrant_manager)
+                        Collection.update_description(
+                            collection_name=update_collection, description=new_description,
+                            qdrant_manager=qdrant_manager)
                         st.success(f"コレクション '{update_collection}' の説明を更新しました")
                         # 更新後に画面を更新して表示を最新化
                         st.rerun()

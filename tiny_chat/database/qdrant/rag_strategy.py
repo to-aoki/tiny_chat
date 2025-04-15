@@ -7,33 +7,47 @@ from tiny_chat.database.embeddings.static_embedding import StaticEmbedding
 
 
 class RagStrategyFactory:
+    # キャッシュ用の静的辞書
+    _strategy_cache = {}
 
     @staticmethod
     def get_strategy(strategy_name, use_gpu=False) -> 'RAGStrategy':
         strategy_name = strategy_name.lower()
+        
+        # キャッシュキーの作成（戦略名とGPU使用フラグの組み合わせ）
+        cache_key = f"{strategy_name}_{use_gpu}"
+        
+        # キャッシュにある場合は、キャッシュから取得
+        if cache_key in RagStrategyFactory._strategy_cache:
+            return RagStrategyFactory._strategy_cache[cache_key]
+        
+        # 新しいインスタンスを作成
         if strategy_name == "bm25":
-            return SparseOnly("bm25")
+            strategy = SparseOnly("bm25")
         elif strategy_name == "bm42":
-            return SparseOnly("bm42", use_gpu=use_gpu)
+            strategy = SparseOnly("bm42", use_gpu=use_gpu)
         elif strategy_name == "splade_ja":
-            return SparseOnly("hotchpotch/japanese-splade-v2", use_gpu=use_gpu)
+            strategy = SparseOnly("hotchpotch/japanese-splade-v2", use_gpu=use_gpu)
         elif strategy_name == "ruri_small":
-            return DenseOnly("cl-nagoya/ruri-v3-30m", use_gpu=use_gpu)
+            strategy = DenseOnly("cl-nagoya/ruri-v3-30m", use_gpu=use_gpu)
         elif strategy_name == "ja_static":
-            return DenseOnly("hotchpotch/static-embedding-japanese", use_gpu=use_gpu)
+            strategy = DenseOnly("ja_static", use_gpu=use_gpu)
         elif strategy_name == "m_e5":
-            return DenseOnly("intfloat/multilingual-e5-large", use_gpu=use_gpu)
+            strategy = DenseOnly("intfloat/multilingual-e5-large", use_gpu=use_gpu)
         elif strategy_name == "bm25_static":
-            return SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
+            strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
         elif strategy_name == "bm25_sbert":
-            return SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
-        elif strategy_name == "bm25_sbert":
-            return SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
+            strategy = SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
         elif strategy_name == "splade_sbert":
-            return SpaceRRF("bm25_splade", use_gpu=use_gpu)
+            strategy = SpaceRRF("bm25_splade", use_gpu=use_gpu)
         else:
-            return NoopRAGStrategy()
-        return None
+            strategy = NoopRAGStrategy()
+        
+        # 作成したインスタンスをキャッシュに保存
+        if strategy is not None:
+            RagStrategyFactory._strategy_cache[cache_key] = strategy
+            
+        return strategy
 
 
 class RAGStrategy(ABC):
@@ -110,9 +124,9 @@ class DenseOnly(RAGStrategy):
 
         self.strategy = strategy
         self.dense_vector_field_name = "dense"
-        if strategy == "hotchpotch/static-embedding-japanese":
+        if strategy == "ja_static":
             self.model = StaticEmbedding(
-                model_name=strategy, device='cuda' if use_gpu else 'cpu')
+                model_name="hotchpotch/static-embedding-japanese", device='cuda' if use_gpu else 'cpu')
         elif strategy == "cl-nagoya/ruri-v3-30m":
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.model = SentenceTransformerEmbedding(
@@ -127,6 +141,7 @@ class DenseOnly(RAGStrategy):
             self.model.dimension = 1024  # FIXME patch!
 
     def create_vector_config(self):
+        print(self.model.dimension)
         return {
             self.dense_vector_field_name: models.VectorParams(
                 size=self.model.dimension,
@@ -204,7 +219,6 @@ class SpaceDenseRRF(RAGStrategy):
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(device='cuda' if use_gpu else 'cpu')
 
-
         else:
             ValueError("unknown strategy: " + strategy)
         self.strategy = strategy
@@ -228,8 +242,8 @@ class SpaceDenseRRF(RAGStrategy):
         sparse_embedding = list(self.bm25_model.embed(text))[0]
         dense_embedding = list(self.emb_model.embed(text))[0]
         return {
-            self.dense_vector_field_name: dense_embedding.tolist(),
             self.sparse_vector_field_name: sparse_embedding.as_object(),
+            self.dense_vector_field_name: dense_embedding.tolist(),
         }
 
     def prefetch(self, text, top_k):
