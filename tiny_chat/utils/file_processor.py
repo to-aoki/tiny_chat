@@ -503,20 +503,19 @@ def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
         text, sheet_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
         if error:
             raise ValueError(f"Excelの処理中にエラーが発生しました: {error}")
-        metadata["sheet_count"] = sheet_count
+        metadata["page_count"] = sheet_count
 
     elif file_ext == '.docx':
         text, para_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
         if error:
             raise ValueError(f"Wordの処理中にエラーが発生しました: {error}")
-        metadata["para_count"] = para_count
+        metadata["page_count"] = para_count
 
     elif file_ext == '.pptx':
         text, slide_count, error = processor.extract_text_from_bytes(file_bytes, is_page=True)
         if error:
             raise ValueError(f"PowerPointの処理中にエラーが発生しました: {error}")
-
-        metadata["slide_count"] = slide_count
+        metadata["page_count"] = slide_count
 
     elif file_ext in ['.txt', '.csv', '.json', '.md']:
         text, error = processor.extract_text_from_bytes(file_bytes)
@@ -594,16 +593,16 @@ class URIProcessor:
                 message = f"PDFから{page_count}ページのテキストを抽出しました" if not error else error
 
             elif 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' in content_type or 'application/vnd.ms-excel' in content_type:
-                extract_text, sheet_count, error = ExcelProcessor.extract_text_from_bytes(content, is_page=is_page)
-                message = f"Excelから{sheet_count}シートのテキストを抽出しました" if not error else error
+                extract_text, page_count, error = ExcelProcessor.extract_text_from_bytes(content, is_page=is_page)
+                message = f"Excelから{page_count}シートのテキストを抽出しました" if not error else error
 
             elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or 'application/msword' in content_type:
-                extract_text, error = WordProcessor.extract_text_from_bytes(content, is_page=is_page)
+                extract_text, page_count, error = WordProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = "Wordドキュメントからテキストを抽出しました" if not error else error
 
             elif 'application/vnd.openxmlformats-officedocument.presentationml.presentation' in content_type or 'application/vnd.ms-powerpoint' in content_type:
-                extract_text, slide_count, error = PowerPointProcessor.extract_text_from_bytes(content, is_page=is_page)
-                message = f"PowerPointから{slide_count}スライドのテキストを抽出しました" if not error else error
+                extract_text, page_count, error = PowerPointProcessor.extract_text_from_bytes(content, is_page=is_page)
+                message = f"PowerPointから{page_count}スライドのテキストを抽出しました" if not error else error
 
             elif 'text/html' in content_type:
                 extract_text, message = HTMLProcessor.extract_text_from_bytes(content)
