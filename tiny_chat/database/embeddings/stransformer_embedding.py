@@ -9,7 +9,7 @@ class SentenceTransformerEmbedding:
 
     def __init__(
         self,
-        model_name: str = "cl-nagoya/ruri-small-v2",
+        model_name: str = "cl-nagoya/ruri-v3-30m",
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
         **kwargs
     ):
