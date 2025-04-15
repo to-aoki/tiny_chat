@@ -129,7 +129,15 @@ async def search_collection(
     score_threshold = arguments.get("score_threshold", collection.score_threshold)
 
     try:
-        # qdrant_manager.update_settings(collection.__dict__)
+        settings = {
+            'collection_name': collection_name,
+            'description': collection.description if hasattr(collection, 'description') else '',
+            'rag_strategy': collection.rag_strategy if hasattr(collection, 'rag_strategy') else 'bm25_static',
+            'use_gpu': collection.use_gpu if hasattr(collection, 'use_gpu') else False,
+            'chunk_size': collection.chunk_size if hasattr(collection, 'chunk_size') else 1024,
+            'chunk_overlap': collection.chunk_overlap if hasattr(collection, 'chunk_overlap') else 24
+        }
+        qdrant_manager.update_settings(**settings)
         # Execute search query
         results = qdrant_manager.query_points(
             query=query,
@@ -172,7 +180,7 @@ async def search_collection(
         return [
             types.TextContent(
                 type="text",
-                text=f"Error searching collection '{collection_name}': {str(e)}"
+                text=f"Error searching collection '{collection_name}': {str(e)}, {str(collection.__dict__)}"
             )
         ]
 
