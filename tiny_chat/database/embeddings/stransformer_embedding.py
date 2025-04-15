@@ -56,9 +56,9 @@ class SentenceTransformerEmbedding:
             documents = [documents]
 
         if is_query:
-            prefix = "クエリ: "
+            prefix = "検索クエリ: "
         else:
-            prefix = "文章: "
+            prefix = "検索文章: "
 
         for i, doc in enumerate(documents):
             if not doc.startswith(prefix):
