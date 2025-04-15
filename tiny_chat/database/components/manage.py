@@ -383,7 +383,7 @@ def _manage_collections(qdrant_manager, logger):
                         # 既存のエントリを削除
                         filter_params = {"collection_name": update_collection}
                         qdrant_manager.delete_by_filter(filter_params, collection_name=Collection.STORED_COLLECTION_NAME)
-                        target_collection.description = new_collection_description
+                        target_collection.description = new_description
                         target_collection.save(qdrant_manager=qdrant_manager)
                         st.success(f"コレクション '{update_collection}' の説明を更新しました")
                         # 更新後に画面を更新して表示を最新化

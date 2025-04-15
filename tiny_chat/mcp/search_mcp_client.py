@@ -37,11 +37,16 @@ class QdrantSearchClient:
         print("\nConnected to Qdrant search server with tools:")
         for tool in tools:
             print(f"- {tool.name}: {tool.description}")
+            
+        # Log all tools for debugging
+        print("\nDEBUG - All available tools:")
+        for i, tool in enumerate(tools):
+            print(f"Tool {i+1}: {tool.name} - {tool.description}")
 
     async def search(self, collection_name: str, query: str, top_k: int = 5, score_threshold: float = 0.4, filter_params=None):
         """Search a collection with the given query"""
         
-        tool_name = f"search_{collection_name}"
+        tool_name = f"search-{collection_name}"  # Changed underscore to hyphen
         arguments = {
             "query": query,
             "top_k": top_k,
@@ -80,8 +85,14 @@ class QdrantSearchClient:
                     tools = response.tools
                     print("\nAvailable collections:")
                     for tool in tools:
-                        collection_name = tool.name[len("search_"):]
-                        print(f"- {collection_name}: {tool.description}")
+                        # Handle both collections-list and search-collection tools
+                        if tool.name == "collections-list":
+                            continue  # Skip the list tool itself
+                        elif tool.name.startswith("search-"):
+                            collection_name = tool.name[len("search-"):]
+                            print(f"- {collection_name}: {tool.description}")
+                        else:
+                            print(f"- {tool.name}: {tool.description}")
                     continue
                     
                 if command.lower().startswith('search '):
