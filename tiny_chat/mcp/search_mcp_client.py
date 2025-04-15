@@ -128,7 +128,7 @@ class QdrantSearchClient:
 async def main():
     if len(sys.argv) < 2:
         print("Usage: python search_client_mcp.py <path_to_server_script>")
-        server_path = "qdrant_search_mcp.py"
+        server_path = os.path.dirname(__file__) + "/search_mcp.py"
     else:
         server_path = sys.argv[1]
         
