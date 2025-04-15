@@ -21,6 +21,8 @@ qdrant_manager = QdrantManager(
     **db_config.__dict__
 )
 
+available_collections = {}
+
 
 def get_collection_description(collection_name: str) -> str:
     """
@@ -39,7 +41,7 @@ def get_collection_description(collection_name: str) -> str:
     collection_info = Collection.load(collection_name, qdrant_manager)
     
     if collection_info:
-        return collection_info.description
+        return collection_info
     else:
         return f"Search {collection_name} collection"
 
@@ -57,12 +59,13 @@ async def handle_list_tools() -> list[types.Tool]:
     
     # Create a search tool for each collection
     for collection_name in collections:
-        description = get_collection_description(collection_name)
+        collection = get_collection_description(collection_name)
+        available_collections[collection_name] = collection
         
         tools.append(
             types.Tool(
                 name=f"search_{collection_name}",
-                description=description,
+                description=collection.description,
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -73,16 +76,12 @@ async def handle_list_tools() -> list[types.Tool]:
                         "top_k": {
                             "type": "integer",
                             "description": "Number of results to return",
-                            "default": 5
+                            "default": collection.top_k
                         },
                         "score_threshold": {
                             "type": "number",
                             "description": "Minimum score threshold for results",
-                            "default": 0.4
-                        },
-                        "filter": {
-                            "type": "object",
-                            "description": "Optional filter parameters"
+                            "default": collection.score_threshold
                         }
                     },
                     "required": ["query"]
@@ -109,6 +108,7 @@ async def handle_call_tool(
     else:
         raise ValueError(f"Unknown tool: {name}")
 
+
 async def search_collection(
     collection_name: str, 
     arguments: Dict[str, Any]
@@ -124,18 +124,18 @@ async def search_collection(
         list[types.TextContent]: Search results formatted as text
     """
     query = arguments.get("query", "")
-    top_k = arguments.get("top_k", 5)
-    score_threshold = arguments.get("score_threshold", 0.4)
-    filter_params = arguments.get("filter", None)
-    
+    collection = available_collections.get(collection_name)
+    top_k = arguments.get("top_k", collection.top_k)
+    score_threshold = arguments.get("score_threshold", collection.score_threshold)
+
     try:
+        # qdrant_manager.update_settings(collection.__dict__)
         # Execute search query
         results = qdrant_manager.query_points(
             query=query,
             collection_name=collection_name,
             top_k=top_k,
             score_threshold=score_threshold,
-            filter_params=filter_params
         )
         
         # Format the results
