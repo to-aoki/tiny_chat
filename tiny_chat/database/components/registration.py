@@ -9,6 +9,7 @@ import pandas as pd
 
 from tiny_chat.utils.file_processor import process_file
 from tiny_chat.database.qdrant.collection import Collection
+from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
 
 
 SUPPORT_EXTENSIONS = ['.pdf', '.xlsx', '.docx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
@@ -68,7 +69,10 @@ def process_directory(directory_path: str,
     return results
 
 
-def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict], qdrant_manager, collection_name: str = None) -> List[str]:
+def add_files_to_qdrant(
+    texts: List[List[str]], metadatas: List[Dict],
+    qdrant_manager, collection_name: str = None, strategy=None, chunk_size=None, chunk_overlap=None
+) -> List[str]:
     """
     テキストとメタデータをQdrantに追加します
     同じソース（ファイル名）が既に存在する場合は、削除してから追加します
@@ -110,7 +114,10 @@ def add_files_to_qdrant(texts: List[List[str]], metadatas: List[Dict], qdrant_ma
             all_metadatas.append(page_metadata)
 
     # Qdrantに追加
-    added_ids = qdrant_manager.add_documents(all_texts, all_metadatas, collection_name=collection_name)
+    added_ids = qdrant_manager.add_documents(
+        all_texts, all_metadatas, collection_name=collection_name,
+        strategy=strategy, chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    )
     return added_ids
 
 
@@ -185,22 +192,18 @@ def show_registration(
                         progress_bar.progress((i + 1) / total_files)
 
                     if texts:
-                        # コレクション名を設定して処理
-                        if collection_name != qdrant_manager.collection_name:
-                            collection = Collection(
-                                collection_name=collection_name,
-                                chunk_size=qdrant_manager.chunk_size,
-                                chunk_overlap=qdrant_manager.chunk_overlap,
-                                top_k=qdrant_manager.top_k,
-                                score_threshold=qdrant_manager.score_threshold,
-                                rag_strategy=qdrant_manager.rag_strategy,
-                                use_gpu=qdrant_manager.use_gpu,
-                            )
-                            collection.save(qdrant_manager=qdrant_manager)
+                        collection = Collection.load(
+                            collection_name=collection_name, qdrant_manager=qdrant_manager)
+                        if collection is None:
+                            collection = Collection(collection_name)
+                            collection.save(qdrant_manager)
 
                         # Qdrantに追加
                         added_ids = add_files_to_qdrant(
-                            texts, metadatas, qdrant_manager, collection_name=collection_name)
+                            texts, metadatas, qdrant_manager, collection_name=collection_name,
+                            strategy=RagStrategyFactory.get_strategy(collection.rag_strategy, collection.use_gpu),
+                            chunk_size=collection.chunk_size, chunk_overlap=collection.chunk_overlap
+                        )
 
                         # 結果表示
                         st.success(
@@ -266,21 +269,18 @@ def show_registration(
                                     metadata["source"] = web_path
 
                         # コレクション名を設定して処理
-                        if collection_name != qdrant_manager.collection_name:
-                            collection = Collection(
-                                collection_name=collection_name,
-                                chunk_size=qdrant_manager.chunk_size,
-                                chunk_overlap=qdrant_manager.chunk_overlap,
-                                top_k=qdrant_manager.top_k,
-                                score_threshold=qdrant_manager.score_threshold,
-                                rag_strategy=qdrant_manager.rag_strategy,
-                                use_gpu=qdrant_manager.use_gpu,
-                            )
-                            collection.save(qdrant_manager=qdrant_manager)
+                        collection = Collection.load(
+                            collection_name=collection_name, qdrant_manager=qdrant_manager)
+                        if collection is None:
+                            collection = Collection(collection_name)
+                            collection.save(qdrant_manager)
 
                         # Qdrantに追加
                         added_ids = add_files_to_qdrant(
-                            texts, metadatas, qdrant_manager, collection_name=collection_name)
+                            texts, metadatas, qdrant_manager, collection_name=collection_name,
+                            strategy=RagStrategyFactory.get_strategy(collection.rag_strategy, collection.use_gpu),
+                            chunk_size=collection.chunk_size, chunk_overlap=collection.chunk_overlap
+                        )
 
                         # 結果表示
                         st.success(

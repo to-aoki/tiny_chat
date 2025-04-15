@@ -7,8 +7,10 @@ from mcp.server.fastmcp import FastMCP, Context
 from contextlib import asynccontextmanager
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
 from tiny_chat.database.qdrant.collection import Collection
+from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
 from tiny_chat.database.database_config import DatabaseConfig, DEFAULT_CONFIG_PATH
 
 
@@ -39,6 +41,7 @@ def parse_args():
     )
     return parser.parse_args()
 
+
 # Define lifespan context manager
 @asynccontextmanager
 async def lifespan_manager(fastmcp_app: FastMCP, qdrant_mgr):
@@ -64,40 +67,14 @@ def get_collection_description(collection_name: str, qdrant_mgr) -> str:
     Returns:
         str: Description of the collection, or default description if not found
     """
-    # Ensure the collection_descriptions collection exists
-    Collection.ensure_collection_descriptions_exists(qdrant_mgr)
-    
     # Try to load the collection information
     collection_info = Collection.load(collection_name, qdrant_mgr)
     
     if collection_info:
         return collection_info
     else:
+        # 説明情報なし
         return f"Search {collection_name} collection"
-
-
-# Function definition for FastMCP tool registration in main()
-async def list_collections(ctx: Context, qdrant_mgr) -> Dict[str, str]:
-    """List available collections for searching"""
-    # Get all available collections
-    collections = qdrant_mgr.get_collections()
-    
-    # Skip the collection_descriptions collection
-    collections = [c for c in collections if c != Collection.STORED_COLLECTION_NAME]
-    
-    result = {}
-    for collection_name in collections:
-        collection_info = get_collection_description(collection_name, qdrant_mgr)
-        
-        # Handle different return types from get_collection_description
-        if isinstance(collection_info, str):
-            description = collection_info
-        else:
-            description = getattr(collection_info, 'description', f"Search {collection_name} collection")
-            
-        result[collection_name] = description
-        
-    return result
 
 
 async def register_search_tools(app, qdrant_mgr):
@@ -109,21 +86,18 @@ async def register_search_tools(app, qdrant_mgr):
     
     for collection_name in collections:
         collection_info = get_collection_description(collection_name, qdrant_mgr)
-        
-        # Ensure collection_info is properly handled regardless of its type
+
         if isinstance(collection_info, str):
-            # If get_collection_description returned a string
             collection = type('Collection', (), {
                 'description': collection_info,
                 'top_k': 3,
                 'score_threshold': 0.4
             })
         else:
-            # If get_collection_description returned an object
             collection = collection_info
-            
+
         available_collections[collection_name] = collection
-        
+
         # Create a local function factory that binds the current collection_name
         def create_search_tool(coll_name, coll):
             # Define a tool for this collection
@@ -178,25 +152,17 @@ async def search_collection(
     collection = available_collections.get(collection_name)
     top_k = arguments.get("top_k", getattr(collection, 'top_k', 3))
     score_threshold = arguments.get("score_threshold", getattr(collection, 'score_threshold', 0.4))
+    rag_strategy = arguments.get("rag_strategy", getattr(collection, 'rag_strategy', "bm25_sbert"))
+    use_gpu = arguments.get("use_gpu", getattr(collection, 'use_gpu', False))
 
     try:
-        settings = {
-            'collection_name': collection_name,
-            'description': getattr(collection, 'description', ''),
-            'rag_strategy': getattr(collection, 'rag_strategy', 'bm25_static'),
-            'use_gpu': getattr(collection, 'use_gpu', False),
-            'chunk_size': getattr(collection, 'chunk_size', 1024),
-            'chunk_overlap': getattr(collection, 'chunk_overlap', 24)
-        }
-        qdrant_mgr.update_settings(**settings)
-        # Execute search query
         results = qdrant_mgr.query_points(
             query=query,
             collection_name=collection_name,
             top_k=top_k,
             score_threshold=score_threshold,
+            strategy=RagStrategyFactory.get_strategy(rag_strategy, use_gpu)
         )
-        
         # Format the results
         formatted_results = []
         for i, result in enumerate(results):
@@ -250,12 +216,7 @@ def main():
         debug=args.debug,     # Debug mode based on args
         lifespan=app_lifespan  # Assign lifespan function
     )
-    
-    # Register collections-list tool
-    @app.tool(name="collections-list", description="List available Qdrant collections")
-    async def collections_list_tool(ctx: Context) -> Dict[str, str]:
-        return await list_collections(ctx, qdrant_mgr)
-    
+
     # Set binary mode for stdin/stdout on Windows if running in local mode
     if args.mode == "local" and sys.platform == 'win32':
         import msvcrt

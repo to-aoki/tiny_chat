@@ -6,14 +6,14 @@ from qdrant_client.http.models.models import QueryResponse
 
 try:
     from tiny_chat.database.embeddings.text_chunk import TextChunker
-    from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
+    from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory, RAGStrategy
     from tiny_chat.database.qdrant.collection import Collection
 except:
     import os
     import sys
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
     from tiny_chat.database.embeddings.text_chunk import TextChunker
-    from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
+    from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory, RAGStrategy
     from tiny_chat.database.qdrant.collection import Collection
 
 
@@ -31,7 +31,7 @@ class QdrantManager:
         chunk_overlap: Optional[int] = 24,
         top_k: int = 3,
         score_threshold: float = 0.4,
-        rag_strategy: Optional[str] = "bm25_static",
+        rag_strategy: Optional[str] = "bm25_sbert",
         use_gpu: Optional[bool] = False,
         **kwargs
     ):
@@ -64,13 +64,21 @@ class QdrantManager:
         self.use_gpu = use_gpu
         self.strategy = RagStrategyFactory.get_strategy(
             strategy_name=rag_strategy, use_gpu=use_gpu)
-        self.ensure_collection_exists()
-        self.chunker = TextChunker(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap
-        )
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        Collection.ensure_collection_descriptions_exists(qdrant_manager=self)
+        collection = Collection.load(self.collection_name, qdrant_manager=self)
+        if collection is None:
+            collection = Collection(
+                collection_name=self.collection_name,
+                top_k=top_k,
+                score_threshold=score_threshold,
+                rag_strategy=rag_strategy,
+                use_gpu=use_gpu,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap
+            )
+            collection.save(qdrant_manager=self)
 
     def is_need_reconnect(
         self,
@@ -103,11 +111,10 @@ class QdrantManager:
             collection_name = selected_collection_name
         if collection_name is not None and self.collection_name != collection_name:
             self.set_collection_name(collection_name=collection_name)
-        if (chunk_size is not None and self.chunker.chunk_size != chunk_size) or (
-                chunk_overlap is not None and self.chunker.chunk_overlap != chunk_overlap):
-            update_chunk_size = self.chunker.chunk_size if chunk_size is None else chunk_size
-            update_chunk_overlap = self.chunker.chunk_overlap if chunk_overlap is None else chunk_overlap
-            self.chunker = TextChunker(chunk_size=update_chunk_size, chunk_overlap=update_chunk_overlap)
+        if chunk_size is not None and self.chunk_size != chunk_size:
+            self.chunk_size = chunk_size
+        if chunk_overlap is not None and self.chunk_overlap != chunk_overlap:
+            self.chunk_overlap = chunk_overlap
         self.top_k = top_k if top_k is not None else self.top_k
         self.score_threshold = score_threshold if score_threshold is not None else self.score_threshold
         if (use_gpu is not None and self.use_gpu != use_gpu) or (
@@ -123,7 +130,8 @@ class QdrantManager:
             self.rag_strategy = update_rag_strategy
             self.use_gpu = update_use_gpu
 
-    def ensure_collection_exists(self, collection_name: Optional[str] = None):
+    def ensure_collection_exists(
+            self, collection_name: Optional[str] = None, strategy: Optional[RAGStrategy] = None):
         """
         コレクションが存在するか確認し、なければ作成する
 
@@ -137,13 +145,16 @@ class QdrantManager:
         collections = self.client.get_collections().collections
         collection_names = [c.name for c in collections]
 
+        if strategy is None:
+            strategy = self.strategy
+
         # コレクションが存在しない場合は新規作成
         if collection_name not in collection_names:
             # コレクションの作成
             self.client.create_collection(
                 collection_name=collection_name,
-                vectors_config=self.strategy.create_vector_config(),
-                sparse_vectors_config=self.strategy.create_sparse_vectors_config(),
+                vectors_config=strategy.create_vector_config(),
+                sparse_vectors_config=strategy.create_sparse_vectors_config(),
                 quantization_config=models.ScalarQuantization(
                     scalar=models.ScalarQuantizationConfig(
                         type=models.ScalarType.INT8,
@@ -178,8 +189,7 @@ class QdrantManager:
             collection_name: コレクション名
             **kwargs: 追加する文書とメタデータ
         """
-        # コレクションの存在を確認
-        self.ensure_collection_exists(collection_name)
+        # self.ensure_collection_exists(collection_name)
         
         documents = kwargs.get("texts", [])
         metadatas = kwargs.get("metadatas", [])
@@ -222,8 +232,7 @@ class QdrantManager:
         if score_threshold:
             score_threshold = self.score_threshold
 
-        # コレクションの存在を確認
-        self.ensure_collection_exists(collection_name)
+        # self.ensure_collection_exists(collection_name)
         filter_params = kwargs.get("filter", None)
         return self.query_points(query_text,
                                  top_k=top_k,
@@ -236,7 +245,10 @@ class QdrantManager:
         document: str,
         metadata: Dict[str, Any],
         collection_name: Optional[str] = None,
-        use_chunker: bool = True
+        use_chunker: bool = True,
+        strategy: Optional[RAGStrategy] = None,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
     ) -> str:
         """
         単一の文書をチャンク分割してベクトル化しQdrantに追加する
@@ -249,8 +261,8 @@ class QdrantManager:
         Returns:
             str: 追加された文書のID
         """
-        # add_documentsを利用して処理を共通化
-        result = self.add_documents([document], [metadata], collection_name, use_chunker)
+        result = self.add_documents([document], [metadata], collection_name, use_chunker,
+                                    strategy=strategy, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         return result[0] if result else None
         
     def add_documents(
@@ -259,6 +271,9 @@ class QdrantManager:
         metadata_list: List[Dict[str, Any]],
         collection_name: Optional[str] = None,
         use_chunker: bool = True,
+        strategy: Optional[RAGStrategy] = None,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
     ) -> List[str]:
         """
         複数の文書をチャンク分割してベクトル化しQdrantに追加する
@@ -273,9 +288,12 @@ class QdrantManager:
         """
         # コレクション名を確定
         collection_name = collection_name if collection_name is not None else self.collection_name
-        
+
+        if strategy is None:
+            strategy = self.strategy
+
         # コレクションの存在を確認
-        self.ensure_collection_exists(collection_name)
+        # self.ensure_collection_exists(collection_name)
 
         if len(documents) != len(metadata_list):
             raise ValueError("documents と metadata_list の長さが一致しません")
@@ -299,8 +317,12 @@ class QdrantManager:
             
             # 文書をチャンク分割
             if use_chunker:
-                doc_chunks = self.chunker.split_text(doc)
-
+                if chunk_size is None:
+                    chunk_size = self.chunk_size
+                if chunk_overlap is None:
+                    chunk_overlap = self.chunk_overlap
+                doc_chunks = TextChunker.split_text(
+                    doc, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
                 # 各チャンクを処理
                 for chunk_idx, chunk in enumerate(doc_chunks):
                     if original_id:
@@ -320,11 +342,10 @@ class QdrantManager:
                         chunk_metadata["parent_id"] = chunk_metadata["id"]
 
                     chunk_metadata["id"] = point_id
-
                     # Qdrantポイントの作成
                     point = models.PointStruct(
                         id=point_id,
-                        vector=self.strategy.vector(chunk),
+                        vector=strategy.vector(chunk),
                         payload={
                             "text": chunk,
                             **chunk_metadata
@@ -341,7 +362,7 @@ class QdrantManager:
                 # Qdrantポイントの作成
                 point = models.PointStruct(
                     id=point_id,
-                    vector=self.strategy.vector(doc),
+                    vector=strategy.vector(doc),
                     payload={
                         "text": doc,
                         **metadata
@@ -366,6 +387,7 @@ class QdrantManager:
         score_threshold: float = 0.4,
         collection_name: Optional[str] = None,
         filter_params: Optional[Dict[str, Any]] = None,
+        strategy : Optional[RAGStrategy] = None,
     ) -> List[QueryResponse]:
         """
         クエリに基づいて文書を検索する (ハイブリッド検索)
@@ -380,11 +402,14 @@ class QdrantManager:
         Returns:
             List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
         """
-        # コレクション名を確定
-        collection_name = collection_name if collection_name is not None else self.collection_name
+        if collection_name is None:
+            collection_name = self.collection_name
         
         # コレクションの存在を確認
-        self.ensure_collection_exists(collection_name)
+        # self.ensure_collection_exists(collection_name)
+
+        if strategy is None:
+            strategy = self.strategy
 
         # 検索フィルタを作成
         search_filter = None
@@ -418,12 +443,12 @@ class QdrantManager:
         if score_threshold is None:
             score_threshold = self.score_threshold
 
-        prefetch = self.strategy.prefetch(query, top_k)
+        prefetch = strategy.prefetch(query, top_k)
         if prefetch:
             response = self.client.query_points(
                 collection_name=collection_name,
                 prefetch=prefetch,
-                query=self.strategy.query(query),
+                query=strategy.query(query),
                 limit=top_k,
                 with_vectors=False,
                 with_payload=True,
@@ -433,8 +458,8 @@ class QdrantManager:
         else:
             response = self.client.query_points(
                 collection_name=collection_name,
-                query=self.strategy.query(query),
-                using=self.strategy.use_vector_name(),
+                query=strategy.query(query),
+                using=strategy.use_vector_name(),
                 limit=top_k,
                 with_vectors=False,
                 with_payload=True,
@@ -463,7 +488,7 @@ class QdrantManager:
 
         return results
 
-    def set_collection_name(self, collection_name: str) -> None:
+    def set_collection_name(self, collection_name: str, force_create=False) -> None:
         """
         現在のデフォルトコレクション名を変更する
         
@@ -471,7 +496,8 @@ class QdrantManager:
             collection_name: 新しいコレクション名
         """
         self.collection_name = collection_name
-        self.ensure_collection_exists(collection_name)
+        if force_create:
+            self.ensure_collection_exists(collection_name)
     
     def get_collections(self) -> List[str]:
         """
@@ -502,7 +528,7 @@ class QdrantManager:
         collection_name = collection_name if collection_name is not None else self.collection_name
         
         # コレクションの存在を確認
-        self.ensure_collection_exists(collection_name)
+        # self.ensure_collection_exists(collection_name)
 
         try:
             # scrollメソッドはbatch数を返すのでイテレーションが必要
@@ -552,7 +578,7 @@ class QdrantManager:
         collection_name = collection_name if collection_name is not None else self.collection_name
         
         # コレクションの存在を確認
-        self.ensure_collection_exists(collection_name)
+        # self.ensure_collection_exists(collection_name)
 
         collection_info = self.client.get_collection(collection_name=collection_name)
         return collection_info.points_count
@@ -573,19 +599,19 @@ class QdrantManager:
         try:
             # コレクションが存在するか確認
             collections = self.client.get_collections().collections
-            collection_names = [c.name for c in collections]
-            
-            if collection_name not in collection_names:
+            collection_names = [c.name for c in collections if c.name != Collection.STORED_COLLECTION_NAME]
+
+            if len(collection_names) <= 1 or collection_name not in collection_names:
                 return False  # 削除対象のコレクションが存在しない
-                
+
             # コレクションを削除
             self.client.delete_collection(collection_name=collection_name)
+
+            collection_names.remove(collection_name)
             
-            # 削除後、現在のコレクション名が一致する場合はデフォルトに戻す
             if self.collection_name == collection_name:
-                self.collection_name = "default"
-                self.ensure_collection_exists()
-                
+                self.collection_name = collection_names[0]
+
             return True
         except Exception as e:
             return False
@@ -603,9 +629,11 @@ class QdrantManager:
         """
         # コレクション名を確定
         collection_name = collection_name if collection_name is not None else self.collection_name
-        
-        # コレクションの存在を確認
-        self.ensure_collection_exists(collection_name)
+        collections = self.client.get_collections().collections
+        collection_names = [c.name for c in collections if c.name != Collection.STORED_COLLECTION_NAME]
+
+        if collection_name not in collection_names:
+            return 0  # 削除対象のコレクションが存在しない
 
         filter_conditions = []
         for key, value in filter_params.items():
@@ -663,12 +691,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     start_time = time.time()
+    test_path = "./qdrant_test_data"
     manager = QdrantManager(
         collection_name="test",
-        rag_strategy=args.strategy, use_gpu=args.use_gpu, path="./qdrant_test_data")
-
-    manager.delete_collection("test")
-    manager.set_collection_name("test")
+        rag_strategy=args.strategy, use_gpu=args.use_gpu, file_path=test_path)
 
     print(f"初期化時間: {time.time() - start_time:.4f}秒")
 
@@ -731,3 +757,8 @@ if __name__ == "__main__":
         print(f"  {i+1}. スコア: {result.score:.4f}")
         print(f"     文書: {result.payload.get('text')}")
         print(f"     メタデータ: {', '.join([f'{k}={v}' for k, v in result.payload.items() if k != 'text'])}")
+
+    manager.client.close()
+
+    import shutil
+    shutil.rmtree(test_path)
