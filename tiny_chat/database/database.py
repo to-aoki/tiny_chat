@@ -56,6 +56,7 @@ def get_or_create_qdrant_manager(
                 if logger:
                     logger.info("QdrantManagerを初期化しています...")
                 try:
+                    db_config = st.session_state.db_config
                     _qdrant_manager = QdrantManager(
                         **db_config.__dict__
                     )
