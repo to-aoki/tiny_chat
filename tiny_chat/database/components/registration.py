@@ -205,7 +205,6 @@ def show_registration(
                             chunk_size=collection.chunk_size, chunk_overlap=collection.chunk_overlap
                         )
 
-                        # 結果表示
                         st.success(
                             f"{len(added_ids)}件のドキュメントを「{collection_name}」コレクションに登録しました")
 
@@ -286,7 +285,6 @@ def show_registration(
                         st.success(
                             f"{len(added_ids)}件のドキュメントを「{collection_name}」コレクションに登録しました")
 
-                        # 登録されたドキュメントの一覧をセッションに保存
                         metadata_df = pd.DataFrame(metadatas)
                         st.dataframe(metadata_df, use_container_width=True)
 

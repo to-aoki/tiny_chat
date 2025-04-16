@@ -606,15 +606,24 @@ def run_chat_app(server_mode=False):
     with st.sidebar:
         sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
 
-    # タブの作成
-    tabs = st.tabs(["💬 チャット", "🔍 データベース"])
+    tab_items = ["💬 チャット", "🛢️ データベース"]
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = tab_items[0]
+
+    st.radio(
+        "トップナビゲーション",
+        tab_items,
+        key='active_tab',
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
     # チャット機能タブ
-    with tabs[0]:
+    if st.session_state.active_tab == tab_items[0]:
         show_chat_component(logger=LOGGER)
 
     # データベース機能タブ
-    with tabs[1]:
+    if st.session_state.active_tab == tab_items[1]:
         # データベース機能の表示
         if st.session_state.rag_mode_ever_enabled:
             try:

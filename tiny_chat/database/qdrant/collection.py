@@ -138,5 +138,10 @@ class Collection:
         qdrant_manager.delete_by_filter(filter_params,
                                         collection_name=Collection.STORED_COLLECTION_NAME)
         target_collection.description = description
-        cls.save(qdrant_manager=qdrant_manager)
+        target_collection.save(qdrant_manager=qdrant_manager)
 
+    @classmethod
+    def delete(cls, collection_name, qdrant_manager):
+        filter_params = {"collection_name": collection_name}
+        qdrant_manager.delete_by_filter(filter_params,
+                                        collection_name=Collection.STORED_COLLECTION_NAME)
