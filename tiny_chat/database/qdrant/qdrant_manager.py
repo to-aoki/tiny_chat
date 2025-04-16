@@ -45,7 +45,13 @@ class QdrantManager:
         self.file_path = None
         if server_url:
             # サーバーに接続
-            self.client = QdrantClient(url=server_url, api_key=api_key)
+            if server_url.startswith("http"):
+                self.client = QdrantClient(url=server_url, api_key=api_key)
+            elif server_url.startswith("dns://"):
+                from urllib.parse import urlparse
+                # dns://localhost:6334 のような dns://から始まるURIはgRPCとみなす
+                parsed_uri = urlparse(server_url)
+                self.client = QdrantClient(host=parsed_uri.hostname, port=parsed_uri.port, prefer_grpc=True)
             self.server_url = server_url
             self.api_key = api_key
         elif file_path == ":memory:":
