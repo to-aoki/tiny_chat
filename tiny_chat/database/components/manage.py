@@ -339,6 +339,7 @@ def _manage_collections(qdrant_manager, logger):
                             # コレクション情報を保存
                             new_collection.save(qdrant_manager=qdrant_manager)
                             st.success(f"コレクション '{new_collection_name}' を作成しました")
+                            st.rerun()
                         except Exception as e:
                             st.error(f"コレクション作成中にエラーが発生しました: {str(e)}")
                             logger.error(f"コレクション作成エラー: {str(e)}")
@@ -375,7 +376,6 @@ def _manage_collections(qdrant_manager, logger):
             if update_pressed and update_collection:
                 with st.spinner(f"コレクション '{update_collection}' の説明を更新中..."):
                     try:
-                        from tiny_chat.database.qdrant.collection import Collection
                         Collection.update_description(
                             collection_name=update_collection, description=new_description,
                             qdrant_manager=qdrant_manager)
@@ -424,9 +424,7 @@ def _manage_collections(qdrant_manager, logger):
                     with st.spinner(f"コレクション '{selected_collection_to_delete}' を削除中..."):
                         try:
                             # コレクション管理から削除
-                            filter_params = {"collection_name": selected_collection_to_delete}
-                            qdrant_manager.delete_by_filter(filter_params)
-                            # コレクションを削除
+                            Collection.delete(selected_collection_to_delete)
                             qdrant_manager.delete_collection(selected_collection_to_delete)
                             # 常に成功メッセージを表示
                             st.success(f"コレクション '{selected_collection_to_delete}' の削除が完了しました")
@@ -439,12 +437,25 @@ def _manage_collections(qdrant_manager, logger):
                             st.error(f"削除処理中にエラーが発生しました: {str(e)}")
                             logger.error(f"コレクション削除エラー: {str(e)}")
 
+
 def show_manage_component(qdrant_manager, logger):
-    # タブを作成
-    data_management_tabs = st.tabs(["ソース", "コレクション"])
+
+    tab_object = ["🏷 ️ソース", "📗 コレクション"]
+    if 'active_object' not in st.session_state:
+        st.session_state.active_object = tab_object[0]
+
+    st.radio(
+        "対象オブジェクト",
+        tab_object,
+        key='active_object',
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
     # ソースタブ
-    with data_management_tabs[0]:
+    if st.session_state.active_object == tab_object[0]:
         _manage_sources(qdrant_manager, logger)
+
     # コレクションタブ
-    with data_management_tabs[1]:
+    if st.session_state.active_object == tab_object[1]:
         _manage_collections(qdrant_manager, logger)

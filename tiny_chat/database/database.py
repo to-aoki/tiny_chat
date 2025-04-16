@@ -55,9 +55,16 @@ def get_or_create_qdrant_manager(
 
                 if logger:
                     logger.info("QdrantManagerを初期化しています...")
-                _qdrant_manager = QdrantManager(
-                    **db_config.__dict__
-                )
+                try:
+                    _qdrant_manager = QdrantManager(
+                        **db_config.__dict__
+                    )
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    if logger:
+                        logger.error(f"QdrantManagerの初期化が失敗しました: {str(e)}")
+                    raise e
                 if logger:
                     logger.info("QdrantManagerの初期化が完了しました")
 
@@ -112,26 +119,34 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
         mode.append("⚙️ 設定")
         is_server_mode = False
 
+    if 'active_select_db' not in st.session_state:
+        st.session_state.active_select_db = mode[0]
+
     # 検索と文書登録のタブを作成
-    search_tabs = st.tabs(mode)
+    st.selectbox(
+        "データベースナビゲーション",
+        mode,
+        key='active_select_db',
+        label_visibility="collapsed"
+    )
 
     # QdrantManagerを使用
     _qdrant_manager = get_or_create_qdrant_manager(logger)
 
     # 検索タブ
-    with search_tabs[0]:
+    if st.session_state.active_select_db == mode[0]:
         show_search_component(_qdrant_manager)
     if not is_server_mode:
         # 文書登録タブ
-        with (search_tabs[1]):
+        if st.session_state.active_select_db == mode[1]:
             show_registration(_qdrant_manager, extensions=extensions)
 
         # 削除タブ
-        with search_tabs[2]:
+        if st.session_state.active_select_db == mode[2]:
             show_manage_component(_qdrant_manager, logger=logger)
 
         # 設定タブ
-        with search_tabs[3]:
+        if st.session_state.active_select_db == mode[3]:
             show_settings(logger=logger, config_file_path=DEFAULT_CONFIG_PATH)
 
 
