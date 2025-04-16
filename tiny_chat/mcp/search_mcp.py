@@ -119,15 +119,13 @@ async def register_search_tools(app, qdrant_mgr):
     
     for collection_name in collections:
         collection_info = get_collection_description(collection_name)
-
         if isinstance(collection_info, str):
-            collection = type('Collection', (), {
-                'description': collection_info,
-                'top_k': 3,
-                'score_threshold': 0.4
-            })
+            continue
         else:
             collection = collection_info
+
+        if not collection_info.show_mcp:
+            continue
 
         available_collections[collection_name] = collection
 
