@@ -94,7 +94,7 @@ def _manage_collections(qdrant_manager, logger):
     else:
         from tiny_chat.database.qdrant.collection import Collection
         # コレクション情報を表示
-        st.write(f"利用可能なコレクション: {len(collections)}個")
+        st.write(f"利用可能なコレクション: {len(collections) - 1}個")
         try:
             # scrollメソッドを使用してデータを直接取得
             results = []
@@ -137,13 +137,18 @@ def _manage_collections(qdrant_manager, logger):
                 # 文書数を取得（コレクション名を明示的に指定）
                 doc_count = qdrant_manager.count_documents(collection_name=col_name)
                 # コレクション説明を取得
+                show_mcp = False
                 description = ""
                 if col_name in description_map:
                     description = description_map[col_name].get('description', '')
+                    meta_data = description_map[col_name].get('metadata', None)
+                    if meta_data:
+                        show_mcp = meta_data.get('show_mcp', False)
                 # コレクションに関する情報を収集
                 collection_infos.append({
                     "name": col_name,
-                    "description": description,
+                    "show_mcp": show_mcp,
+                    "description": description if col_name != Collection.STORED_COLLECTION_NAME else "管理用のコレクションです",
                     "doc_count": doc_count,
                     "is_current": col_name == original_collection
                 })
@@ -157,29 +162,34 @@ def _manage_collections(qdrant_manager, logger):
                 })
         # カスタムテーブルでコレクション一覧とチェックボックスを一緒に表示
         # テーブルヘッダー
-        col1, col2, col3, col4, col5 = st.columns([1, 2, 4, 1, 1])
+        col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 2, 4, 1, 1])
         with col1:
             st.write("**選択**")
         with col2:
-            st.write("**コレクション名**")
+            st.write("**MCP利用**")
         with col3:
-            st.write("**説明**")
+            st.write("**コレクション名**")
         with col4:
-            st.write("**文書数**")
+            st.write("**説明**")
         with col5:
+            st.write("**文書数**")
+        with col6:
             st.write("**削除**")
         # 区切り線
         st.markdown("---")
         # 各コレクションの行を表示
         for col_info in collection_infos:
             col_name = col_info["name"]
+            show_mcp = col_info.get("show_mcp", False)
             description = col_info["description"]
             is_current = col_info["is_current"]
             # セッション状態の初期化
             if f"collection_active_{col_name}" not in st.session_state:
                 st.session_state[f"collection_active_{col_name}"] = is_current
+            if f"collection_active_{col_name}_show_mcp" not in st.session_state:
+                st.session_state[f"collection_active_{col_name}_show_mcp"] = show_mcp
             # 行の表示
-            col1, col2, col3, col4, col5 = st.columns([1, 2, 4, 1, 1])
+            col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 2, 4, 1, 1])
             # チェックボックスを表示
             with col1:
                 checkbox_selected = st.checkbox(
@@ -189,17 +199,25 @@ def _manage_collections(qdrant_manager, logger):
                     disabled=is_current,  # 現在使用中のコレクションはチェックを外せないようにする
                     label_visibility="collapsed"  # ラベルを非表示にする
                 )
-            # コレクション名を表示
             with col2:
+                if col_name != Collection.STORED_COLLECTION_NAME:
+                    show_mcp_checkbox_selected = st.checkbox(
+                        f"MCP利用 {col_name}",  # アクセシビリティのために非空のラベルを設定
+                        value=st.session_state[f"collection_active_{col_name}_show_mcp"],
+                        key=f"collection_checkbox_{col_name}_mcp",
+                        label_visibility="collapsed"  # ラベルを非表示にする
+                    )
+            # コレクション名を表示
+            with col3:
                 st.write(f"**{col_name}**" + (" (現在使用中)" if is_current else ""))
             # 説明を表示
-            with col3:
+            with col4:
                 st.write(f"{description}" if description else "")
             # 文書数
-            with col4:
+            with col5:
                 st.write(f"{col_info['doc_count']}")
             # 削除ボタン
-            with col5:
+            with col6:
                 # デフォルトコレクションは削除不可
                 button_disabled = is_current or col_name == Collection.STORED_COLLECTION_NAME
                 delete_button = st.button(
@@ -227,6 +245,15 @@ def _manage_collections(qdrant_manager, logger):
                     qdrant_manager.collection_name = col_name
                     st.success(f"コレクション '{col_name}' を使用するように設定しました。")
                     st.rerun()
+
+            if (col_name != Collection.STORED_COLLECTION_NAME and
+                    show_mcp_checkbox_selected != st.session_state[f"collection_active_{col_name}_show_mcp"]):
+                    st.session_state[f"collection_active_{col_name}_show_mcp"] = show_mcp_checkbox_selected
+                    Collection.update_mcp(collection_name=col_name,
+                                          show_mcp=show_mcp_checkbox_selected, qdrant_manager=qdrant_manager)
+                    st.success(f"コレクション '{col_name}' のMCP利用設定を変更しました。")
+                    st.rerun()
+
         # コレクション新規作成
         with st.expander("コレクション新規作成", expanded=False):
             # コレクション名の入力
@@ -424,7 +451,7 @@ def _manage_collections(qdrant_manager, logger):
                     with st.spinner(f"コレクション '{selected_collection_to_delete}' を削除中..."):
                         try:
                             # コレクション管理から削除
-                            Collection.delete(selected_collection_to_delete)
+                            Collection.delete(selected_collection_to_delete, qdrant_manager=qdrant_manager)
                             qdrant_manager.delete_collection(selected_collection_to_delete)
                             # 常に成功メッセージを表示
                             st.success(f"コレクション '{selected_collection_to_delete}' の削除が完了しました")

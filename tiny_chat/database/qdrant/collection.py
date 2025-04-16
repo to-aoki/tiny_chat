@@ -23,6 +23,7 @@ class Collection:
         score_threshold: float = 0.4,
         rag_strategy: Optional[str] = "bm25_sbert",
         use_gpu: Optional[bool] = False,
+        show_mcp: Optional[bool] = True,
         **kwargs
     ):
         """
@@ -50,6 +51,7 @@ class Collection:
         self.rag_strategy = rag_strategy
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.show_mcp = show_mcp
 
     def save(self, qdrant_manager=None):
         """
@@ -73,9 +75,10 @@ class Collection:
                 "top_k": self.top_k,
                 "score_threshold": self.score_threshold,
                 "rag_strategy": self.rag_strategy,
-                "use_gpu": self.use_gpu,
                 "chunk_size": self.chunk_size,
-                "chunk_overlap": self.chunk_overlap
+                "chunk_overlap": self.chunk_overlap,
+                "use_gpu": self.use_gpu,
+                "show_mcp": self.show_mcp
             },
             use_chunker=False,
             strategy=NOOP_STRATEGY
@@ -122,7 +125,8 @@ class Collection:
             top_k=payload.get("top_k", 3),
             score_threshold=payload.get("score_threshold", 0.4),
             rag_strategy=payload.get("rag_strategy", "bm25_static"),
-            use_gpu=payload.get("use_gpu", False)
+            use_gpu=payload.get("use_gpu", False),
+            shwo_mcp=payload.get("shwo_mcp", False)
         )
 
     @classmethod
@@ -141,7 +145,19 @@ class Collection:
         target_collection.save(qdrant_manager=qdrant_manager)
 
     @classmethod
+    def update_mcp(cls, collection_name, show_mcp, qdrant_manager):
+        target_collection = cls.load(
+            collection_name=collection_name,
+            qdrant_manager=qdrant_manager)
+        filter_params = {"collection_name": collection_name}
+        qdrant_manager.delete_by_filter(filter_params,
+                                        collection_name=Collection.STORED_COLLECTION_NAME)
+        target_collection.show_mcp = show_mcp
+        target_collection.save(qdrant_manager=qdrant_manager)
+
+    @classmethod
     def delete(cls, collection_name, qdrant_manager):
         filter_params = {"collection_name": collection_name}
         qdrant_manager.delete_by_filter(filter_params,
                                         collection_name=Collection.STORED_COLLECTION_NAME)
+        qdrant_manager.delete_collection(collection_name=collection_name)
