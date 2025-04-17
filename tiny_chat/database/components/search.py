@@ -6,6 +6,8 @@ import webbrowser
 
 import pandas as pd
 import streamlit as st
+from tiny_chat.database.qdrant.collection import Collection
+from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
 
 
 def get_page_info_display(metadata: Dict) -> str:
@@ -54,9 +56,15 @@ def search_documents(
     if collection_name is None:
         collection_name = qdrant_manager.collection_name
 
+    collection = Collection.load(
+        collection_name=collection_name, qdrant_manager=qdrant_manager)
+
     results = qdrant_manager.query_points(
         query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold,
-        collection_name=collection_name)
+        collection_name=collection_name,
+        strategy=RagStrategyFactory.get_strategy(strategy_name=collection.rag_strategy, use_gpu=collection.use_gpu)
+    )
+
     return results
 
 
