@@ -165,8 +165,6 @@ def toggle_rag_mode(logger):
 # キャッシュ可能な検索関数 - RAGモード専用
 @functools.lru_cache(maxsize=32)
 def cached_search_documents(prompt_content, logger):
-    # search_documentsは外部関数なので、都度インポートして実行したRAGモードを確認
-    # これによりサイドバー描画時の不要な呼び出しを防止
     if not st.session_state.rag_mode:
         return []
     
@@ -550,7 +548,7 @@ def show_chat_component(logger):
                 uploaded_file = prompt["files"][0]  # 先頭1件のみ処理
                 file_processed = process_uploaded_file(uploaded_file)
                 # ファイル処理後、テキストがなければ再描画して終了
-                if not prompt.text:
+                if not file_processed or not prompt.text:
                     st.rerun()
                     return
 
