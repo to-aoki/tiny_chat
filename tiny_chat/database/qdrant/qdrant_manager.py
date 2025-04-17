@@ -449,6 +449,10 @@ class QdrantManager:
         if score_threshold is None:
             score_threshold = self.score_threshold
 
+        if hasattr(strategy, 'rerank'):
+            # 2倍にする
+            top_k = top_k * 2
+
         prefetch = strategy.prefetch(query, top_k)
         if prefetch:
             response = self.client.query_points(
@@ -491,6 +495,10 @@ class QdrantManager:
                     continue
             if score_threshold < point.score:
                 results.append(point)
+
+        if hasattr(strategy, 'rerank'):
+            if results is not None or len(results) > 2:
+                return strategy.rerank(query, results, top_k, score_threshold)
 
         return results
 

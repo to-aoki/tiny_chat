@@ -276,7 +276,7 @@ def _manage_collections(qdrant_manager, logger):
                 col1, col2 = st.columns(2)
                 with col1:
                     # RAG戦略の選択
-                    rag_strategy_options = ["bm25_static"]
+                    rag_strategy_options = ["bm25_sbert"]
                     rag_strategy = st.selectbox(
                         "RAG戦略",
                         options=rag_strategy_options,
