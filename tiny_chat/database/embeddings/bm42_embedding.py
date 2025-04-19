@@ -38,7 +38,6 @@ class BM42TextEmbedding:
         self.model = None
         self.load_model(model_name, device)
 
-
     def load_model(self, model_name: str, device: str):
         """SentenceTransformerモデルをロードします。
 
@@ -47,7 +46,6 @@ class BM42TextEmbedding:
             device: モデルを実行するデバイス（'cuda'または'cpu'）
         """
         self.model = SentenceTransformer(model_name, trust_remote_code=True, device=device)
-
 
     def _remove_symbols(self, morphemes: List) -> List:
         """補助記号を削除します。
@@ -126,7 +124,7 @@ class BM42TextEmbedding:
         device = self.model.device  # モデルのデバイスを取得
 
         # テキストをトークン化
-        inputs = tokenizer(prefixed_text, return_tensors="pt", truncation=True, max_length=768)
+        inputs = tokenizer(prefixed_text, return_tensors="pt", truncation=True, max_length=512)
 
         # 入力テンソルをモデルと同じデバイスに移動
         inputs = {k: v.to(device) for k, v in inputs.items()}
