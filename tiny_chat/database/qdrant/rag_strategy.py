@@ -28,8 +28,14 @@ class RagStrategyFactory:
             strategy = SparseOnly("bm42", use_gpu=use_gpu)
         elif strategy_name == "splade_ja":
             strategy = SparseOnly("hotchpotch/japanese-splade-v2", use_gpu=use_gpu)
-        elif strategy_name == "ruri_small":
+        elif strategy_name == "ruri_xsmall":
             strategy = DenseOnly("cl-nagoya/ruri-v3-30m", use_gpu=use_gpu)
+        elif strategy_name == "ruri_small":
+            strategy = DenseOnly("cl-nagoya/ruri-v3-70m", use_gpu=use_gpu)
+        elif strategy_name == "ruri_base":
+            strategy = DenseOnly("cl-nagoya/ruri-v3-130m", use_gpu=use_gpu)
+        elif strategy_name == "ruri_large":
+            strategy = DenseOnly("cl-nagoya/ruri-v3-310m", use_gpu=use_gpu)
         elif strategy_name == "ja_static":
             strategy = DenseOnly("ja_static", use_gpu=use_gpu)
         elif strategy_name == "m_e5":
@@ -131,21 +137,16 @@ class DenseOnly(RAGStrategy):
         if strategy == "ja_static":
             self.model = StaticEmbedding(
                 model_name="hotchpotch/static-embedding-japanese", device='cuda' if use_gpu else 'cpu')
-        elif strategy == "cl-nagoya/ruri-v3-30m":
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
-            self.model = SentenceTransformerEmbedding(
-                model_name=strategy, device='cuda' if use_gpu else 'cpu')
         elif strategy == "intfloat/multilingual-e5-large":
             from fastembed import TextEmbedding
             self.model = TextEmbedding(model_name=strategy, cache_dir="./multilingual-e5-large")
             self.model.dimension = 1024  # FIXME patch!
         else:
-            from fastembed import TextEmbedding
-            self.model = TextEmbedding(model_name=strategy)
-            self.model.dimension = 1024  # FIXME patch!
+            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
+            self.model = SentenceTransformerEmbedding(
+                model_name=strategy, device='cuda' if use_gpu else 'cpu')
 
     def create_vector_config(self):
-        print(self.model.dimension)
         return {
             self.dense_vector_field_name: models.VectorParams(
                 size=self.model.dimension,

@@ -222,3 +222,56 @@ if __name__ == "__main__":
     print("Average NDCG Scores:")
     for k, avg_score in average_ndcg_scores.items():
         print(f"  NDCG@{k}: {avg_score:.4f}")
+
+# $ python evaluate/eval_ja_gov_fags22k.py -uri dns://localhost:6334 -g -s ruri_xsmall
+# === 文書の追加 ===
+#
+# ドキュメント追加時間: 682.0819秒
+# コレクション内の文書数: 22892
+# Processing queries: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3420/3420 [01:20<00:00, 42.34query/s]
+#
+# Evaluated 3420 queries.
+# Average NDCG Scores:
+#   NDCG@1: 0.5561
+#   NDCG@3: 0.6604
+#   NDCG@5: 0.6834
+#   NDCG@10: 0.7033
+
+# $ python evaluate/eval_ja_gov_fags22k.py -uri dns://localhost:6334 -g -s ruri_small
+# === 文書の追加 ===
+# ドキュメント追加時間: 1114.8480秒
+# コレクション内の文書数: 22892
+# Processing queries: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3420/3420 [01:37<00:00, 34.93query/s]
+#
+# Evaluated 3420 queries.
+# Average NDCG Scores:
+#   NDCG@1: 0.5836
+#   NDCG@3: 0.6900
+#   NDCG@5: 0.7111
+#   NDCG@10: 0.7290
+
+# $ python evaluate/eval_ja_gov_fags22k.py -uri dns://localhost:6334 -g -s ruri_base
+# === 文書の追加 ===
+# ドキュメント追加時間: 2097.0727秒
+# コレクション内の文書数: 22892
+# Processing queries: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3420/3420 [02:12<00:00, 25.86query/s]
+#
+# Evaluated 3420 queries.
+# Average NDCG Scores:
+#   NDCG@1: 0.6211
+#   NDCG@3: 0.7256
+#   NDCG@5: 0.7454
+#   NDCG@10: 0.7599
+
+# $ python evaluate/eval_ja_gov_fags22k.py -uri dns://localhost:6334 -g -s ruri_large
+# === 文書の追加 ===
+# ドキュメント追加時間: 4631.5279秒
+# コレクション内の文書数: 22892
+# Processing queries: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3420/3420 [02:12<00:00, 25.86query/s]
+#
+# Evaluated 3420 queries.
+# Average NDCG Scores:
+#   NDCG@1: 0.6088
+#   NDCG@3: 0.7173
+#   NDCG@5: 0.7392
+#   NDCG@10: 0.7530

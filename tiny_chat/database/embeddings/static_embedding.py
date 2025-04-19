@@ -15,6 +15,7 @@ class StaticEmbedding:
         self,
         model_name="hotchpotch/static-embedding-japanese",
         device="cpu",
+        truncate_dim=512,  # 32, 64, 128, 256, 512, 1024
         **kwargs
     ):
         """
@@ -30,11 +31,12 @@ class StaticEmbedding:
             model_name,
             # backend="onnx",
             # model_kwargs={"file_name": "onnx/model_int8.onnx"},
-            device=device, **kwargs
+            device=device, **kwargs,
+            truncate_dim=truncate_dim
         )
         if device.startswith('cuda'):
             self.model.half()
-        self.dimension = self.model.get_sentence_embedding_dimension()
+        self.dimension = truncate_dim
 
     def _batch_process(
         self, 
