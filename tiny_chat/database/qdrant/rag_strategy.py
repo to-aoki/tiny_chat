@@ -47,9 +47,9 @@ class RagStrategyFactory:
         elif strategy_name == "bm25_static":
             strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_small":
-            strategy = SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
+            strategy = SpaceDenseRRF("bm25_ruri_small", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_base":
-            strategy = SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
+            strategy = SpaceDenseRRF("bm25_ruri_base", use_gpu=use_gpu)
         elif strategy_name == "splade_sbert":
             strategy = SpaceDenseRRF("splade_sbert", use_gpu=use_gpu)
         elif strategy_name == "bm25_sbert_rerank":
