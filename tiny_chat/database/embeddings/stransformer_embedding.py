@@ -1,3 +1,4 @@
+import os.path
 from typing import Any, Iterable, Optional, Union
 import torch
 from sentence_transformers import SentenceTransformer
@@ -13,16 +14,39 @@ class SentenceTransformerEmbedding:
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
         **kwargs
     ):
-
         self.model_name = model_name
         self.device = device
-        self.model = SentenceTransformer(
-            model_name,
-            trust_remote_code=True,
-            # backend="onnx",
-            # model_kwargs={"file_name": "onnx/model_int8.onnx"},
-            device=device, **kwargs
-        )
+        extra_path = kwargs.get("file_name", None)
+        if device == 'cpu' and extra_path is not None and extra_path.startswith("openvino/"):
+            model_dir = os.path.dirname(__file__) + "/model/" + os.path.split(model_name)[-1]
+            if not os.path.isdir(model_dir):
+                print("モデル変換(openvino int8) 開始:", model_dir)
+                model = SentenceTransformer(
+                    model_name,
+                    trust_remote_code=True,
+                    backend="openvino"
+                )
+                from sentence_transformers import export_static_quantized_openvino_model
+                from optimum.intel import OVQuantizationConfig
+                model.save(model_dir)
+                quantization_config = OVQuantizationConfig()
+                export_static_quantized_openvino_model(model, quantization_config, model_dir)
+                print("モデル変換(openvino int8) 完了:", model_dir)
+
+            self.model = SentenceTransformer(
+                model_dir,
+                device=device,
+                backend="openvino",
+                model_kwargs=kwargs
+            )
+        else:
+            self.model = SentenceTransformer(
+                model_name,
+                trust_remote_code=True,
+                device=device,
+                model_kwargs=kwargs
+            )
+
         if device.startswith('cuda'):
             self.model.half()
         self.dimension = self.model.get_sentence_embedding_dimension()
