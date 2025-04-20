@@ -1,4 +1,3 @@
-import os.path
 from abc import ABC
 from qdrant_client import models
 
@@ -36,7 +35,7 @@ class RagStrategyFactory:
             strategy = DenseOnly("cl-nagoya/ruri-v3-130m", use_gpu=use_gpu)
         elif strategy_name == "ruri_large":
             strategy = DenseOnly("cl-nagoya/ruri-v3-310m", use_gpu=use_gpu)
-        elif strategy_name == "ruri_xsmall-open-vino":
+        elif strategy_name == "ruri_xsmall_openvino":
             strategy = DenseOnly(strategy="cl-nagoya/ruri-v3-30m", use_gpu=False,
                                  file_name="openvino/openvino_model_qint8_quantized.xml")
         elif strategy_name == "ja_static":
@@ -140,6 +139,11 @@ class DenseOnly(RAGStrategy):
         if strategy == "ja_static":
             self.model = StaticEmbedding(
                 model_name="hotchpotch/static-embedding-japanese", device='cuda' if use_gpu else 'cpu')
+        if strategy == "ja_static_openvino":
+            self.model = StaticEmbedding(
+                model_name="hotchpotch/static-embedding-japanese", device='cpu',
+                file_name="openvino/openvino_model_qint8_quantized.xml"
+            )
         elif strategy == "intfloat/multilingual-e5-large":
             from fastembed import TextEmbedding
             self.model = TextEmbedding(model_name=strategy, cache_dir="./multilingual-e5-large")
