@@ -16,9 +16,8 @@ class SentenceTransformerCrossEncoder:
         self.model = CrossEncoder(
             model_name,
             trust_remote_code=True,
-            # backend="onnx",
-            # model_kwargs={"file_name": "onnx/model_int8.onnx"},
-            device=device, **kwargs
+            device=device,
+            model_kwargs=kwargs
         )
         if device.startswith('cuda'):
             self.model.half()
