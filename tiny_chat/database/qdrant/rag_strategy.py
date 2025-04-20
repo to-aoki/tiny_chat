@@ -46,7 +46,9 @@ class RagStrategyFactory:
             strategy = DenseReranker("cl-nagoya/ruri-v3-130m", use_gpu=use_gpu)
         elif strategy_name == "bm25_static":
             strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
-        elif strategy_name == "bm25_sbert":
+        elif strategy_name == "bm25_ruri_small":
+            strategy = SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
+        elif strategy_name == "bm25_ruri_base":
             strategy = SpaceDenseRRF("bm25_sbert", use_gpu=use_gpu)
         elif strategy_name == "splade_sbert":
             strategy = SpaceDenseRRF("splade_sbert", use_gpu=use_gpu)
@@ -246,12 +248,21 @@ class SpaceDenseRRF(RAGStrategy):
             self.bm25_model = BM25TextEmbedding()
             self.emb_model = StaticEmbedding(device='cuda' if use_gpu else 'cpu')
 
-        elif strategy == 'bm25_sbert':
+        elif strategy == 'bm25_ruri_small':
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
+                device='cuda' if use_gpu else 'cpu')
+
+        elif strategy == 'bm25_ruri_base':
+            self.sparse_vector_field_name = "sparse"
+            self.dense_vector_field_name = "dense"
+            self.bm25_model = BM25TextEmbedding()
+            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
+            self.emb_model = SentenceTransformerEmbedding(
+                model_name="cl-nagoya/ruri-v3-130m",
                 device='cuda' if use_gpu else 'cpu')
 
         elif strategy == 'splade_sbert':
@@ -311,7 +322,9 @@ class SpaceDenseRRFRerank(RAGStrategy):
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
-            self.emb_model = SentenceTransformerEmbedding(device='cuda' if use_gpu else 'cpu')
+            self.emb_model = SentenceTransformerEmbedding(
+                model_name="cl-nagoya/ruri-v3-130m",
+                device='cuda' if use_gpu else 'cpu')
             from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
             self.reanker = SentenceTransformerCrossEncoder(device='cuda' if use_gpu else 'cpu')
 
