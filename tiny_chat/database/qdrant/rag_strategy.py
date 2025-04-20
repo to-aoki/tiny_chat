@@ -42,6 +42,8 @@ class RagStrategyFactory:
             strategy = DenseOnly("ja_static", use_gpu=use_gpu)
         elif strategy_name == "m_e5":
             strategy = DenseOnly("intfloat/multilingual-e5-large", use_gpu=use_gpu)
+        elif strategy_name == "ruri_base_reranker":
+            strategy = DenseReranker("cl-nagoya/ruri-v3-130m", use_gpu=use_gpu)
         elif strategy_name == "bm25_static":
             strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
         elif strategy_name == "bm25_sbert":
@@ -173,6 +175,34 @@ class DenseOnly(RAGStrategy):
     def query(self, text=None):
         query_embedding = list(self.model.query_embed(text))[0]
         return query_embedding.tolist()
+
+
+class DenseReranker(DenseOnly):
+
+    def __init__(self, strategy="cl-nagoya/ruri-v3-30m", use_gpu=False, **kwargs):
+        self.strategy = strategy
+        self.dense_vector_field_name = "dense"
+        from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
+        self.model = SentenceTransformerEmbedding(
+            model_name=strategy, device='cuda' if use_gpu else 'cpu', **kwargs)
+        from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
+        self.reanker = SentenceTransformerCrossEncoder(device='cuda' if use_gpu else 'cpu')
+
+    def rerank(self, query, results, top_k, score_threshold=0.5):
+        documents = [result.payload.get("text", "") for result in results]
+        reranked = self.reanker.rank(query=query, documents=documents)
+        filterd = [rank for rank in reranked if rank['score'] >= score_threshold]
+
+        rank_results = []
+        for rank in filterd:
+            result = results[rank["corpus_id"]]
+            result.score = rank["score"]
+            rank_results.append(result)
+            if len(rank_results) >= top_k:
+                break
+
+        return rank_results
+
 
 
 class SpaceRRF(RAGStrategy):
