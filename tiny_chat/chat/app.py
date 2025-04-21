@@ -403,7 +403,7 @@ def show_chat_component(logger):
 
                         for i, result in enumerate(search_results):
                             source = result.payload.get('source', '')
-                            
+
                             # 重複チェック
                             if source in exist_path:
                                 continue
@@ -416,8 +416,7 @@ def show_chat_component(logger):
                             # 参照情報を保存
                             source_info = {
                                 "index": i + 1,
-                                "source": source,
-                                "text": text  # テキスト内容も保存
+                                "source": source
                             }
                             st.session_state.rag_sources.append(source_info)
 
@@ -434,7 +433,7 @@ def show_chat_component(logger):
 
             # 拡張プロンプトがあれば更新
             if enhanced_prompt:
-                st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
+               st.session_state.chat_manager.update_enhanced_prompt(enhanced_prompt)
 
             # APIに送信するメッセージの準備
             messages_for_api = st.session_state.chat_manager.prepare_messages_for_api(
@@ -445,19 +444,10 @@ def show_chat_component(logger):
                 if st.session_state.config["meta_prompt"]:
                     messages_for_api.append({"role": "system", "content": st.session_state.config["meta_prompt"]})
 
-                # 通常メッセージ
-                content_to_send = prompt_content
-
-                # RAGが有効で検索結果がある場合のみ検索結果を含める
-                if st.session_state.rag_mode and st.session_state.rag_sources:
-                    search_context = "\n\n以下は検索システムから取得した関連情報です:\n\n"
-                    for source in st.session_state.rag_sources:
-                        search_context += f"[{source['index']}] {source['source']}:\n"
-                        if 'text' in source:
-                            search_context += f"{source['text']}\n\n"
-                    content_to_send += search_context
-
-                messages_for_api.append({"role": "user", "content": content_to_send})
+                if enhanced_prompt:
+                    messages_for_api.append({"role": "user", "content": enhanced_prompt})
+                else:
+                    messages_for_api.append({"role": "user", "content": prompt_content})
 
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
