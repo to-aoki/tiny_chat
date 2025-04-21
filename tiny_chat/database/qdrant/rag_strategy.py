@@ -46,8 +46,8 @@ class RagStrategyFactory:
             strategy = DenseReranker("cl-nagoya/ruri-v3-130m", use_gpu=use_gpu)
         elif strategy_name == "bm25_static":
             strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
-        elif strategy_name == "bm25_ruri_small":
-            strategy = SpaceDenseRRF("bm25_ruri_small", use_gpu=use_gpu)
+        elif strategy_name == "bm25_ruri_xsmall":
+            strategy = SpaceDenseRRF("bm25_ruri_xsmall", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_base":
             strategy = SpaceDenseRRF("bm25_ruri_base", use_gpu=use_gpu)
         elif strategy_name == "splade_sbert":
@@ -248,7 +248,7 @@ class SpaceDenseRRF(RAGStrategy):
             self.bm25_model = BM25TextEmbedding()
             self.emb_model = StaticEmbedding(device='cuda' if use_gpu else 'cpu')
 
-        elif strategy == 'bm25_ruri_small':
+        elif strategy == 'bm25_ruri_xsmall':
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
