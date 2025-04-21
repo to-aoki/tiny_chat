@@ -248,6 +248,7 @@ def show_chat_component(logger):
             )
 
         with cols[2]:
+            # 履歴ファイルの出力
             if not st.session_state.chat_manager.messages:
                 if st.button(
                         "チャット保存",
@@ -256,27 +257,27 @@ def show_chat_component(logger):
                         key="export_chat_history_button"):
                     st.warning("保存するメッセージ履歴がありません")
             else:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 chat_history = st.session_state.chat_manager.to_json()
-                # クライアントインスタンスが存在しない場合は初期化
                 if "openai_client" not in st.session_state or st.session_state.openai_client is None:
                     st.session_state.openai_client = get_llm_client(
                         server_url=st.session_state.config["server_url"],
                         api_key=st.session_state.config["api_key"],
                         is_azure=st.session_state.config["is_azure"]
                     )
-
-                # 既存のクライアントインスタンスを使用
                 client = st.session_state.openai_client
-                summary = [{"role": "user", "content": "次の文字情報を10文字程度で要約をしてください: "
-                                                       + st.session_state.chat_manager.messages[0]["content"]}]
-                response = client.chat.completions.create(
-                    model=st.session_state.config["selected_model"],
-                    messages=summary,
-                    stream=False,
-                )
-                summary_part = response.choices[0].message.content[:10]
+                try:
+                    summary = [{"role": "user", "content": "次の文字情報を10文字程度で要約をしてください: "
+                                                           + st.session_state.chat_manager.messages[0]["content"]}]
+                    response = client.chat.completions.create(
+                        model=st.session_state.config["selected_model"],
+                        messages=summary,
+                        stream=False,
+                    )
+                    summary_part = response.choices[0].message.content[:10]
+                except:
+                    summary_part = "LLM-API_failed"
+
                 st.download_button(
                     label="チャット保存",
                     data=chat_history,
