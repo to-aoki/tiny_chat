@@ -192,7 +192,8 @@ def show_chat_component(logger):
                         for idx, file_info in enumerate(st.session_state.reference_files):
                             if not file_info["path"].startswith(('http://', 'https://')):
                                 if st.button(
-                                        f"[{file_info['index']}] {file_info['path']} ページ: {file_info['page']}", key=f"open_ref_{i}_{idx}"):
+                                        f"[{file_info['index']}] {file_info['path']} ページ: {file_info['page']}",
+                                        key=f"open_ref_{i}_{idx}"):
                                     try:
                                         webbrowser.open(file_info["path"])
                                     except Exception as e:
@@ -527,6 +528,8 @@ def show_chat_component(logger):
                         
                         # セッション状態に参照ファイル情報を保存
                         st.session_state.reference_files = reference_files
+
+                    message_placeholder.empty()
 
                     # 応答をメッセージ履歴に追加
                     st.session_state.chat_manager.add_assistant_message(full_response)
