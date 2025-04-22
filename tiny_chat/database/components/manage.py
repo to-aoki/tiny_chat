@@ -130,35 +130,35 @@ def _manage_collections(qdrant_manager, logger):
         description_map = {desc['collection_name']: desc for desc in collection_descriptions}
         # 各コレクションの情報を表示
         collection_infos = []
-        for col_name in collections:
+        for collection_name in collections:
             try:
                 # 現在のコレクション名を保持
                 original_collection = qdrant_manager.collection_name
                 # 文書数を取得（コレクション名を明示的に指定）
-                doc_count = qdrant_manager.count_documents(collection_name=col_name)
+                doc_count = qdrant_manager.count_documents(collection_name=collection_name)
                 # コレクション説明を取得
                 show_mcp = False
                 description = ""
-                if col_name in description_map:
-                    description = description_map[col_name].get('description', '')
-                    meta_data = description_map[col_name].get('metadata', None)
+                if collection_name in description_map:
+                    description = description_map[collection_name].get('description', '')
+                    meta_data = description_map[collection_name].get('metadata', None)
                     if meta_data:
                         show_mcp = meta_data.get('show_mcp', False)
                 # コレクションに関する情報を収集
                 collection_infos.append({
-                    "name": col_name,
+                    "name": collection_name,
                     "show_mcp": show_mcp,
-                    "description": description if col_name != Collection.STORED_COLLECTION_NAME else "管理用のコレクションです",
+                    "description": description if collection_name != Collection.STORED_COLLECTION_NAME else "管理用のコレクションです",
                     "doc_count": doc_count,
-                    "is_current": col_name == original_collection
+                    "is_current": collection_name == original_collection
                 })
             except Exception as e:
-                logger.error(f"コレクション情報取得エラー ({col_name}): {str(e)}")
+                logger.error(f"コレクション情報取得エラー ({collection_name}): {str(e)}")
                 collection_infos.append({
-                    "name": col_name,
+                    "name": collection_name,
                     "description": "エラー",
                     "doc_count": "エラー",
-                    "is_current": col_name == qdrant_manager.collection_name
+                    "is_current": collection_name == qdrant_manager.collection_name
                 })
         # カスタムテーブルでコレクション一覧とチェックボックスを一緒に表示
         # テーブルヘッダー
@@ -179,37 +179,37 @@ def _manage_collections(qdrant_manager, logger):
         st.markdown("---")
         # 各コレクションの行を表示
         for col_info in collection_infos:
-            col_name = col_info["name"]
+            collection_name = col_info["name"]
             show_mcp = col_info.get("show_mcp", False)
             description = col_info["description"]
             is_current = col_info["is_current"]
             # セッション状態の初期化
-            if f"collection_active_{col_name}" not in st.session_state:
-                st.session_state[f"collection_active_{col_name}"] = is_current
-            if f"collection_active_{col_name}_show_mcp" not in st.session_state:
-                st.session_state[f"collection_active_{col_name}_show_mcp"] = show_mcp
+            if f"collection_active_{collection_name}" not in st.session_state:
+                st.session_state[f"collection_active_{collection_name}"] = is_current
+            if f"collection_active_{collection_name}_show_mcp" not in st.session_state:
+                st.session_state[f"collection_active_{collection_name}_show_mcp"] = show_mcp
             # 行の表示
             col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 2, 4, 1, 1])
             # チェックボックスを表示
             with col1:
                 checkbox_selected = st.checkbox(
-                    f"選択 {col_name}",  # アクセシビリティのために非空のラベルを設定
-                    value=st.session_state[f"collection_active_{col_name}"],
-                    key=f"collection_checkbox_{col_name}",
-                    disabled=is_current,  # 現在使用中のコレクションはチェックを外せないようにする
+                    f"選択 {collection_name}",  # アクセシビリティのために非空のラベルを設定
+                    value=st.session_state[f"collection_active_{collection_name}"],
+                    key=f"collection_checkbox_{collection_name}",
+                    disabled=True if (collection_name == Collection.STORED_COLLECTION_NAME) or is_current else False,  # 現在使用中のコレクションはチェックを外せないようにする
                     label_visibility="collapsed"  # ラベルを非表示にする
                 )
             with col2:
-                if col_name != Collection.STORED_COLLECTION_NAME:
+                if collection_name != Collection.STORED_COLLECTION_NAME:
                     show_mcp_checkbox_selected = st.checkbox(
-                        f"MCP利用 {col_name}",  # アクセシビリティのために非空のラベルを設定
-                        value=st.session_state[f"collection_active_{col_name}_show_mcp"],
-                        key=f"collection_checkbox_{col_name}_mcp",
+                        f"MCP利用 {collection_name}",  # アクセシビリティのために非空のラベルを設定
+                        value=st.session_state[f"collection_active_{collection_name}_show_mcp"],
+                        key=f"collection_checkbox_{collection_name}_mcp",
                         label_visibility="collapsed"  # ラベルを非表示にする
                     )
             # コレクション名を表示
             with col3:
-                st.write(f"**{col_name}**" + (" (現在使用中)" if is_current else ""))
+                st.write(f"**{collection_name}**" + (" (現在使用中)" if is_current else ""))
             # 説明を表示
             with col4:
                 st.write(f"{description}" if description else "")
@@ -219,40 +219,40 @@ def _manage_collections(qdrant_manager, logger):
             # 削除ボタン
             with col6:
                 # デフォルトコレクションは削除不可
-                button_disabled = is_current or col_name == Collection.STORED_COLLECTION_NAME
+                button_disabled = is_current or collection_name == Collection.STORED_COLLECTION_NAME
                 delete_button = st.button(
                     "削除",
-                    key=f"delete_button_{col_name}",
+                    key=f"delete_button_{collection_name}",
                     disabled=button_disabled,
                     type="secondary",
                 )
                 # 削除ボタンが押された場合
                 if delete_button:
-                    st.session_state.selected_collection_to_delete = col_name
+                    st.session_state.selected_collection_to_delete = collection_name
                     st.session_state.delete_collection_confirmation_state = True
             
             # チェックボックスの状態が変更された場合の処理
-            if checkbox_selected != st.session_state[f"collection_active_{col_name}"]:
-                st.session_state[f"collection_active_{col_name}"] = checkbox_selected
+            if checkbox_selected != st.session_state[f"collection_active_{collection_name}"]:
+                st.session_state[f"collection_active_{collection_name}"] = checkbox_selected
                 # チェックされたコレクションをアクティブにする
                 if checkbox_selected:
                     # 他のコレクションのチェックを外す
                     for other_col_info in collection_infos:
-                        other_col_name = other_col_info["name"]
-                        if other_col_name != col_name:
-                            st.session_state[f"collection_active_{other_col_name}"] = False
+                        other_collection_name = other_col_info["name"]
+                        if other_collection_name != collection_name:
+                            st.session_state[f"collection_active_{other_collection_name}"] = False
                     # qdrant_managerのcollection_nameを変更
-                    qdrant_manager.collection_name = col_name
-                    st.success(f"コレクション '{col_name}' を使用するように設定しました。")
+                    qdrant_manager.collection_name = collection_name
+                    st.success(f"コレクション '{collection_name}' を使用するように設定しました。")
                     st.rerun()
 
-            if (col_name != Collection.STORED_COLLECTION_NAME and
-                    show_mcp_checkbox_selected != st.session_state[f"collection_active_{col_name}_show_mcp"]):
-                    st.session_state[f"collection_active_{col_name}_show_mcp"] = show_mcp_checkbox_selected
-                    Collection.update_mcp(collection_name=col_name,
-                                          show_mcp=show_mcp_checkbox_selected, qdrant_manager=qdrant_manager)
-                    st.success(f"コレクション '{col_name}' のMCP利用設定を変更しました。")
-                    st.rerun()
+            if (collection_name != Collection.STORED_COLLECTION_NAME and
+                    show_mcp_checkbox_selected != st.session_state[f"collection_active_{collection_name}_show_mcp"]):
+                st.session_state[f"collection_active_{collection_name}_show_mcp"] = show_mcp_checkbox_selected
+                Collection.update_mcp(collection_name=collection_name,
+                                      show_mcp=show_mcp_checkbox_selected, qdrant_manager=qdrant_manager)
+                st.success(f"コレクション '{collection_name}' のMCP利用設定を変更しました。")
+                st.rerun()
 
         # コレクション新規作成
         with st.expander("コレクション新規作成", expanded=False):
@@ -276,7 +276,16 @@ def _manage_collections(qdrant_manager, logger):
                 col1, col2 = st.columns(2)
                 with col1:
                     # RAG戦略の選択
-                    rag_strategy_options = ["bm25_sbert"]
+                    rag_strategy_options = [
+                        "bm25",
+                        "ruri_xsmall",
+                        "ruri_base",
+                        "ruri_xsmall_openvino",
+                        "bm25_static",
+                        "bm25_ruri_xsmall",
+                        "bm25_ruri_base",
+                        "bm25_ruri_large"
+                    ]
                     rag_strategy = st.selectbox(
                         "RAG戦略",
                         options=rag_strategy_options,

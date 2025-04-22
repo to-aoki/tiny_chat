@@ -75,17 +75,17 @@ def sidebar(config_file_path, logger):
         message_length = st.number_input(
             "メッセージ長",
             min_value=1000,
-            max_value=500000,
+            max_value=2000000,
             value=st.session_state.config["message_length"],
-            step=500,
+            step=1000,
             help="入力最大メッセージ長を決定します",
             disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
         )
 
         context_length = st.number_input(
             "添付ファイル文字列長",
-            min_value=100,
-            max_value=100000,
+            min_value=500,
+            max_value=1000000,
             value=st.session_state.config["context_length"],
             step=500,
             help="添付ファイルやURLコンテンツの取得最大長（切り詰める）文字数を指定します",

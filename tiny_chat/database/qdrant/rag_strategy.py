@@ -50,12 +50,14 @@ class RagStrategyFactory:
             strategy = SpaceDenseRRF("bm25_ruri_xsmall", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_base":
             strategy = SpaceDenseRRF("bm25_ruri_base", use_gpu=use_gpu)
-        elif strategy_name == "splade_sbert":
-            strategy = SpaceDenseRRF("splade_sbert", use_gpu=use_gpu)
-        elif strategy_name == "bm25_sbert_rerank":
-            strategy = SpaceDenseRRFRerank("bm25_sbert_rerank", use_gpu=use_gpu)
-        elif strategy_name == "splade_sbert_rerank":
-            strategy = SpaceDenseRRFRerank("splade_sbert_rerank", use_gpu=use_gpu)
+        elif strategy_name == "bm25_ruri_large":
+            strategy = SpaceDenseRRF("bm25_ruri_large", use_gpu=use_gpu)
+        elif strategy_name == "splade_ruri_base":
+            strategy = SpaceDenseRRF("splade_ruri_base", use_gpu=use_gpu)
+        elif strategy_name == "bm25_ruri_base_rerank":
+            strategy = SpaceDenseRRFRerank("bm25_ruri_base_rerank", use_gpu=use_gpu)
+        elif strategy_name == "splade_ruri_base_rerank":
+            strategy = SpaceDenseRRFRerank("splade_ruri_base_rerank", use_gpu=use_gpu)
         else:
             strategy = NoopRAGStrategy()
         
@@ -265,7 +267,16 @@ class SpaceDenseRRF(RAGStrategy):
                 model_name="cl-nagoya/ruri-v3-130m",
                 device='cuda' if use_gpu else 'cpu')
 
-        elif strategy == 'splade_sbert':
+        elif strategy == 'bm25_ruri_large':
+            self.sparse_vector_field_name = "sparse"
+            self.dense_vector_field_name = "dense"
+            self.bm25_model = BM25TextEmbedding()
+            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
+            self.emb_model = SentenceTransformerEmbedding(
+                model_name="cl-nagoya/ruri-v3-310m",
+                device='cuda' if use_gpu else 'cpu')
+
+        elif strategy == 'splade_ruri_base':
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             from tiny_chat.database.embeddings.splade_embedding import SpladeEmbedding
@@ -316,8 +327,8 @@ class SpaceDenseRRF(RAGStrategy):
 
 
 class SpaceDenseRRFRerank(RAGStrategy):
-    def __init__(self, strategy='bm25_sbert_rerank', use_gpu=False):
-        if strategy == 'bm25_sbert_rerank':
+    def __init__(self, strategy='bm25_ruri_base_rerank', use_gpu=False):
+        if strategy == 'bm25_ruri_base_rerank':
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
@@ -328,7 +339,7 @@ class SpaceDenseRRFRerank(RAGStrategy):
             from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
             self.reanker = SentenceTransformerCrossEncoder(device='cuda' if use_gpu else 'cpu')
 
-        elif strategy == 'splade_sbert_rerank':
+        elif strategy == 'splade_ruri_base_rerank':
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             from tiny_chat.database.embeddings.splade_embedding import SpladeEmbedding
