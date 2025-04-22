@@ -33,6 +33,7 @@ class Logger:
 
         # ロガーの設定
         self.logger = logging.getLogger("chat_app")
+        self.logger.propagate = False
         self.logger.setLevel(self.log_level)
 
         # ハンドラーがすでに設定されている場合は追加しない

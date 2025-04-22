@@ -614,7 +614,7 @@ def run_chat_app(server_mode=False):
     with st.sidebar:
         sidebar(config_file_path=CONFIG_FILE, logger=LOGGER)
 
-    tab_items = ["💬 チャット", "🛢️ データベース"]
+    tab_items = ["💬 チャット", "📁️ データベース"]
     if 'active_tab' not in st.session_state:
         st.session_state.active_tab = tab_items[0]
 
