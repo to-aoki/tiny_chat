@@ -467,7 +467,7 @@ def _manage_collections(qdrant_manager, logger):
 
 def show_manage_component(qdrant_manager, logger):
 
-    tab_object = ["🏷 ️ソース", "📗 コレクション"]
+    tab_object = ["✂ ️ソース", "📗 コレクション"]
     if 'active_object' not in st.session_state:
         st.session_state.active_object = tab_object[0]
 
