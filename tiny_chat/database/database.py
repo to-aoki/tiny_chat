@@ -24,6 +24,7 @@ def get_lock():
 
 my_lock = get_lock()
 
+
 def get_or_create_qdrant_manager(
         logger=None, config_file_path=DEFAULT_CONFIG_PATH, reconnect=False):
     """
