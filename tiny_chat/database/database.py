@@ -60,6 +60,10 @@ def get_or_create_qdrant_manager(
                     _qdrant_manager = QdrantManager(
                         **db_config.__dict__
                     )
+                    from tiny_chat.database.qdrant.collection import Collection
+                    collection = Collection(**db_config.__dict__)
+                    collection.save(qdrant_manager=_qdrant_manager)
+
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
