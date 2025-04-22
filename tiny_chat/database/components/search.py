@@ -3,6 +3,7 @@ from typing import Dict, List
 import functools
 import urllib.parse
 import webbrowser
+import io  # CSVデータを文字列として扱うために追加
 
 import pandas as pd
 import streamlit as st
@@ -82,12 +83,15 @@ def show_search_component(qdrant_manager, logger=None):
 
     # 詳細設定のエクスパンダー
     with st.expander("詳細設定", expanded=False):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
-            top_k = st.slider("表示件数", min_value=1, max_value=50, value=10)
+            top_k = st.slider("最大検索件数", min_value=1, max_value=10000, value=10)
 
         with col2:
+            score_threshold = st.slider("スコアしきい値", min_value=0., max_value=1., value=0.2)
+
+        with col3:
             # 使用可能なソースを取得（常に最新の状態を取得）
             # 現在のコレクション名を明示的に使用
             current_collection = qdrant_manager.collection_name
@@ -121,8 +125,8 @@ def show_search_component(qdrant_manager, logger=None):
             # コレクション名を明示的に渡して検索（キャッシュキーに含める）
             current_collection = qdrant_manager.collection_name
             st.session_state.search_results = search_documents(
-                query, qdrant_manager, top_k=top_k, filter_params_str=filter_params_str, 
-                score_threshold=0., collection_name=current_collection)
+                query, qdrant_manager, top_k=top_k, filter_params_str=filter_params_str,
+                score_threshold=score_threshold, collection_name=current_collection)
 
     # 結果の表示
     if st.session_state.search_results:
@@ -130,44 +134,84 @@ def show_search_component(qdrant_manager, logger=None):
         result_count = len(results)
         st.success(f"{result_count}件の結果が見つかりました")
 
-        result_grid = []
+        # 検索結果からDataFrameを作成
+        csv_data = []
         for i, result in enumerate(results):
+            # 各結果から必要な情報を抽出
+            row = {
+                "index": i + 1, # 表示上のインデックス
+                "score": result.score,
+                "source": str(result.payload['source']),
+                "page": str(result.payload['page']),
+                "file_type": str(result.payload['file_type']),
+                "text": str(result.payload['text'][:500]),
+            }
+            csv_data.append(row)
+
+        # DataFrameに変換
+        df = pd.DataFrame(csv_data)
+        cols = df.columns.tolist()
+        # 指定した列をリストの最初に移動させるヘルパー関数
+        def move_cols_to_front(df_cols, cols_to_move):
+            new_cols = []
+            for col in cols_to_move:
+                if col in df_cols:
+                    new_cols.append(col)
+            remaining_cols = [col for col in df_cols if col not in new_cols]
+            return new_cols + remaining_cols
+
+        ordered_cols = move_cols_to_front(cols, ["index", "score", "source", "page", "file_type", "text"])
+        df = df[ordered_cols]
+
+        # DataFrameをCSV文字列に変換 (UTF-8エンコード)
+        csv_string = df.to_csv(index=False).encode('utf-8')
+
+        # ダウンロードボタンを設置
+        st.download_button(
+            label="検索結果をCSVでダウンロード",
+            data=csv_string,
+            file_name=f'search_results_{query}.csv',
+            mime='text/csv',
+            key='download_search_results_csv' # ボタンキー
+        )
+
+        if len(results) > 50:
+            st.warning(f"上位50件を表示します")
+            results = results[:50]
+
+        for idx, result in enumerate(results): # results を直接ループ
             score = result.score
             metadata = {k: v for k, v in result.payload.items() if k != "text"}
             page_info = get_page_info_display(metadata)
+            source_name = metadata.get('source', 'ドキュメント')
+            text_content = result.payload.get("text", "")
 
-            result_grid.append({
-                "index": i + 1,
-                "source": metadata.get('source', 'ドキュメント'),
-                "page_info": page_info,
-                "score": f"{score:.4f}",
-                "metadata": metadata,
-                "text": result.payload.get("text", "")
-            })
-
-        # 一列表示に変更
-        for idx, item in enumerate(result_grid):
             with st.expander(
-                    f"#{item['index']}: {item['source']} {item['page_info']} (スコア: {item['score']})",
-                    expanded=idx == 0):
+                    f"#{idx + 1}: {source_name} {page_info} (スコア: {score:.4f})",
+                    expanded=idx == 0): # 最初の結果を展開
                 # メタデータをDataFrameとして表示
-                st.dataframe(pd.DataFrame([item['metadata']]), hide_index=True, use_container_width=True)
+                # metadataディクショナリをそのままDataFrameの行データとして渡す
+                st.dataframe(pd.DataFrame([metadata]), hide_index=True, use_container_width=True)
 
-                # ソースファイルへのリンク
-                if 'source' in item['metadata'] and item['metadata']['source']:
-                    source_path = item['metadata']['source']
-                    if not source_path.startswith(('http://', 'https://')):
-                        if st.button(f"{source_path}",
-                                     key=f"open_ref_{source_path}_{idx}", use_container_width=True):
+                # ソースファイルへのリンク/ボタン
+                if source_name: # source_nameが空文字列でないことを確認
+                    if not source_name.startswith(('http://', 'https://')):
+                        # ローカルファイルパスの場合
+                        if st.button(f"{source_name}",
+                                     key=f"open_ref_local_{idx}", use_container_width=True): # キーはユニークに
                             try:
-                                webbrowser.open(source_path)
+                                webbrowser.open(source_name)
                             except Exception as e:
                                 st.error(f"ファイルを開けませんでした: {str(e)}")
                     else:
-                        st.markdown(f"[{source_path}]({urllib.parse.quote(source_path, safe=':/')})")
+                        # URLの場合
+                        st.markdown(f"[{source_name}]({urllib.parse.quote(source_name, safe=':/')})")
 
                 # テキスト表示（長い場合は省略）
-                text = item['text']
-                st.text(text[:500] + "..." if len(text) > 500 else text)
+                st.text(text_content[:500] + "..." if len(text_content) > 500 else text_content)
     else:
-        st.info("検索結果はありません")
+        # 検索ボタンが押されたが結果が0件の場合もこのブロックに入る
+        if st.session_state.run_search or search_pressed: # 検索実行試みたが結果が0件の場合
+             st.info("一致する検索結果は見つかりませんでした。")
+        else: # 検索前の初期状態
+             st.info("検索条件を入力してください。")
