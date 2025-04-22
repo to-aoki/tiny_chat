@@ -419,7 +419,7 @@ class QdrantManager:
 
         # 検索フィルタを作成
         search_filter = None
-        if filter_params and self.file_path is None:
+        if filter_params and self.server_url is not None:
             filter_conditions = []
             for key, value in filter_params.items():
                 if value:  # 値が空でない場合のみフィルタに追加
@@ -480,7 +480,7 @@ class QdrantManager:
         points = response.points
         results = []
         for point in points:
-            if self.file_path is not None and filter_params:
+            if filter_params and self.server_url is None:
                 not_match = False
                 for key, value in filter_params.items():
                     if isinstance(value, list):
