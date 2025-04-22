@@ -66,28 +66,37 @@ class Collection:
         if qdrant_manager is None:
             raise ValueError("QdrantManagerが設定されていません")
 
-        # コレクション情報をメタデータとして保存
-        qdrant_manager.add_document(
+        results = qdrant_manager.query_points(
+            query="",  # 空のクエリで全件取得
+            filter_params={"collection_name": self.collection_name},
             collection_name=self.STORED_COLLECTION_NAME,
-            document=self.description,
-            metadata={
-                "collection_name": self.collection_name,
-                "top_k": self.top_k,
-                "score_threshold": self.score_threshold,
-                "rag_strategy": self.rag_strategy,
-                "chunk_size": self.chunk_size,
-                "chunk_overlap": self.chunk_overlap,
-                "use_gpu": self.use_gpu,
-                "show_mcp": self.show_mcp
-            },
-            use_chunker=False,
-            strategy=NOOP_STRATEGY
+            top_k=1,  # 1件だけ取得,
+            strategy=NOOP_STRATEGY,
+            score_threshold=-1.   # スコア不問(0返却）
         )
-        qdrant_manager.ensure_collection_exists(
-            self.collection_name,
-            strategy=RagStrategyFactory.get_strategy(
-                self.rag_strategy, use_gpu=self.use_gpu)
-        )
+        if not results:
+            # コレクション情報をメタデータとして保存
+            qdrant_manager.add_document(
+                collection_name=self.STORED_COLLECTION_NAME,
+                document=self.description,
+                metadata={
+                    "collection_name": self.collection_name,
+                    "top_k": self.top_k,
+                    "score_threshold": self.score_threshold,
+                    "rag_strategy": self.rag_strategy,
+                    "chunk_size": self.chunk_size,
+                    "chunk_overlap": self.chunk_overlap,
+                    "use_gpu": self.use_gpu,
+                    "show_mcp": self.show_mcp
+                },
+                use_chunker=False,
+                strategy=NOOP_STRATEGY
+            )
+            qdrant_manager.ensure_collection_exists(
+                self.collection_name,
+                strategy=RagStrategyFactory.get_strategy(
+                    self.rag_strategy, use_gpu=self.use_gpu)
+            )
 
     @classmethod
     def load(cls, collection_name: str, qdrant_manager=None):
