@@ -192,14 +192,14 @@ def show_chat_component(logger):
                         for idx, file_info in enumerate(st.session_state.reference_files):
                             if not file_info["path"].startswith(('http://', 'https://')):
                                 if st.button(
-                                        f"[{file_info['index']}] {file_info['path']}", key=f"open_ref_{i}_{idx}"):
+                                        f"[{file_info['index']}] {file_info['path']} ページ: {file_info['page']}", key=f"open_ref_{i}_{idx}"):
                                     try:
                                         webbrowser.open(file_info["path"])
                                     except Exception as e:
                                         st.error(f"ファイルを開けませんでした: {str(e)}")
                             else:
                                 st.markdown(
-                                    f"[\\[{file_info['index']}\\] {file_info['path']}]"
+                                    f"[\\[{file_info['index']}\\] {file_info['path']} ページ: {file_info['page']}]"
                                     f"({urllib.parse.quote(file_info['path'], safe=':/')})")
 
     # 添付ファイル一覧を表示
@@ -419,30 +419,22 @@ def show_chat_component(logger):
 
                         # 参照情報をリセット
                         st.session_state.rag_sources = []
-                        
-                        # 既存のパスを追跡して重複を避ける
-                        exist_path = set()
 
-                        for i, result in enumerate(search_results):
+                        for result in search_results:
                             source = result.payload.get('source', '')
+                            page = result.payload.get('page', '')
 
-                            # 重複チェック
-                            if source in exist_path:
-                                continue
-                                
-                            exist_path.add(source)
-                            
                             # テキスト内容を取得（長さ制限あり）
-                            text = result.payload.get('text', '')[:st.session_state.config["context_length"]]  
+                            text = result.payload.get('text', '')[:st.session_state.config["context_length"]]
 
                             # 参照情報を保存
                             source_info = {
-                                "index": i + 1,
+                                "page": page,
                                 "source": source
                             }
                             st.session_state.rag_sources.append(source_info)
 
-                            search_context += f"[{i + 1}] {source}:\n{text}\n\n"
+                            search_context += f"{source}:\n{text}\n\n"
 
                         # 検索結果を含めた拡張プロンプトを作成
                         if enhanced_prompt:
@@ -508,7 +500,6 @@ def show_chat_component(logger):
 
                     # RAGモードで検索結果がある場合のみ、参照情報を追加
                     if st.session_state.rag_mode and st.session_state.rag_sources:
-                        # 参照ファイル情報を保存するが、マークダウンには表示しない
                         reference_files = []
                         refer = 0
                         exist_path = set()
@@ -517,17 +508,21 @@ def show_chat_component(logger):
                             source_path = source["source"]
 
                             if source_path in exist_path:
+                                # 同じ情報源は表示しない（ページは先頭のみ）
                                 continue
 
                             if not source_path or source_path.startswith(tempfile.gettempdir()):
+                                # 一時ファイルはリンクが貼れない
                                 continue
 
                             # URLの場合とローカルファイルの場合、両方とも参照ボタンとして表示できるようにする
                             reference_files.append({
                                 "index": refer+1,
-                                "path": source_path
+                                "path": source_path,
+                                "page": source["page"]
                             })
                             refer += 1
+
                             exist_path.add(source_path)
                         
                         # セッション状態に参照ファイル情報を保存
