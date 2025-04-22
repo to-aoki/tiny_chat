@@ -20,6 +20,7 @@ class SentenceTransformerEmbedding:
         if device == 'cpu' and extra_path is not None and extra_path.startswith("openvino/"):
             model_dir = os.path.dirname(__file__) + "/model/" + os.path.split(model_name)[-1]
             if not os.path.isdir(model_dir):
+                # pip install sentence-transformers[openvino]
                 print("モデル変換(openvino int8) 開始:", model_dir)
                 model = SentenceTransformer(
                     model_name,
