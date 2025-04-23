@@ -2,6 +2,11 @@ import os
 import sys
 import argparse
 
+# https://discuss.streamlit.io/t/message-error-about-torch/90886/9
+# RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
+import torch
+
+torch.classes.__path__ = []
 
 def main():
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
