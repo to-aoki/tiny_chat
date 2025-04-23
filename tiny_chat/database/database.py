@@ -118,8 +118,8 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
 
     mode = ["🔍 検索"]
     is_server_mode = True
-    if st.session_state.get("config") is not None and st.session_state.get(
-            "config").get("session_only_mode") is not True:
+    if st.session_state.get("config") is None or (st.session_state.get("config") is not None and st.session_state.get(
+            "config").get("session_only_mode") is not True):
         mode.append("📑 登録")
         mode.append("📚 管理")
         mode.append("⚙️ 設定")

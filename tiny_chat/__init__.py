@@ -3,6 +3,12 @@ import sys
 import argparse
 import streamlit.web.cli
 
+# https://discuss.streamlit.io/t/message-error-about-torch/90886/9
+# RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
+import torch
+
+torch.classes.__path__ = []
+
 __version__ = "0.1.1"
 
 

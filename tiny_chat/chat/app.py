@@ -17,11 +17,6 @@ from tiny_chat.utils.llm_utils import get_llm_client
 from tiny_chat.chat.sidebar import sidebar
 from tiny_chat.chat.copy_botton import copy_button
 
-# https://discuss.streamlit.io/t/message-error-about-torch/90886/9
-# RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
-import torch
-torch.classes.__path__ = []
-
 
 # 設定ファイルのパス
 CONFIG_FILE = "chat_app_config.json"
