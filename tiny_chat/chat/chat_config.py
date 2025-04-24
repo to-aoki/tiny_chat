@@ -18,6 +18,8 @@ class ChatConfig:
         uri_processing: bool = True,
         is_azure: bool = False,
         session_only_mode: bool = False,
+        temperature: float = 1.,
+        top_p: float = 1.,
         **kwargs
     ):
         self.server_url = server_url
@@ -29,6 +31,8 @@ class ChatConfig:
         self.uri_processing = uri_processing
         self.is_azure = is_azure
         self.session_only_mode = session_only_mode
+        self.temperature = temperature
+        self.top_p = top_p
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
