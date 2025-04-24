@@ -60,6 +60,8 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "uri_processing": file_config.uri_processing,
             "is_azure": file_config.is_azure,
             "session_only_mode": file_config.session_only_mode,
+            "temperature": file_config.temperature,
+            "top_p": file_config.top_p,
         }
 
     # その他のセッション状態を初期化
@@ -268,6 +270,8 @@ def show_chat_component(logger):
                     response = client.chat.completions.create(
                         model=st.session_state.config["selected_model"],
                         messages=summary,
+                        temperature=st.session_state.config["temperature"],
+                        top_p=st.session_state.config["top_p"],
                         stream=False,
                     )
                     summary_part = response.choices[0].message.content[:10]
@@ -478,6 +482,8 @@ def show_chat_component(logger):
                     response = client.chat.completions.create(
                         model=st.session_state.config["selected_model"],
                         messages=messages_for_api,
+                        temperature=st.session_state.config["temperature"],
+                        top_p=st.session_state.config["top_p"],
                         stream=True
                     )
 
