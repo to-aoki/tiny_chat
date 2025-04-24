@@ -92,6 +92,26 @@ def sidebar(config_file_path, logger):
             disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
         )
 
+        temperature = st.number_input(
+            "温度",
+            min_value=0.0,
+            max_value=2.0,
+            value=st.session_state.config["temperature"],
+            step=0.1,
+            help="LLMの応答単語の確率分布を制御します（値が大きいと創造的/ハルシーネションが起こりやすいです）",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
+        top_p = st.number_input(
+            "トップPサンプリング",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.config["top_p"],
+            step=0.1,
+            help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
         uri_processing = st.checkbox(
             "メッセージURL取得",
             value=st.session_state.config["uri_processing"],
@@ -121,27 +141,6 @@ def sidebar(config_file_path, logger):
 
     if meta_prompt != st.session_state.config["meta_prompt"]:
         st.session_state.config["meta_prompt"] = meta_prompt
-
-    print(st.session_state.config["temperature"])
-    message_length = st.number_input(
-        "温度",
-        min_value=0.0,
-        max_value=2.0,
-        value=st.session_state.config["temperature"],
-        step=0.1,
-        help="LLMの応答単語の確率分布を制御します（値が大きいと創造的/ハルシーネションが起こりやすいです）",
-        disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-    )
-
-    context_length = st.number_input(
-        "トップPサンプリング",
-        min_value=0.0,
-        max_value=1.0,
-        value=st.session_state.config["top_p"],
-        step=0.1,
-        help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
-        disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-    )
 
     if not server_mode:
         # いずれかの設定変更があった場合
@@ -225,6 +224,16 @@ def sidebar(config_file_path, logger):
                 if context_length != st.session_state.config["context_length"]:
                     logger.info(f"コンテキスト長を更新: {context_length}")
                     st.session_state.config["context_length"] = context_length
+                    settings_changed = True
+
+                if temperature != st.session_state.config["temperature"]:
+                    logger.info(f"temperature: {temperature}")
+                    st.session_state.config["temperature"] = context_length
+                    settings_changed = True
+
+                if top_p != st.session_state.config["top_p"]:
+                    logger.info(f"top_p: {top_p}")
+                    st.session_state.config["top_p"] = context_length
                     settings_changed = True
 
             if uri_processing != st.session_state.config["uri_processing"]:
