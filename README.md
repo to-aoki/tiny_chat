@@ -23,7 +23,7 @@ pip install dist/*.whl
 
 ### Running from source (development)
 ```bash
-streamlit run tiny_chat/main.py -- --server.address=127.0.0.1
+streamlit run tiny_chat/main.py --server.address=127.0.0.1
 ```
 
 ### Running installed package
