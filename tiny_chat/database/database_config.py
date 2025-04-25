@@ -20,7 +20,7 @@ class DatabaseConfig:
         top_k: int = 3,
         score_threshold: float = 0.4,
         selected_collection_name: str = "default",
-        rag_strategy: str = 'bm25_ruri_xsmall',
+        rag_strategy: str = 'bm25',
         ues_gpu: bool = False,
         **kwargs
     ):

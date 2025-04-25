@@ -21,7 +21,7 @@ class Collection:
         chunk_overlap: Optional[int] = 24,
         top_k: int = 3,
         score_threshold: float = 0.4,
-        rag_strategy: Optional[str] = "bm25_static",
+        rag_strategy: Optional[str] = "bm25",
         use_gpu: Optional[bool] = False,
         show_mcp: Optional[bool] = True,
         **kwargs
