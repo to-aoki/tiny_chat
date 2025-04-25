@@ -96,7 +96,7 @@ def sidebar(config_file_path, logger):
             "温度",
             min_value=0.0,
             max_value=2.0,
-            value=st.session_state.config["temperature"],
+            value=float(st.session_state.config["temperature"]),
             step=0.1,
             help="LLMの応答単語の確率分布を制御します（値が大きいと創造的/ハルシーネションが起こりやすいです）",
             disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
@@ -106,7 +106,7 @@ def sidebar(config_file_path, logger):
             "トップPサンプリング",
             min_value=0.0,
             max_value=1.0,
-            value=st.session_state.config["top_p"],
+            value=float(st.session_state.config["top_p"]),
             step=0.1,
             help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
             disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
