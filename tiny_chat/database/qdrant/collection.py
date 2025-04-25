@@ -115,8 +115,8 @@ class Collection:
             filter_params={"collection_name": collection_name},
             collection_name=cls.STORED_COLLECTION_NAME,
             top_k=1,  # 1件だけ取得,
-            strategy=NOOP_STRATEGY,
-            score_threshold=-1.   # スコア不問(0返却）
+            strategy=NOOP_STRATEGY,  # ベクトル検索なし
+            score_threshold=-1.      # スコア不問(0返却）
         )
 
         if not results:
@@ -133,7 +133,7 @@ class Collection:
             chunk_overlap=payload.get("chunk_overlap", 24),
             top_k=payload.get("top_k", 3),
             score_threshold=payload.get("score_threshold", 0.4),
-            rag_strategy=payload.get("rag_strategy", "bm25_static"),
+            rag_strategy=payload.get("rag_strategy", "bm25"),
             use_gpu=payload.get("use_gpu", False),
             shwo_mcp=payload.get("shwo_mcp", False)
         )

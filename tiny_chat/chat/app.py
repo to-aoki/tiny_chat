@@ -170,7 +170,18 @@ def cached_search_documents(prompt_content, logger):
     from tiny_chat.database.database import get_or_create_qdrant_manager
     from tiny_chat.database.components.search import search_documents
     qdrant_manager = get_or_create_qdrant_manager(logger=logger)
-    return search_documents(prompt_content, qdrant_manager=qdrant_manager)
+
+    selected_collection = st.session_state.selected_collection
+    top_k = st.session_state.db_config.top_k
+    score_threshold = st.session_state.db_config.score_threshold
+
+    return search_documents(
+        prompt_content, 
+        qdrant_manager=qdrant_manager,
+        collection_name=selected_collection,
+        top_k=top_k,
+        score_threshold=score_threshold
+    )
 
 
 def show_chat_component(logger):

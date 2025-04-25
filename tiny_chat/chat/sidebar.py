@@ -103,7 +103,7 @@ def sidebar(config_file_path, logger):
         )
 
         top_p = st.number_input(
-            "トップPサンプリング",
+            "確率累積値（top_p）",
             min_value=0.0,
             max_value=1.0,
             value=float(st.session_state.config["top_p"]),
@@ -135,7 +135,7 @@ def sidebar(config_file_path, logger):
         "メタプロンプト",
         value=st.session_state.config["meta_prompt"],
         height=150,
-        help="LLMへのsystem指示を入力してください",
+        help="LLMのsystem指示文字列を入力してください",
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
@@ -217,27 +217,22 @@ def sidebar(config_file_path, logger):
 
             if not server_mode:
                 if message_length != st.session_state.config["message_length"]:
-                    logger.info(f"メッセージ長を更新: {message_length}")
                     st.session_state.config["message_length"] = message_length
                     settings_changed = True
 
                 if context_length != st.session_state.config["context_length"]:
-                    logger.info(f"コンテキスト長を更新: {context_length}")
                     st.session_state.config["context_length"] = context_length
                     settings_changed = True
 
                 if temperature != st.session_state.config["temperature"]:
-                    logger.info(f"temperature: {temperature}")
                     st.session_state.config["temperature"] = temperature
                     settings_changed = True
 
                 if top_p != st.session_state.config["top_p"]:
-                    logger.info(f"top_p: {top_p}")
                     st.session_state.config["top_p"] = top_p
                     settings_changed = True
 
             if uri_processing != st.session_state.config["uri_processing"]:
-                logger.info(f"URI処理設定を更新: {uri_processing}")
                 st.session_state.config["uri_processing"] = uri_processing
                 settings_changed = True
 
@@ -254,9 +249,7 @@ def sidebar(config_file_path, logger):
                 session_only_mode=server_mode
             )
 
-            if st.session_state.config["session_only_mode"]:
-                st.success("設定を更新しました (サーバーモード)")
-            elif config.save(config_file_path):
+            if config.save(config_file_path):
                 logger.info("設定をファイルに保存しました")
                 st.success("設定を更新し、ファイルに保存しました")
             else:
@@ -312,11 +305,9 @@ def sidebar(config_file_path, logger):
     )
 
     if uploaded_json is not None:
-        logger.info(f"JSONファイルがアップロードされました: {uploaded_json.name}")
         content = uploaded_json.getvalue().decode("utf-8")
 
         if st.button("インポートした履歴を適用", disabled=st.session_state.is_sending_message):
-            logger.info("履歴インポート適用ボタンがクリックされました")
             success = st.session_state.chat_manager.apply_imported_history(content)
             if success:
                 logger.info("メッセージ履歴のインポートに成功しました")
@@ -333,7 +324,34 @@ def sidebar(config_file_path, logger):
             from tiny_chat.database.qdrant.collection import Collection
 
             # 検索用サイドバー設定
-            st.sidebar.markdown("検索")
+            st.sidebar.markdown("RAG")
+
+            # top_kの設定
+            rag_top_k = st.sidebar.slider(
+                "最大検索件数 (top_k)", 
+                min_value=1, 
+                max_value=20,
+                value=st.session_state.db_config.top_k,
+                help="RAG検索で取得する最大文書数を設定します"
+            )
+            
+            # 値が変更された場合、セッション状態を更新
+            if rag_top_k != st.session_state.db_config.top_k:
+                st.session_state.db_config.top_k = rag_top_k
+            
+            # score_thresholdの設定
+            rag_score_threshold = st.sidebar.slider(
+                "スコアしきい値", 
+                min_value=0.0, 
+                max_value=1.0, 
+                value=st.session_state.db_config.score_threshold,
+                step=0.01,
+                help="RAG検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）"
+            )
+            
+            # 値が変更された場合、セッション状態を更新
+            if rag_score_threshold != st.session_state.db_config.score_threshold:
+                st.session_state.db_config.score_threshold = rag_score_threshold
 
             # コレクション名の選択（サイドバーに表示）
             manager = get_or_create_qdrant_manager(logger)
@@ -345,6 +363,8 @@ def sidebar(config_file_path, logger):
             if not available_collections:
                 available_collections = ["default"]
                 collection = Collection(collection_name="default")
+                collection.top_k = rag_top_k
+                collection.score_threshold = rag_score_threshold
                 collection.save(qdrant_manager=manager)
 
             available_collections = [collection for collection in available_collections
@@ -374,13 +394,11 @@ def sidebar(config_file_path, logger):
             search_collection = st.session_state.collection_select
 
             # 選択されたコレクションに切り替え
-            if (search_collection != manager.collection_name and 
-                not st.session_state.collection_changing):
+            if search_collection != manager.collection_name and not st.session_state.collection_changing:
                 # 変更中フラグを設定
                 st.session_state.collection_changing = True
                 st.sidebar.info(f"コレクション変更: {manager.collection_name} → {search_collection}")
-                logger.info(f"コレクション変更: {manager.collection_name} → {search_collection}")
-                
+
                 # コレクション名を変更
                 manager.set_collection_name(search_collection)
                 st.session_state.selected_collection = search_collection
