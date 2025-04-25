@@ -228,12 +228,12 @@ def sidebar(config_file_path, logger):
 
                 if temperature != st.session_state.config["temperature"]:
                     logger.info(f"temperature: {temperature}")
-                    st.session_state.config["temperature"] = context_length
+                    st.session_state.config["temperature"] = temperature
                     settings_changed = True
 
                 if top_p != st.session_state.config["top_p"]:
                     logger.info(f"top_p: {top_p}")
-                    st.session_state.config["top_p"] = context_length
+                    st.session_state.config["top_p"] = top_p
                     settings_changed = True
 
             if uri_processing != st.session_state.config["uri_processing"]:

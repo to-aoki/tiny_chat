@@ -79,7 +79,7 @@ class ChatConfig:
                 'context_length': self.context_length,
                 'uri_processing': self.uri_processing,
                 'is_azure': self.is_azure,
-                'session_only_mode': self.session_only_mode
+                'session_only_mode': self.session_only_mode,
                 'temperature': self.temperature,
                 'top_p': self.top_p,
             }
