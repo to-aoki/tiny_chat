@@ -18,8 +18,8 @@ class ChatConfig:
         uri_processing: bool = True,
         is_azure: bool = False,
         session_only_mode: bool = False,
-        temperature: float = 1.,
-        top_p: float = 1.,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
         **kwargs
     ):
         self.server_url = server_url
