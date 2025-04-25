@@ -11,125 +11,165 @@ def sidebar(config_file_path, logger):
     server_mode = st.session_state.config["session_only_mode"]
 
     if not server_mode:
-        # モデル選択または入力
-        # APIに接続できる場合はドロップダウンリストを表示し、できない場合はテキスト入力欄を表示
-        if st.session_state.models_api_success and st.session_state.available_models:
-            model_input = st.selectbox(
-                "モデル",
-                st.session_state.available_models,
-                index=st.session_state.available_models.index(
-                    st.session_state.config["selected_model"]
-                ) if st.session_state.config["selected_model"] in st.session_state.available_models else 0,
-                help="API から取得したモデル一覧から選択します",
+        with st.expander("モデル設定", expanded=False):
+            st.markdown('<span style="font-size: 12px;">変更時は「設定を反映」してください</span>', unsafe_allow_html=True)
+
+            # モデル選択または入力
+            # APIに接続できる場合はドロップダウンリストを表示し、できない場合はテキスト入力欄を表示
+            if st.session_state.models_api_success and st.session_state.available_models:
+                model_input = st.selectbox(
+                    "モデル",
+                    st.session_state.available_models,
+                    index=st.session_state.available_models.index(
+                        st.session_state.config["selected_model"]
+                    ) if st.session_state.config["selected_model"] in st.session_state.available_models else 0,
+                    help="API から取得したモデル一覧から選択します",
+                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+                )
+            else:
+                model_input = st.text_input(
+                    "モデル",
+                    value=st.session_state.config["selected_model"],
+                    help="使用するモデル名を入力してください",
+                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+                )
+
+            # 入力されたモデルを使用
+            if model_input != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
+                st.session_state.config["selected_model"] = model_input
+                logger.info(f"モデルを変更: {model_input}")
+                # 設定を外部ファイルに保存
+                config = ChatConfig(
+                    server_url=st.session_state.config["server_url"],
+                    api_key=st.session_state.config["api_key"],
+                    selected_model=model_input,
+                    meta_prompt=st.session_state.config["meta_prompt"],
+                    context_length=st.session_state.config["context_length"],
+                    message_length=st.session_state.config["message_length"],
+                    uri_processing=st.session_state.config["uri_processing"],
+                    is_azure=st.session_state.config["is_azure"],
+                    session_only_mode=st.session_state.config["session_only_mode"]
+                )
+                config.save(config_file_path)
+                logger.info("設定を保存しました")
+
+            server_url = st.text_input(
+                "サーバーURL",
+                value=st.session_state.config["server_url"],
+                help="OpenAI APIサーバーのURLを入力してください",
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
-        else:
-            model_input = st.text_input(
-                "モデル",
-                value=st.session_state.config["selected_model"],
-                help="使用するモデル名を入力してください",
+
+            api_key = st.text_input(
+                "API Key",
+                value=st.session_state.config["api_key"],
+                type="password",
+                help="APIキーを入力してください",
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
 
-        # 入力されたモデルを使用
-        if model_input != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
-            st.session_state.config["selected_model"] = model_input
-            logger.info(f"モデルを変更: {model_input}")
-            # 設定を外部ファイルに保存
-            config = ChatConfig(
-                server_url=st.session_state.config["server_url"],
-                api_key=st.session_state.config["api_key"],
-                selected_model=model_input,
-                meta_prompt=st.session_state.config["meta_prompt"],
-                context_length=st.session_state.config["context_length"],
-                message_length=st.session_state.config["message_length"],
-                uri_processing=st.session_state.config["uri_processing"],
-                is_azure=st.session_state.config["is_azure"],
-                session_only_mode=st.session_state.config["session_only_mode"]
+            is_azure = st.checkbox(
+                "Azure OpenAIを利用",
+                value=st.session_state.config["is_azure"],
+                help="APIはAzure OpenAIを利用します",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
-            config.save(config_file_path)
-            logger.info("設定を保存しました")
 
-        server_url = st.text_input(
-            "サーバーURL",
-            value=st.session_state.config["server_url"],
-            help="OpenAI APIサーバーのURLを入力してください",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            message_length = st.number_input(
+                "メッセージ長",
+                min_value=1000,
+                max_value=2000000,
+                value=st.session_state.config["message_length"],
+                step=1000,
+                help="入力最大メッセージ長を決定します",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
 
-        api_key = st.text_input(
-            "API Key",
-            value=st.session_state.config["api_key"],
-            type="password",
-            help="APIキーを入力してください",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            context_length = st.number_input(
+                "添付ファイル文字列長",
+                min_value=500,
+                max_value=1000000,
+                value=st.session_state.config["context_length"],
+                step=500,
+                help="添付ファイルやURLコンテンツの取得最大長（切り詰める）文字数を指定します",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
 
-        is_azure = st.checkbox(
-            "Azure OpenAIを利用",
-            value=st.session_state.config["is_azure"],
-            help="APIはAzure OpenAIを利用します",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            temperature = st.number_input(
+                "温度",
+                min_value=0.0,
+                max_value=2.0,
+                value=float(st.session_state.config["temperature"]),
+                step=0.1,
+                help="LLMの応答単語の確率分布を制御します（値が大きいと創造的/ハルシーネションが起こりやすいです）",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
 
-        message_length = st.number_input(
-            "メッセージ長",
-            min_value=1000,
-            max_value=2000000,
-            value=st.session_state.config["message_length"],
-            step=1000,
-            help="入力最大メッセージ長を決定します",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            top_p = st.number_input(
+                "確率累積値（top_p）",
+                min_value=0.0,
+                max_value=1.0,
+                value=float(st.session_state.config["top_p"]),
+                step=0.1,
+                help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
 
-        context_length = st.number_input(
-            "添付ファイル文字列長",
-            min_value=500,
-            max_value=1000000,
-            value=st.session_state.config["context_length"],
-            step=500,
-            help="添付ファイルやURLコンテンツの取得最大長（切り詰める）文字数を指定します",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            uri_processing = st.checkbox(
+                "メッセージURL取得",
+                value=st.session_state.config["uri_processing"],
+                help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
 
-        temperature = st.number_input(
-            "温度",
-            min_value=0.0,
-            max_value=2.0,
-            value=float(st.session_state.config["temperature"]),
-            step=0.1,
-            help="LLMの応答単語の確率分布を制御します（値が大きいと創造的/ハルシーネションが起こりやすいです）",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            if uri_processing != st.session_state.config["uri_processing"] and not st.session_state.is_sending_message:
+                st.session_state.config["uri_processing"] = uri_processing
+                logger.info(f"URI処理設定を変更: {uri_processing}")
 
-        top_p = st.number_input(
-            "確率累積値（top_p）",
-            min_value=0.0,
-            max_value=1.0,
-            value=float(st.session_state.config["top_p"]),
-            step=0.1,
-            help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            if not server_mode:
+                # サーバーURL変更または Azure フラグの変更があった場合の処理
+                server_or_azure_changed = (server_url != st.session_state.config["server_url"] or
+                                          is_azure != st.session_state.config["is_azure"])
 
-        uri_processing = st.checkbox(
-            "メッセージURL取得",
-            value=st.session_state.config["uri_processing"],
-            help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
-            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-        )
+            # APIキーの変更をチェック
+            api_key_changed = api_key != st.session_state.config["api_key"]
 
-        if uri_processing != st.session_state.config["uri_processing"] and not st.session_state.is_sending_message:
-            st.session_state.config["uri_processing"] = uri_processing
-            logger.info(f"URI処理設定を変更: {uri_processing}")
+            # モデルリスト更新ボタン
+            if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
+                # 現在の設定値を使用
+                current_server = st.session_state.config["server_url"]
+                current_api_key = st.session_state.config["api_key"]
+                current_is_azure = st.session_state.config["is_azure"]
 
-        if not server_mode:
-            # サーバーURL変更または Azure フラグの変更があった場合の処理
-            server_or_azure_changed = (server_url != st.session_state.config["server_url"] or
-                                      is_azure != st.session_state.config["is_azure"])
+                try:
+                    # モデルリストを再取得
+                    models, api_success = ModelManager.fetch_available_models(
+                        current_server,
+                        current_api_key,
+                        st.session_state.openai_client,
+                        is_azure=current_is_azure
+                    )
 
-        # APIキーの変更をチェック
-        api_key_changed = api_key != st.session_state.config["api_key"]
+                    # 状態を更新
+                    st.session_state.available_models = models
+                    st.session_state.models_api_success = api_success
+
+                    if not api_success:
+                        logger.warning("モデルリスト取得に失敗しました")
+                        st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
+
+                    # APIクライアントの再初期化
+                    st.session_state.openai_client = get_llm_client(
+                        server_url=current_server,
+                        api_key=current_api_key,
+                        is_azure=current_is_azure
+                    )
+
+                    st.rerun()
+                except Exception as e:
+                    error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
+                    logger.error(error_msg)
+                    st.error(error_msg)
 
     meta_prompt = st.text_area(
         "メタプロンプト",
@@ -144,7 +184,8 @@ def sidebar(config_file_path, logger):
 
     if not server_mode:
         # いずれかの設定変更があった場合
-        if (server_or_azure_changed or api_key_changed) and not st.session_state.is_sending_message:
+        if hasattr(locals(), 'server_or_azure_changed') and (
+                server_or_azure_changed or api_key_changed) and not st.session_state.is_sending_message:
             # ログ記録
             if server_or_azure_changed:
                 logger.info(f"サーバーURLを変更: {server_url}")
@@ -216,36 +257,43 @@ def sidebar(config_file_path, logger):
             settings_changed = False
 
             if not server_mode:
-                if message_length != st.session_state.config["message_length"]:
-                    st.session_state.config["message_length"] = message_length
-                    settings_changed = True
 
-                if context_length != st.session_state.config["context_length"]:
-                    st.session_state.config["context_length"] = context_length
-                    settings_changed = True
+                # ローカル変数にアクセスするため、expanderの外で再定義
+                if 'message_length' in locals():
+                    if message_length != st.session_state.config["message_length"]:
+                        st.session_state.config["message_length"] = message_length
+                        settings_changed = True
 
-                if temperature != st.session_state.config["temperature"]:
-                    st.session_state.config["temperature"] = temperature
-                    settings_changed = True
+                if 'context_length' in locals():
+                    if context_length != st.session_state.config["context_length"]:
+                        st.session_state.config["context_length"] = context_length
+                        settings_changed = True
 
-                if top_p != st.session_state.config["top_p"]:
-                    st.session_state.config["top_p"] = top_p
-                    settings_changed = True
+                if 'temperature' in locals():
+                    if temperature != st.session_state.config["temperature"]:
+                        st.session_state.config["temperature"] = temperature
+                        settings_changed = True
 
-            if uri_processing != st.session_state.config["uri_processing"]:
-                st.session_state.config["uri_processing"] = uri_processing
-                settings_changed = True
+                if 'top_p' in locals():
+                    if top_p != st.session_state.config["top_p"]:
+                        st.session_state.config["top_p"] = top_p
+                        settings_changed = True
+
+                if 'uri_processing' in locals():
+                    if uri_processing != st.session_state.config["uri_processing"]:
+                        st.session_state.config["uri_processing"] = uri_processing
+                        settings_changed = True
 
             # 設定をファイルに保存
             config = ChatConfig(
-                server_url=server_url,
-                api_key=api_key,
+                server_url=st.session_state.config["server_url"],
+                api_key=st.session_state.config["api_key"],
                 selected_model=st.session_state.config["selected_model"],
                 meta_prompt=meta_prompt,
-                message_length=message_length,
-                context_length=context_length,
-                uri_processing=uri_processing,
-                is_azure=is_azure,
+                message_length=st.session_state.config["message_length"],
+                context_length=st.session_state.config["context_length"],
+                uri_processing=st.session_state.config["uri_processing"],
+                is_azure=st.session_state.config["is_azure"],
                 session_only_mode=server_mode
             )
 
@@ -256,46 +304,10 @@ def sidebar(config_file_path, logger):
                 logger.warning("設定ファイルへの保存に失敗しました")
                 st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
 
-            if settings_changed or server_or_azure_changed or api_key_changed:
+            if hasattr(locals(), 'settings_changed') and (
+                    settings_changed or hasattr(locals(), 'server_or_azure_changed') and (
+                    server_or_azure_changed or api_key_changed)):
                 st.rerun()
-
-            # モデルリスト更新ボタン
-            if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
-
-                # 現在の設定値を使用
-                current_server = st.session_state.config["server_url"]
-                current_api_key = st.session_state.config["api_key"]
-                current_is_azure = st.session_state.config["is_azure"]
-
-                try:
-                    # モデルリストを再取得
-                    models, api_success = ModelManager.fetch_available_models(
-                        current_server,
-                        current_api_key,
-                        st.session_state.openai_client,
-                        is_azure=current_is_azure
-                    )
-
-                    # 状態を更新
-                    st.session_state.available_models = models
-                    st.session_state.models_api_success = api_success
-
-                    if not api_success:
-                        logger.warning("モデルリスト取得に失敗しました")
-                        st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
-
-                    # APIクライアントの再初期化
-                    st.session_state.openai_client = get_llm_client(
-                        server_url=current_server,
-                        api_key=current_api_key,
-                        is_azure=current_is_azure
-                    )
-
-                    st.rerun()
-                except Exception as e:
-                    error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
-                    logger.error(error_msg)
-                    st.error(error_msg)
 
     uploaded_json = st.file_uploader(
         "チャット履歴をインポート",
