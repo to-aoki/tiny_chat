@@ -26,9 +26,20 @@ pip install dist/*.whl
 streamlit run tiny_chat/main.py --server.address=127.0.0.1
 ```
 
+### only database (development)
+```bash
+streamlit run tiny_chat/main.py --server.address=127.0.0.1 -- --database
+```
+
+
 ### Running installed package
 ```bash
 tiny-chat
+```
+
+### only database
+```bash
+tiny-chat --database
 ```
 
 ![img.png](img.png)
