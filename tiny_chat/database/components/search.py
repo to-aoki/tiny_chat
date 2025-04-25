@@ -33,8 +33,9 @@ def get_page_info_display(metadata: Dict) -> str:
 
 @functools.lru_cache(maxsize=32)
 def search_documents(
-        query: str, qdrant_manager, top_k: int = None, filter_params_str: str = None,
-        score_threshold=None, collection_name: str = None) -> List:
+    query: str, qdrant_manager, top_k: int = None, filter_params_str: str = None,
+    score_threshold=None, collection_name: str = None
+) -> List:
     """
     ドキュメントを検索します（キャッシュ機能付き）
     注意: この関数を呼び出す前に、QdrantManagerを初期化する必要があります
@@ -49,7 +50,6 @@ def search_documents(
     Returns:
         results: 検索結果のリスト
     """
-    # 文字列からフィルタを復元（もしあれば）
     filter_params = None
     if filter_params_str:
         import json
@@ -60,6 +60,9 @@ def search_documents(
 
     collection = Collection.load(
         collection_name=collection_name, qdrant_manager=qdrant_manager)
+
+    if collection is None:
+        raise ValueError(f'コレクション: {collection_name} が見つかりません')
 
     results = qdrant_manager.query_points(
         query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold,
