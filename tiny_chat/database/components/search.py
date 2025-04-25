@@ -44,6 +44,7 @@ def search_documents(
         top_k: 返す結果の数
         filter_params_str: 検索フィルタの文字列表現（キャッシュキーとして使用）
         score_threshold: 最小スコアしきい値
+        collection_name: 検索対象のコレクション名
 
     Returns:
         results: 検索結果のリスト
@@ -83,7 +84,7 @@ def show_search_component(qdrant_manager, logger=None):
 
     # 詳細設定のエクスパンダー
     with st.expander("詳細設定", expanded=False):
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             top_k = st.slider("最大検索件数", min_value=1, max_value=10000, value=10)
@@ -92,10 +93,25 @@ def show_search_component(qdrant_manager, logger=None):
             score_threshold = st.slider("スコアしきい値", min_value=0., max_value=1., value=0.2)
 
         with col3:
-            # 使用可能なソースを取得（常に最新の状態を取得）
-            # 現在のコレクション名を明示的に使用
+            # 利用可能なコレクション一覧を取得
+            available_collections = qdrant_manager.get_collections()
+            # コレクション_descriptionsは除外
+            available_collections = [c for c in available_collections if c != Collection.STORED_COLLECTION_NAME]
+            
+            # 現在のコレクション名をデフォルト選択に
             current_collection = qdrant_manager.collection_name
-            sources = qdrant_manager.get_sources(collection_name=current_collection)
+            default_idx = available_collections.index(current_collection) if current_collection in available_collections else 0
+            
+            selected_collection = st.selectbox(
+                "コレクションを選択",
+                options=available_collections,
+                index=default_idx,
+                key="collection_selectbox"
+            )
+
+        with col4:
+            # 選択されたコレクションに基づいてソースを取得
+            sources = qdrant_manager.get_sources(collection_name=selected_collection)
             selected_sources = st.multiselect(
                 "ソースでフィルタ",
                 options=sources,
@@ -122,11 +138,10 @@ def show_search_component(qdrant_manager, logger=None):
             filter_params_str = json.dumps(filter_params)
 
         with st.spinner("検索中..."):
-            # コレクション名を明示的に渡して検索（キャッシュキーに含める）
-            current_collection = qdrant_manager.collection_name
+            # 選択されたコレクション名を使用して検索
             st.session_state.search_results = search_documents(
                 query, qdrant_manager, top_k=top_k, filter_params_str=filter_params_str,
-                score_threshold=score_threshold, collection_name=current_collection)
+                score_threshold=score_threshold, collection_name=selected_collection)
 
     # 結果の表示
     if st.session_state.search_results:
