@@ -9,6 +9,10 @@ def sidebar(config_file_path, logger):
     st.header("設定")
 
     server_mode = st.session_state.config["session_only_mode"]
+    # 設定変更フラグ - すべての変更を追跡する統一変数
+    settings_changed = False
+    # サーバーURL、API Key、Azureフラグの変更を特別に追跡
+    server_settings_changed = False
 
     if not server_mode:
         with st.expander("モデル設定", expanded=False):
@@ -38,20 +42,7 @@ def sidebar(config_file_path, logger):
             if model_input != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
                 st.session_state.config["selected_model"] = model_input
                 logger.info(f"モデルを変更: {model_input}")
-                # 設定を外部ファイルに保存
-                config = ChatConfig(
-                    server_url=st.session_state.config["server_url"],
-                    api_key=st.session_state.config["api_key"],
-                    selected_model=model_input,
-                    meta_prompt=st.session_state.config["meta_prompt"],
-                    context_length=st.session_state.config["context_length"],
-                    message_length=st.session_state.config["message_length"],
-                    uri_processing=st.session_state.config["uri_processing"],
-                    is_azure=st.session_state.config["is_azure"],
-                    session_only_mode=st.session_state.config["session_only_mode"]
-                )
-                config.save(config_file_path)
-                logger.info("設定を保存しました")
+                settings_changed = True
 
             server_url = st.text_input(
                 "サーバーURL",
@@ -122,17 +113,19 @@ def sidebar(config_file_path, logger):
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
 
+            # 設定値変更の検出（フラグの一元管理）
             if uri_processing != st.session_state.config["uri_processing"] and not st.session_state.is_sending_message:
                 st.session_state.config["uri_processing"] = uri_processing
                 logger.info(f"URI処理設定を変更: {uri_processing}")
+                settings_changed = True
 
-            if not server_mode:
-                # サーバーURL変更または Azure フラグの変更があった場合の処理
-                server_or_azure_changed = (server_url != st.session_state.config["server_url"] or
-                                          is_azure != st.session_state.config["is_azure"])
-
-            # APIキーの変更をチェック
+            # サーバー関連設定の変更をチェック
+            server_url_changed = server_url != st.session_state.config["server_url"]
             api_key_changed = api_key != st.session_state.config["api_key"]
+            is_azure_changed = is_azure != st.session_state.config["is_azure"]
+            
+            # サーバー設定変更フラグ
+            server_settings_changed = server_url_changed or api_key_changed or is_azure_changed
 
             # モデルリスト更新ボタン
             if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
@@ -181,108 +174,95 @@ def sidebar(config_file_path, logger):
 
     if meta_prompt != st.session_state.config["meta_prompt"]:
         st.session_state.config["meta_prompt"] = meta_prompt
+        settings_changed = True
 
-    if not server_mode:
-        # いずれかの設定変更があった場合
-        if hasattr(locals(), 'server_or_azure_changed') and (
-                server_or_azure_changed or api_key_changed) and not st.session_state.is_sending_message:
-            # ログ記録
-            if server_or_azure_changed:
-                logger.info(f"サーバーURLを変更: {server_url}")
-                if is_azure != st.session_state.config["is_azure"]:
-                    logger.info(f"Azure設定を変更: {is_azure}")
-
-            if api_key_changed:
-                logger.info("APIキーを変更しました")
+    if not server_mode and server_settings_changed and not st.session_state.is_sending_message:
+        # ログ記録
+        if server_url_changed:
+            logger.info(f"サーバーURLを変更: {server_url}")
             
-            # 各フィールドの更新
-            st.session_state.config["server_url"] = server_url
-            st.session_state.config["api_key"] = api_key
-            st.session_state.config["is_azure"] = is_azure
+        if is_azure_changed:
+            logger.info(f"Azure設定を変更: {is_azure}")
 
-            # サーバー変更の場合はモデルリストを更新
-            if server_or_azure_changed:
-                logger.info("サーバー変更に伴いモデルリストを更新中...")
-                new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
-                    server_url,
-                    api_key,
-                    st.session_state.config["selected_model"],
-                    is_azure=is_azure
-                )
+        if api_key_changed:
+            logger.info("APIキーを変更しました")
+        
+        # 各フィールドの更新
+        st.session_state.config["server_url"] = server_url
+        st.session_state.config["api_key"] = api_key
+        st.session_state.config["is_azure"] = is_azure
 
-                st.session_state.available_models = new_models
-                st.session_state.models_api_success = api_success
+        # サーバー変更の場合はモデルリストを更新
+        if server_url_changed or is_azure_changed:
+            logger.info("サーバー変更に伴いモデルリストを更新中...")
+            new_models, selected_model, api_success = ModelManager.update_models_on_server_change(
+                server_url,
+                api_key,
+                st.session_state.config["selected_model"],
+                is_azure=is_azure
+            )
 
-                # モデルの自動変更通知 (新しいサーバーで現在のモデルが利用できない場合)
-                if selected_model != st.session_state.config["selected_model"] and new_models:
-                    old_model = st.session_state.config["selected_model"]
-                    st.session_state.config["selected_model"] = selected_model
-                    logger.warning(f"モデルを自動変更: {old_model} → {selected_model}")
-                    st.info(
-                        f"選択したモデル '{old_model}' は新しいサーバーでは利用できません。"
-                        f"'{selected_model}' に変更されました。")
+            st.session_state.available_models = new_models
+            st.session_state.models_api_success = api_success
 
-            # APIキーだけ変更された場合
-            elif api_key_changed:
-                logger.info("APIキー変更に伴いモデルリストを更新中...")
-                models, api_success = ModelManager.fetch_available_models(
-                    server_url,
-                    api_key,
-                    st.session_state.openai_client,
-                    is_azure=is_azure
-                )
-                st.session_state.available_models = models
-                st.session_state.models_api_success = api_success
+            # モデルの自動変更通知 (新しいサーバーで現在のモデルが利用できない場合)
+            if selected_model != st.session_state.config["selected_model"] and new_models:
+                old_model = st.session_state.config["selected_model"]
+                st.session_state.config["selected_model"] = selected_model
+                logger.warning(f"モデルを自動変更: {old_model} → {selected_model}")
+                st.info(
+                    f"選択したモデル '{old_model}' は新しいサーバーでは利用できません。"
+                    f"'{selected_model}' に変更されました。")
 
-            # クライアントの再初期化
-            try:
-                logger.info("設定変更に伴いOpenAIクライアントを初期化中...")
-                st.session_state.openai_client = get_llm_client(
-                    server_url=server_url,
-                    api_key=api_key,
-                    is_azure=is_azure
-                )
-                logger.info("OpenAIクライアント初期化完了")
-            except Exception as e:
-                error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
-                logger.error(error_msg)
-                st.error(error_msg)
-                st.session_state.openai_client = None
+        # APIキーだけ変更された場合
+        elif api_key_changed:
+            logger.info("APIキー変更に伴いモデルリストを更新中...")
+            models, api_success = ModelManager.fetch_available_models(
+                server_url,
+                api_key,
+                st.session_state.openai_client,
+                is_azure=is_azure
+            )
+            st.session_state.available_models = models
+            st.session_state.models_api_success = api_success
 
-        # 設定を反映ボタン
-        if st.button("設定を反映", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
+        # クライアントの再初期化
+        try:
+            logger.info("設定変更に伴いOpenAIクライアントを初期化中...")
+            st.session_state.openai_client = get_llm_client(
+                server_url=server_url,
+                api_key=api_key,
+                is_azure=is_azure
+            )
+            logger.info("OpenAIクライアント初期化完了")
+            settings_changed = True
+        except Exception as e:
+            error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
+            logger.error(error_msg)
+            st.error(error_msg)
+            st.session_state.openai_client = None
 
-            # メタプロンプト、メッセージ長、コンテキスト長の変更を記録
-            settings_changed = False
+    # 設定を反映ボタン
+    if not server_mode and st.button("設定を反映", disabled=st.session_state.is_sending_message):
+        # 数値設定の変更を検出して反映
+        if message_length != st.session_state.config["message_length"]:
+            st.session_state.config["message_length"] = message_length
+            settings_changed = True
 
-            if not server_mode:
+        if context_length != st.session_state.config["context_length"]:
+            st.session_state.config["context_length"] = context_length
+            settings_changed = True
 
-                # ローカル変数にアクセスするため、expanderの外で再定義
-                if 'message_length' in locals():
-                    if message_length != st.session_state.config["message_length"]:
-                        st.session_state.config["message_length"] = message_length
-                        settings_changed = True
+        if temperature != st.session_state.config["temperature"]:
+            st.session_state.config["temperature"] = temperature
+            settings_changed = True
 
-                if 'context_length' in locals():
-                    if context_length != st.session_state.config["context_length"]:
-                        st.session_state.config["context_length"] = context_length
-                        settings_changed = True
+        if top_p != st.session_state.config["top_p"]:
+            st.session_state.config["top_p"] = top_p
+            settings_changed = True
 
-                if 'temperature' in locals():
-                    if temperature != st.session_state.config["temperature"]:
-                        st.session_state.config["temperature"] = temperature
-                        settings_changed = True
-
-                if 'top_p' in locals():
-                    if top_p != st.session_state.config["top_p"]:
-                        st.session_state.config["top_p"] = top_p
-                        settings_changed = True
-
-                if 'uri_processing' in locals():
-                    if uri_processing != st.session_state.config["uri_processing"]:
-                        st.session_state.config["uri_processing"] = uri_processing
-                        settings_changed = True
-
+        # サーバーモードでなければ設定ファイルに保存
+        if not server_mode:
             # 設定をファイルに保存
             config = ChatConfig(
                 server_url=st.session_state.config["server_url"],
@@ -304,10 +284,9 @@ def sidebar(config_file_path, logger):
                 logger.warning("設定ファイルへの保存に失敗しました")
                 st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
 
-            if hasattr(locals(), 'settings_changed') and (
-                    settings_changed or hasattr(locals(), 'server_or_azure_changed') and (
-                    server_or_azure_changed or api_key_changed)):
-                st.rerun()
+        # 設定変更があった場合は画面を再読み込み
+        if settings_changed:
+            st.rerun()
 
     uploaded_json = st.file_uploader(
         "チャット履歴をインポート",
@@ -372,8 +351,9 @@ def sidebar(config_file_path, logger):
                     disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
                 )
 
-                if meta_prompt != st.session_state.config["rag_process_prompt"]:
+                if rag_process_prompt != st.session_state.config["rag_process_prompt"]:
                     st.session_state.config["rag_process_prompt"] = rag_process_prompt
+                    settings_changed = True
 
                 st.markdown('<span style="font-size: 12px;">保存する場合は「設定を反映」してください</span>',
                             unsafe_allow_html=True)
