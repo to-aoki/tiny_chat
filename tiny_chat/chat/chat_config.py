@@ -14,12 +14,13 @@ class ChatConfig:
         selected_model: str = "hf.co/mmnga/llm-jp-3-980m-instruct3-gguf:Q4_K_M",
         meta_prompt: str = "",
         message_length: int = 8000,
-        context_length: int = 1000,
+        context_length: int = 2000,
         uri_processing: bool = True,
         is_azure: bool = False,
         session_only_mode: bool = False,
         temperature: float = 1.0,
         top_p: float = 1.0,
+        rag_process_prompt: str = "関連文書が有効な場合は回答に役立ててください。\n関連文書:\n",
         **kwargs
     ):
         self.server_url = server_url
@@ -33,6 +34,7 @@ class ChatConfig:
         self.session_only_mode = session_only_mode
         self.temperature = temperature
         self.top_p = top_p
+        self.rag_process_prompt = rag_process_prompt
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -82,6 +84,7 @@ class ChatConfig:
                 'session_only_mode': self.session_only_mode,
                 'temperature': self.temperature,
                 'top_p': self.top_p,
+                'rag_process_prompt': self.rag_process_prompt,
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:

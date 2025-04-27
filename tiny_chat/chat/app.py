@@ -62,6 +62,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "session_only_mode": file_config.session_only_mode,
             "temperature": file_config.temperature,
             "top_p": file_config.top_p,
+            "rag_process_prompt": file_config.rag_process_prompt
         }
 
     # その他のセッション状態を初期化
@@ -246,8 +247,18 @@ def show_chat_component(logger):
                         f"{attachment_info['count_text']}")
 
     with st.container():
-        cols = st.columns([3, 2, 3])
-        with cols[0]:
+        # ユーザー入力
+        # 添付ファイルは streamlit v1.43.2 以降
+        prompt = st.chat_input(
+            "メッセージを入力してください...",
+            disabled=st.session_state.is_sending_message,
+            accept_file=True,
+            file_type=[ext.lstrip(".") for ext in SUPPORT_EXTENSIONS]
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
             st.button(
                 "チャットクリア",
                 disabled=st.session_state.is_sending_message,
@@ -255,15 +266,15 @@ def show_chat_component(logger):
                 key="clear_chat_history_button",
                 on_click=clear_chat
             )
-
-        with cols[2]:
+            
+        with col2:
             # 履歴ファイルの出力
             if not st.session_state.chat_manager.messages:
                 if st.button(
-                        "チャット保存",
-                        disabled=st.session_state.is_sending_message,
-                        use_container_width=True,
-                        key="export_chat_history_button"):
+                    "チャット保存",
+                    disabled=st.session_state.is_sending_message,
+                    use_container_width=True,
+                    key="export_chat_history_button"):
                     st.warning("保存するメッセージ履歴がありません")
             else:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -298,28 +309,14 @@ def show_chat_component(logger):
                     use_container_width=True,
                     key="export_chat_history_button"
                 )
-
-        # RAGモードのチェックボックス
-        st.checkbox("RAG (データベースを利用した回答)", 
-                    value=st.session_state.rag_mode,
-                    key="rag_mode_checkbox", 
-                    on_change=toggle_rag_mode,
-                    args=(logger,))
         
-        # 現在のRAG状態に基づいてメッセージを表示
-        if st.session_state.rag_mode:
-            st.info("RAGが有効です：メッセージ内容で文書を検索し、関連情報を回答に活用します")
-        else:
-            st.info("RAGが無効です")
-
-    # ユーザー入力
-    # 添付ファイルは streamlit v1.43.2 以降
-    prompt = st.chat_input(
-        "メッセージを入力してください...",
-        disabled=st.session_state.is_sending_message,
-        accept_file=True,
-        file_type=[ext.lstrip(".") for ext in SUPPORT_EXTENSIONS]
-    )
+        with col3:
+            # RAGモードのチェックボックス
+            st.checkbox("RAG (データベースを利用した回答)", 
+                      value=st.session_state.rag_mode,
+                      key="rag_mode_checkbox", 
+                      on_change=toggle_rag_mode,
+                      args=(logger,))
 
     # ファイル処理関数
     def process_uploaded_file(uploaded_file):
@@ -426,7 +423,7 @@ def show_chat_component(logger):
 
                     if search_results:
                         # 検索結果を整形
-                        search_context = "関連文書が有効な場合は回答に役立ててください。\n関連文書:\n"
+                        search_context = st.session_state.config["rag_process_prompt"]
 
                         # 参照情報をリセット
                         st.session_state.rag_sources = []

@@ -251,7 +251,6 @@ def sidebar(config_file_path, logger):
 
         # 設定を反映ボタン
         if st.button("設定を反映", disabled=st.session_state.is_sending_message):  # メッセージ送信中は無効化
-            logger.info("設定反映ボタンがクリックされました")
 
             # メタプロンプト、メッセージ長、コンテキスト長の変更を記録
             settings_changed = False
@@ -294,7 +293,8 @@ def sidebar(config_file_path, logger):
                 context_length=st.session_state.config["context_length"],
                 uri_processing=st.session_state.config["uri_processing"],
                 is_azure=st.session_state.config["is_azure"],
-                session_only_mode=server_mode
+                session_only_mode=server_mode,
+                rag_process_prompt=st.session_state.config["rag_process_prompt"],
             )
 
             if config.save(config_file_path):
@@ -338,32 +338,45 @@ def sidebar(config_file_path, logger):
             # 検索用サイドバー設定
             st.sidebar.markdown("RAG")
 
-            # top_kの設定
-            rag_top_k = st.sidebar.slider(
-                "最大検索件数 (top_k)", 
-                min_value=1, 
-                max_value=20,
-                value=st.session_state.db_config.top_k,
-                help="RAG検索で取得する最大文書数を設定します"
-            )
-            
-            # 値が変更された場合、セッション状態を更新
-            if rag_top_k != st.session_state.db_config.top_k:
-                st.session_state.db_config.top_k = rag_top_k
-            
-            # score_thresholdの設定
-            rag_score_threshold = st.sidebar.slider(
-                "スコアしきい値", 
-                min_value=0.0, 
-                max_value=1.0, 
-                value=st.session_state.db_config.score_threshold,
-                step=0.01,
-                help="RAG検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）"
-            )
-            
-            # 値が変更された場合、セッション状態を更新
-            if rag_score_threshold != st.session_state.db_config.score_threshold:
-                st.session_state.db_config.score_threshold = rag_score_threshold
+            with st.expander("検索設定", expanded=False):
+                # top_kの設定
+                rag_top_k = st.slider(
+                    "最大検索件数 (top_k)",
+                    min_value=1,
+                    max_value=20,
+                    value=st.session_state.db_config.top_k,
+                    help="RAG検索で取得する最大文書数を設定します"
+                )
+
+                if rag_top_k != st.session_state.db_config.top_k:
+                    st.session_state.db_config.top_k = rag_top_k
+
+                # score_thresholdの設定
+                rag_score_threshold = st.slider(
+                    "スコアしきい値",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=st.session_state.db_config.score_threshold,
+                    step=0.01,
+                    help="RAG検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）"
+                )
+
+                if rag_score_threshold != st.session_state.db_config.score_threshold:
+                    st.session_state.db_config.score_threshold = rag_score_threshold
+
+                rag_process_prompt = st.text_area(
+                    "検索結果指示",
+                    value=st.session_state.config["rag_process_prompt"],
+                    height=150,
+                    help="検索後の情報活用をLLM指示する文字列を入力してください",
+                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+                )
+
+                if meta_prompt != st.session_state.config["rag_process_prompt"]:
+                    st.session_state.config["rag_process_prompt"] = rag_process_prompt
+
+                st.markdown('<span style="font-size: 12px;">保存する場合は「設定を反映」してください</span>',
+                            unsafe_allow_html=True)
 
             # コレクション名の選択（サイドバーに表示）
             manager = get_or_create_qdrant_manager(logger)

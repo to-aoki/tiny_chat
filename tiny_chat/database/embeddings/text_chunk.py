@@ -43,7 +43,7 @@ class TextChunker:
 
     @staticmethod
     def split_text(text: str, separators: list[str] = None,
-                   chunk_size: int = 1024, chunk_overlap: int = 24) -> list[str]:
+                   chunk_size: int = 1024, chunk_overlap: int = 0) -> list[str]:
         """テキストを指定されたセパレータとチャンクサイズを使って分割します。
 
         Args:
@@ -51,7 +51,7 @@ class TextChunker:
             separators (list[str], optional): 分割に使用するセパレータのリスト。
                 指定されない場合はデフォルトのセパレータを使用します。
             chunk_size (int, optional): チャンクサイズ。デフォルトは768。
-            chunk_overlap (int, optional): 連続するチャンク間の重複部分のサイズ。デフォルトは12。
+            chunk_overlap (int, optional): 連続するチャンク間の重複部分のサイズ。デフォルトは0。
 
         Returns:
             list[str]: 分割されたチャンクのリスト
