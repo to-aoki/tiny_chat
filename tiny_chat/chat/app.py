@@ -286,6 +286,7 @@ def show_chat_component(logger):
                         is_azure=st.session_state.config["is_azure"]
                     )
                 client = st.session_state.openai_client
+                summary_part = ""
                 try:
                     summary = [{"role": "user", "content": "次の文字情報を10文字程度で要約をしてください: "
                                                            + st.session_state.chat_manager.messages[0]["content"]}]
@@ -296,14 +297,14 @@ def show_chat_component(logger):
                         top_p=st.session_state.config["top_p"],
                         stream=False,
                     )
-                    summary_part = response.choices[0].message.content[:10]
+                    summary_part = "_" + response.choices[0].message.content
                 except:
-                    summary_part = "LLM-API_failed"
+                    pass
 
                 st.download_button(
                     label="チャット保存",
                     data=chat_history,
-                    file_name=f"{timestamp}_{summary_part}.json",
+                    file_name=f"{timestamp}{summary_part}.json",
                     mime="application/json",
                     disabled=st.session_state.is_sending_message,
                     use_container_width=True,
