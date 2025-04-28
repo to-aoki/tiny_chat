@@ -25,7 +25,7 @@ available_collections = {}
 
 def get_qdrant_manager() -> QdrantManager:
     """
-    QdrantManagerのシングルトンインスタンスを取得する関数（スレッドセーフ実装）
+    QdrantManagerのシングルトンインスタンスを取得する関数
     
     既にインスタンスが初期化されている場合はそれを返し、
     まだ初期化されていない場合は新しいインスタンスを作成して返します。
@@ -100,7 +100,6 @@ def get_collection_description(collection_name: str) -> str:
         str: Description of the collection, or default description if not found
     """
     qdrant_mgr = get_qdrant_manager()
-    # Try to load the collection information
     collection_info = Collection.load(collection_name, qdrant_mgr)
     
     if collection_info:
@@ -121,46 +120,44 @@ async def register_search_tools(app, qdrant_mgr):
         collection_info = get_collection_description(collection_name)
         if isinstance(collection_info, str):
             continue
-        else:
-            collection = collection_info
 
         if not collection_info.show_mcp:
             continue
 
-        available_collections[collection_name] = collection
+        available_collections[collection_name] = collection_info
 
         # Create a local function factory that binds the current collection_name
-        def create_search_tool(coll_name, coll):
+        def create_search_tool(name, collection):
             # Define a tool for this collection
-            tool_description = getattr(coll, 'description', f"Search {coll_name} collection")
+            tool_description = getattr(collection, 'description', f"Search {name} collection")
             
             @app.tool(
-                name=f"search-{coll_name}",
+                name=f"search-{name}",
                 description=tool_description
             )
             async def search_collection_tool(
                 query: str,
-                top_k: int = getattr(coll, 'top_k', 3),
-                score_threshold: float = getattr(coll, 'score_threshold', 0.4),
+                top_k: int = getattr(collection, 'top_k', 3),
+                score_threshold: float = getattr(collection, 'score_threshold', 0.4),
                 ctx: Context = None
             ) -> str:
                 """Search the specified collection"""
                 if ctx:
-                    await ctx.info(f"Searching collection '{coll_name}' for: {query}")
+                    await ctx.info(f"Searching collection '{name}' for: {query}")
                     
-                return await search_collection(coll_name, {
+                return await search_collection(name, {
                     "query": query,
                     "top_k": top_k,
                     "score_threshold": score_threshold
                 })
             
             # Each tool needs a unique name in the module scope
-            search_collection_tool.__name__ = f"search_{coll_name}_tool"
+            search_collection_tool.__name__ = f"search_{name}_tool"
             
             return search_collection_tool
         
         # Create and register the tool for this collection
-        create_search_tool(collection_name, collection)
+        create_search_tool(collection_name, collection_info)
 
 
 async def search_collection(
@@ -180,9 +177,13 @@ async def search_collection(
     qdrant_mgr = get_qdrant_manager()
     query = arguments.get("query", "")
     collection = available_collections.get(collection_name)
+    if collection is None:
+        return f"Error searching collection '{collection_name}': collection not found."
     top_k = arguments.get("top_k", getattr(collection, 'top_k', 3))
     score_threshold = arguments.get("score_threshold", getattr(collection, 'score_threshold', 0.4))
-    rag_strategy = getattr(collection, 'rag_strategy', "bm25_sbert")
+    rag_strategy = getattr(collection, 'rag_strategy', None)
+    if rag_strategy is None:
+        return f"Error searching collection '{collection_name}': rag_strategy not found."
     use_gpu = getattr(collection, 'use_gpu', False)
 
     try:

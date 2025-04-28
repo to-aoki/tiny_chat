@@ -2,6 +2,8 @@ import json
 import os
 
 
+DEFAULT_CHAT_CONFIG_PATH = "chat_app_config.json"
+
 class ChatConfig:
     """
     チャットアプリケーションの設定を管理するクラス
