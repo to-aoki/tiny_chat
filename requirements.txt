@@ -16,3 +16,4 @@ torch
 sentence-transformers
 mcp
 sentencepiece==0.2.0
+fastapi
