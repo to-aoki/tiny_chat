@@ -274,7 +274,8 @@ def show_chat_component(logger):
                     "チャット保存",
                     disabled=st.session_state.is_sending_message,
                     use_container_width=True,
-                    key="export_chat_history_button"):
+                    key="export_chat_history_button"
+                ):
                     st.warning("保存するメッセージ履歴がありません")
             else:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -292,11 +293,13 @@ def show_chat_component(logger):
         
         with col3:
             # RAGモードのチェックボックス
-            st.checkbox("RAG (データベースを利用した回答)", 
-                      value=st.session_state.rag_mode,
-                      key="rag_mode_checkbox", 
-                      on_change=toggle_rag_mode,
-                      args=(logger,))
+            st.checkbox(
+                "RAG (データベースを利用した回答)",
+                value=st.session_state.rag_mode,
+                key="rag_mode_checkbox",
+                on_change=toggle_rag_mode,
+                args=(logger,)
+            )
 
     # ファイル処理関数
     def process_uploaded_file(uploaded_file):

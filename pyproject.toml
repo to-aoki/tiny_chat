@@ -39,7 +39,8 @@ dependencies = [
     "torch",
     "sentence-transformers",
     "mcp",
-    "sentencepiece==0.2.0"
+    "sentencepiece==0.2.0",
+    "fastapi",
 ]
 
 [project.urls]
@@ -48,6 +49,7 @@ Repository = "https://github.com/to-aoki/tiny_chat"
 [project.scripts]
 tiny-chat = "tiny_chat:main"
 tiny-chat-search-mcp = "tiny_chat.mcp.search_mcp:main"
+tiny-chat-search-api = "tiny_chat.api.compat_openai:main"
 
 [tool.hatch.build]
 exclude = [".git", ".env", ".venv", "venv", "__pycache__"]
