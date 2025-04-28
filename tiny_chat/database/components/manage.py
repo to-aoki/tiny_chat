@@ -306,8 +306,8 @@ def _manage_collections(qdrant_manager, logger):
                         "チャンクサイズ",
                         min_value=128,
                         max_value=8192,
-                        value=1024,
-                        step=128,
+                        value=2000,
+                        step=100,
                         help="テキストを分割するチャンクのサイズを指定してください。",
                         key="new_chunk_size"
                     )
@@ -315,9 +315,9 @@ def _manage_collections(qdrant_manager, logger):
                     chunk_overlap = st.number_input(
                         "チャンクオーバーラップ",
                         min_value=0,
-                        max_value=512,
-                        value=24,
-                        step=8,
+                        max_value=200,
+                        value=0,
+                        step=10,
                         help="チャンク間のオーバーラップするトークン数を指定してください。",
                         key="new_chunk_overlap"
                     )

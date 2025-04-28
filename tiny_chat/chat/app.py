@@ -9,7 +9,7 @@ import urllib.parse
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 import streamlit as st
 
-from tiny_chat.chat.chat_config import ChatConfig, ModelManager
+from tiny_chat.chat.chat_config import ChatConfig, ModelManager, DEFAULT_CHAT_CONFIG_PATH
 from tiny_chat.chat.chat_manager import ChatManager
 from tiny_chat.utils.file_processor import URIProcessor, FileProcessorFactory
 from tiny_chat.utils.logger import get_logger
@@ -19,7 +19,7 @@ from tiny_chat.chat.copy_botton import copy_button
 
 
 # 設定ファイルのパス
-CONFIG_FILE = "chat_app_config.json"
+CONFIG_FILE = DEFAULT_CHAT_CONFIG_PATH
 
 # サポートする拡張子
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
@@ -279,32 +279,11 @@ def show_chat_component(logger):
             else:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 chat_history = st.session_state.chat_manager.to_json()
-                if "openai_client" not in st.session_state or st.session_state.openai_client is None:
-                    st.session_state.openai_client = get_llm_client(
-                        server_url=st.session_state.config["server_url"],
-                        api_key=st.session_state.config["api_key"],
-                        is_azure=st.session_state.config["is_azure"]
-                    )
-                client = st.session_state.openai_client
-                summary_part = ""
-                try:
-                    summary = [{"role": "user", "content": "次の文字情報を10文字程度で要約をしてください: "
-                                                           + st.session_state.chat_manager.messages[0]["content"]}]
-                    response = client.chat.completions.create(
-                        model=st.session_state.config["selected_model"],
-                        messages=summary,
-                        temperature=st.session_state.config["temperature"],
-                        top_p=st.session_state.config["top_p"],
-                        stream=False,
-                    )
-                    summary_part = "_" + response.choices[0].message.content
-                except:
-                    pass
 
                 st.download_button(
                     label="チャット保存",
                     data=chat_history,
-                    file_name=f"{timestamp}{summary_part}.json",
+                    file_name=f"{timestamp}.json",
                     mime="application/json",
                     disabled=st.session_state.is_sending_message,
                     use_container_width=True,
@@ -498,7 +477,6 @@ def show_chat_component(logger):
 
                     # ストリーミング応答をリアルタイムで処理
                     full_response = ""
-
                     for chunk in response:
                         if chunk.choices and chunk.choices[0].delta.content:
                             full_response += chunk.choices[0].delta.content
@@ -551,6 +529,8 @@ def show_chat_component(logger):
                     st.session_state.rag_sources = []
 
                 except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                     error_message = f"APIエラー: {str(e)}"
                     logger.error(f"APIエラー: {str(e)}")
                     message_placeholder.error(error_message)
