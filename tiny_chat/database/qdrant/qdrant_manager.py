@@ -27,11 +27,11 @@ class QdrantManager:
         file_path: str = "./qdrant_data",
         server_url: Optional[str] = None,
         api_key: Optional[str] = None,
-        chunk_size: Optional[int] = 1024,
-        chunk_overlap: Optional[int] = 24,
+        chunk_size: Optional[int] = 2000,
+        chunk_overlap: Optional[int] = 0,
         top_k: int = 3,
-        score_threshold: float = 0.4,
-        rag_strategy: Optional[str] = "bm25_sbert",
+        score_threshold: float = 0.2,
+        rag_strategy: Optional[str] = "bm25",
         use_gpu: Optional[bool] = False,
         **kwargs
     ):
@@ -218,8 +218,9 @@ class QdrantManager:
         return self.add_documents(documents, metadatas, collection_name)
 
     def query(
-            self, collection_name: str, query_text: str,
-            top_k: int, score_threshold: float, **kwargs) -> List[QueryResponse]:
+        self, collection_name: str, query_text: str,
+        top_k: int, score_threshold: float, **kwargs
+    ) -> List[QueryResponse]:
         """
         コレクションにクエリを実行する
 
