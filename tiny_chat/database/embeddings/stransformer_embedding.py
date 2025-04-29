@@ -12,7 +12,7 @@ class SentenceTransformerEmbedding:
         self,
         model_name: str = "cl-nagoya/ruri-v3-30m",
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
-        use_query_prefix = True,
+        use_query_prefix: bool = True,
         **kwargs
     ):
         self.model_name = model_name
