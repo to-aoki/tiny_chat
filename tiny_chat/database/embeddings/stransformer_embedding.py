@@ -12,12 +12,10 @@ class SentenceTransformerEmbedding:
         self,
         model_name: str = "cl-nagoya/ruri-v3-30m",
         device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
-        use_query_prefix: bool = True,
         **kwargs
     ):
         self.model_name = model_name
         self.device = device
-        self.use_query_prefix = use_query_prefix
         extra_path = kwargs.get("file_name", None)
         if device == 'cpu' and extra_path is not None and extra_path.startswith("openvino/"):
             model_dir = os.path.dirname(__file__) + "/model/" + os.path.split(model_name)[-1]
@@ -88,7 +86,7 @@ class SentenceTransformerEmbedding:
             prefix = "検索文章: "
 
         for i, doc in enumerate(documents):
-            if not doc.startswith(prefix):
+            if not doc.startswith(("検索クエリ: ", "検索文章: ")):
                 documents[i] = f"{prefix}{doc}"
             else:
                 documents[i] = doc
@@ -104,7 +102,7 @@ class SentenceTransformerEmbedding:
         self, query: Union[str, Iterable[str]], *kwargs: Any
     ) -> Iterable[NumpyArray]:
         # For this model, query embedding is the same as document embedding
-        yield from self.embed(query, is_query=self.use_query_prefix, **kwargs)
+        yield from self.embed(query, is_query=True, **kwargs)
 
     def similarity(self, embeddings1: NumpyArray, embeddings2: NumpyArray) -> NumpyArray:
         return cos_sim(embeddings1, embeddings2)

@@ -127,7 +127,6 @@ class SparseOnly(RAGStrategy):
             self.sparse_vector_field_name: sparse_embedding.as_object(),
         }
 
-
     def query(self, text=None):
         query_embedding = list(self.model.query_embed(text))[0]
         return models.SparseVector(
@@ -138,7 +137,7 @@ class SparseOnly(RAGStrategy):
 
 class DenseOnly(RAGStrategy):
 
-    def __init__(self, strategy="cl-nagoya/ruri-v3-30m", use_gpu=False, use_query_prefix=True, **kwargs):
+    def __init__(self, strategy="cl-nagoya/ruri-v3-30m", use_gpu=False, **kwargs):
 
         self.strategy = strategy
         self.dense_vector_field_name = "dense"
@@ -152,7 +151,7 @@ class DenseOnly(RAGStrategy):
         else:
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.model = SentenceTransformerEmbedding(
-                model_name=strategy, use_query_prefix=use_query_prefix, device='cuda' if use_gpu else 'cpu', **kwargs)
+                model_name=strategy, device='cuda' if use_gpu else 'cpu', **kwargs)
 
     def create_vector_config(self):
         return {
@@ -237,7 +236,7 @@ class SpaceRRF(RAGStrategy):
 
 class SpaceDenseRRF(RAGStrategy):
 
-    def __init__(self, strategy='bm25_static', use_query_prefix=True, use_gpu=False):
+    def __init__(self, strategy='bm25_static', use_gpu=False):
         if strategy == 'bm25_static':
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
@@ -250,7 +249,6 @@ class SpaceDenseRRF(RAGStrategy):
             self.bm25_model = BM25TextEmbedding()
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
-                use_query_prefix=use_query_prefix,
                 device='cuda' if use_gpu else 'cpu')
 
         elif strategy == 'bm25_ruri_base':
@@ -260,7 +258,6 @@ class SpaceDenseRRF(RAGStrategy):
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-130m",
-                use_query_prefix=use_query_prefix,
                 device='cuda' if use_gpu else 'cpu'
             )
 
@@ -272,7 +269,6 @@ class SpaceDenseRRF(RAGStrategy):
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-130m",
-                use_query_prefix=use_query_prefix,
                 device='cuda' if use_gpu else 'cpu')
 
         elif strategy == 'bm25_ruri_large':
@@ -282,7 +278,6 @@ class SpaceDenseRRF(RAGStrategy):
             from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-310m",
-                use_query_prefix=use_query_prefix,
                 device='cuda' if use_gpu else 'cpu'
             )
 
