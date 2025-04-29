@@ -74,7 +74,7 @@ class SentenceTransformerEmbedding:
         documents: Union[str, Iterable[str]],
         batch_size: int = 256,
         parallel: Optional[int] = None,
-        is_query: bool = False,
+        is_query: Optional[bool] = False,
         **kwargs: Any,
     ) -> Iterable[NumpyArray]:
         if isinstance(documents, str):
@@ -99,10 +99,10 @@ class SentenceTransformerEmbedding:
             yield embedding
 
     def query_embed(
-        self, query: Union[str, Iterable[str]], *kwargs: Any
+        self, query: Union[str, Iterable[str]], **kwargs: Any
     ) -> Iterable[NumpyArray]:
         # For this model, query embedding is the same as document embedding
-        yield from self.embed(query, is_query=True, **kwargs)
+        yield from self.embed(documents=query, is_query=True, **kwargs)
 
     def similarity(self, embeddings1: NumpyArray, embeddings2: NumpyArray) -> NumpyArray:
         return cos_sim(embeddings1, embeddings2)
