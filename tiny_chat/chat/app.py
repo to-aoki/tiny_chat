@@ -62,7 +62,9 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "session_only_mode": file_config.session_only_mode,
             "temperature": file_config.temperature,
             "top_p": file_config.top_p,
-            "rag_process_prompt": file_config.rag_process_prompt
+            "rag_process_prompt": file_config.rag_process_prompt,
+            "use_hyde": file_config.use_hyde,
+            "use_back_step": file_config.use_back_step
         }
 
     # その他のセッション状態を初期化
@@ -108,7 +110,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
     # RAGモードのフラグ
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
-        
+
     # RAGモードが一度でも有効になったことがあるかを追跡するフラグ
     if "rag_mode_ever_enabled" not in st.session_state:
         st.session_state.rag_mode_ever_enabled = False
@@ -176,12 +178,32 @@ def cached_search_documents(prompt_content, logger):
     top_k = st.session_state.db_config.top_k
     score_threshold = st.session_state.db_config.score_threshold
 
+    query_processer = None
+
+    if st.session_state.config["use_hyde"]:
+        from tiny_chat.database.qdrant.query_preprocessor import HypotheticalDocument
+        query_processer = HypotheticalDocument(
+            openai_client=st.session_state.openai_client,
+            model_name=st.session_state.config["selected_model"],
+            temperature=st.session_state.config["temperature"],
+            top_p=st.session_state.config["top_p"],
+        )
+    elif st.session_state.config["use_back_step"]:
+        from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
+        query_processer = StepBackQuery(
+            openai_client=st.session_state.openai_client,
+            model_name=st.session_state.config["selected_model"],
+            temperature=st.session_state.config["temperature"],
+            top_p=st.session_state.config["top_p"],
+        )
+
     return search_documents(
         prompt_content, 
         qdrant_manager=qdrant_manager,
         collection_name=selected_collection,
         top_k=top_k,
-        score_threshold=score_threshold
+        score_threshold=score_threshold,
+        query_processor=query_processer
     )
 
 

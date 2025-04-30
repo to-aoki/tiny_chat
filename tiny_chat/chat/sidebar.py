@@ -275,6 +275,8 @@ def sidebar(config_file_path, logger):
                 is_azure=st.session_state.config["is_azure"],
                 session_only_mode=server_mode,
                 rag_process_prompt=st.session_state.config["rag_process_prompt"],
+                use_hyde=st.session_state.config["use_hyde"],
+                use_back_step=st.session_state.config["use_back_step"]
             )
 
             if config.save(config_file_path):
@@ -317,7 +319,7 @@ def sidebar(config_file_path, logger):
             # 検索用サイドバー設定
             st.sidebar.markdown("RAG")
 
-            with st.expander("検索設定", expanded=False):
+            with (st.expander("検索設定", expanded=False)):
                 # top_kの設定
                 rag_top_k = st.slider(
                     "最大検索件数 (top_k)",
@@ -350,6 +352,33 @@ def sidebar(config_file_path, logger):
                     help="検索後の情報活用をLLM指示する文字列を入力してください",
                     disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
                 )
+                # クエリ変換方式をラジオボタンで選択
+                query_conversion_mode = st.radio(
+                    "クエリ変換方式",
+                    options=["変換なし", "クエリ変換（仮クエリ回答）", "クエリ変換（質問汎化）"],
+                    index=0 if not (st.session_state.config["use_hyde"] or st.session_state.config["use_back_step"]) else 
+                           (1 if st.session_state.config["use_hyde"] else 2),
+                    help="RAG利用時のクエリ変換方式を選択します。",
+                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+                )
+                
+                # 選択結果に基づいてフラグを設定
+                old_hyde = st.session_state.config["use_hyde"]
+                old_back_step = st.session_state.config["use_back_step"]
+                
+                if query_conversion_mode == "変換なし":
+                    st.session_state.config["use_hyde"] = False
+                    st.session_state.config["use_back_step"] = False
+                elif query_conversion_mode == "クエリ変換（仮クエリ回答）":
+                    st.session_state.config["use_hyde"] = True
+                    st.session_state.config["use_back_step"] = False
+                else:  # "クエリ変換（質問汎化）"
+                    st.session_state.config["use_hyde"] = False
+                    st.session_state.config["use_back_step"] = True
+                
+                # いずれかの設定が変更された場合
+                if old_hyde != st.session_state.config["use_hyde"] or old_back_step != st.session_state.config["use_back_step"]:
+                    settings_changed = True
 
                 if rag_process_prompt != st.session_state.config["rag_process_prompt"]:
                     st.session_state.config["rag_process_prompt"] = rag_process_prompt
