@@ -58,20 +58,6 @@ Claude Desktop example.
 }
 ```
 
-## MCP Usage
-example: Claude Desktop settings.
-```json
-{
-  "mcpServers": {
-    "tiny-chat": {
-      "command": "/path/to/tiny_chat/.venv/bin/tiny-chat-mcp",
-      "env": {
-        "DB_CONFIG": "/path/to/tiny_chat/database_config.json"
-      }
-    }
-  }
-}
-```
 ## OpenAI Chat API RAG Server Usage
 ```bash
 tiny-chat-api
