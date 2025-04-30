@@ -217,36 +217,6 @@ class QdrantManager:
         # 文書を追加
         return self.add_documents(documents, metadatas, collection_name)
 
-    def query(
-        self, collection_name: str, query_text: str,
-        top_k: int, score_threshold: float, **kwargs
-    ) -> List[QueryResponse]:
-        """
-        コレクションにクエリを実行する
-
-        Args:
-            collection_name: コレクション名
-            query_text: クエリテキスト
-            top_k: 結果の数
-            **kwargs: その他のパラメータ
-
-        Returns:
-            List[QueryResponse]: 検索結果 (QueryResponseオブジェクトのリスト)
-        """
-
-        if top_k:
-            top_k = self.top_k
-        if score_threshold:
-            score_threshold = self.score_threshold
-
-        # self.ensure_collection_exists(collection_name)
-        filter_params = kwargs.get("filter", None)
-        return self.query_points(query_text,
-                                 top_k=top_k,
-                                 score_threshold=score_threshold,
-                                 filter_params=filter_params,
-                                 collection_name=collection_name)
-
     def add_document(
         self,
         document: str,
@@ -395,6 +365,7 @@ class QdrantManager:
         collection_name: Optional[str] = None,
         filter_params: Optional[Dict[str, Any]] = None,
         strategy : Optional[RAGStrategy] = None,
+        query_processor=None
     ) -> List[QueryResponse]:
         """
         クエリに基づいて文書を検索する (ハイブリッド検索)
@@ -411,9 +382,6 @@ class QdrantManager:
         """
         if collection_name is None:
             collection_name = self.collection_name
-        
-        # コレクションの存在を確認
-        # self.ensure_collection_exists(collection_name)
 
         if strategy is None:
             strategy = self.strategy
@@ -454,12 +422,12 @@ class QdrantManager:
             # 2倍にする
             top_k = top_k * 2
 
-        prefetch = strategy.prefetch(query, top_k)
+        prefetch = strategy.prefetch(query, top_k, query_processor)
         if prefetch:
             response = self.client.query_points(
                 collection_name=collection_name,
                 prefetch=prefetch,
-                query=strategy.query(query),
+                query=strategy.query(query, query_processor),
                 limit=top_k,
                 with_vectors=False,
                 with_payload=True,
@@ -469,7 +437,7 @@ class QdrantManager:
         else:
             response = self.client.query_points(
                 collection_name=collection_name,
-                query=strategy.query(query),
+                query=strategy.query(query, query_processor),
                 using=strategy.use_vector_name(),
                 limit=top_k,
                 with_vectors=False,

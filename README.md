@@ -76,7 +76,7 @@ example: Claude Desktop settings.
 ```bash
 tiny-chat-api
 ```
-`model`: target search qdrant collection name.
+`model`: target search qdrant collection name (model change in conversation).
 ```bash
 curl http://localhost:8080/v1/chat/completions   -H "Content-Type: application/json"   -d '{"model": "qdrant-collection-name", "messages": [{"role": "user", "content": "カレーライスの材料は？"}]}'
 ```

@@ -3,6 +3,7 @@ from qdrant_client import models
 
 from tiny_chat.database.embeddings.bm25_embedding import BM25TextEmbedding
 from tiny_chat.database.embeddings.static_embedding import StaticEmbedding
+from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
 
 
 class RagStrategyFactory:
@@ -82,10 +83,10 @@ class RAGStrategy(ABC):
     def vector(self, text):
         return {}
 
-    def prefetch(self, text, top_k: int = 0):
+    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
         return []
 
-    def query(self, text=None):
+    def query(self, text:str = None, query_preprocessor=None):
         return None
 
 
@@ -127,7 +128,7 @@ class SparseOnly(RAGStrategy):
             self.sparse_vector_field_name: sparse_embedding.as_object(),
         }
 
-    def query(self, text=None):
+    def query(self, text:str = None, query_preprocessor=None):
         query_embedding = list(self.model.query_embed(text))[0]
         return models.SparseVector(
             values=query_embedding.values.tolist(),
@@ -149,7 +150,6 @@ class DenseOnly(RAGStrategy):
             self.model = TextEmbedding(model_name=strategy, cache_dir="./multilingual-e5-large")
             self.model.dimension = 1024  # FIXME patch!
         else:
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.model = SentenceTransformerEmbedding(
                 model_name=strategy, device='cuda' if use_gpu else 'cpu', **kwargs)
 
@@ -170,7 +170,9 @@ class DenseOnly(RAGStrategy):
             self.dense_vector_field_name: dense_embedding.tolist()
         }
 
-    def query(self, text=None):
+    def query(self, text: str = None, query_preprocessor=None):
+        if query_preprocessor is not None:
+            text = query_preprocessor.transform(text)
         query_embedding = list(self.model.query_embed(text))[0]
         return query_embedding.tolist()
 
@@ -180,7 +182,6 @@ class DenseReranker(DenseOnly):
     def __init__(self, strategy="cl-nagoya/ruri-v3-30m", use_gpu=False, **kwargs):
         self.strategy = strategy
         self.dense_vector_field_name = "dense"
-        from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
         self.model = SentenceTransformerEmbedding(
             model_name=strategy, device='cuda' if use_gpu else 'cpu', **kwargs)
         from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
@@ -225,12 +226,12 @@ class SpaceRRF(RAGStrategy):
         return {name: embeddings[i].as_object()
                 for i, name in enumerate(self.sparse_vector_field_names)}
 
-    def prefetch(self, text, top_k):
+    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
         embeddings = self._get_embeddings(text)
         return [models.Prefetch(query=embeddings[i].as_object(), using=name, limit=top_k)
                 for i, name in enumerate(self.sparse_vector_field_names)]
 
-    def query(self, text=None):
+    def query(self, text: str = None, query_preprocessor=None):
         return models.FusionQuery(fusion=models.Fusion.RRF)
 
 
@@ -247,7 +248,6 @@ class SpaceDenseRRF(RAGStrategy):
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 device='cuda' if use_gpu else 'cpu')
 
@@ -255,7 +255,6 @@ class SpaceDenseRRF(RAGStrategy):
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-130m",
                 device='cuda' if use_gpu else 'cpu'
@@ -266,7 +265,6 @@ class SpaceDenseRRF(RAGStrategy):
             self.dense_vector_field_name = "dense"
             from tiny_chat.database.embeddings.splade_embedding import SpladeEmbedding
             self.bm25_model = SpladeEmbedding(device='cuda' if use_gpu else 'cpu')
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-130m",
                 device='cuda' if use_gpu else 'cpu')
@@ -275,7 +273,6 @@ class SpaceDenseRRF(RAGStrategy):
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-310m",
                 device='cuda' if use_gpu else 'cpu'
@@ -308,8 +305,10 @@ class SpaceDenseRRF(RAGStrategy):
             self.dense_vector_field_name: dense_embedding.tolist(),
         }
 
-    def prefetch(self, text, top_k):
+    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
         sparse_embedding = list(self.bm25_model.query_embed(text))[0]
+        if query_preprocessor is not None:
+            text = query_preprocessor.transform(text)
         dense_embedding = list(self.emb_model.query_embed(text))[0]
         return [
             models.Prefetch(
@@ -318,7 +317,7 @@ class SpaceDenseRRF(RAGStrategy):
                 query=dense_embedding.tolist(), using=self.dense_vector_field_name, limit=top_k),
         ]
 
-    def query(self, text=None):
+    def query(self, text: str = None, query_preprocessor=None):
         return models.FusionQuery(fusion=models.Fusion.RRF)
 
 
@@ -328,7 +327,6 @@ class SpaceDenseRRFRerank(RAGStrategy):
             self.sparse_vector_field_name = "sparse"
             self.dense_vector_field_name = "dense"
             self.bm25_model = BM25TextEmbedding()
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-130m",
                 device='cuda' if use_gpu else 'cpu')
@@ -340,7 +338,6 @@ class SpaceDenseRRFRerank(RAGStrategy):
             self.dense_vector_field_name = "dense"
             from tiny_chat.database.embeddings.splade_embedding import SpladeEmbedding
             self.bm25_model = SpladeEmbedding(device='cuda' if use_gpu else 'cpu')
-            from tiny_chat.database.embeddings.stransformer_embedding import SentenceTransformerEmbedding
             self.emb_model = SentenceTransformerEmbedding(
                 model_name="cl-nagoya/ruri-v3-130m", device='cuda' if use_gpu else 'cpu')
             from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
@@ -373,7 +370,7 @@ class SpaceDenseRRFRerank(RAGStrategy):
             self.dense_vector_field_name: dense_embedding.tolist(),
         }
 
-    def prefetch(self, text, top_k):
+    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
         sparse_embedding = list(self.bm25_model.query_embed(text))[0]
         dense_embedding = list(self.emb_model.query_embed(text))[0]
         return [
