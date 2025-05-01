@@ -43,7 +43,28 @@ async def chat_completions_proxy(
 
     if collection is not None and request_body["messages"] and request_body["messages"][-1].get("role") == "user":
         query = request_body["messages"][-1]["content"]
-        search_result = search(query, manager=qdrant_manager, collection_info=collection, chat_config=chat_config)
+
+        if chat_config.use_hyde:
+            from tiny_chat.database.qdrant.query_preprocessor import HypotheticalDocument
+            query_processer = HypotheticalDocument(
+                openai_client=llm_api,
+                model_name=chat_config.selected_model,
+                temperature=chat_config.selected_model.temperature,
+                top_p=chat_config.selected_model.top_p,
+            )
+        elif chat_config.use_step_back:
+            from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
+            query_processer = StepBackQuery(
+                openai_client=llm_api,
+                model_name=chat_config.selected_model,
+                temperature=chat_config.selected_model.temperature,
+                top_p=chat_config.selected_model.top_p,
+            )
+
+        search_result = search(
+            query, manager=qdrant_manager, collection_info=collection, chat_config=chat_config,
+            query_processor=query_processer
+        )
         request_body["messages"][-1]["content"] += search_result
 
     request_body["model"] = chat_config.selected_model

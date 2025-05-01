@@ -64,7 +64,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "top_p": file_config.top_p,
             "rag_process_prompt": file_config.rag_process_prompt,
             "use_hyde": file_config.use_hyde,
-            "use_back_step": file_config.use_back_step
+            "use_step_back": file_config.use_step_back
         }
 
     # その他のセッション状態を初期化
@@ -187,7 +187,7 @@ def cached_search_documents(prompt_content, logger):
             temperature=st.session_state.config["temperature"],
             top_p=st.session_state.config["top_p"],
         )
-    elif st.session_state.config["use_back_step"]:
+    elif st.session_state.config["use_step_back"]:
         from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
         query_processer = StepBackQuery(
             openai_client=st.session_state.openai_client,

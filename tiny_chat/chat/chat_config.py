@@ -25,7 +25,7 @@ class ChatConfig:
         top_p: float = 1.0,
         rag_process_prompt: str = "関連文書が有効な場合は回答に役立ててください。\n関連文書:\n",
         use_hyde: bool = False,
-        use_back_step: bool = False,
+        use_step_back: bool = False,
         **kwargs
     ):
         self.server_url = server_url
@@ -41,7 +41,7 @@ class ChatConfig:
         self.top_p = top_p
         self.rag_process_prompt = rag_process_prompt
         self.use_hyde = use_hyde
-        self.use_back_step = use_back_step
+        self.use_step_back = use_step_back
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -93,7 +93,7 @@ class ChatConfig:
                 'top_p': self.top_p,
                 'rag_process_prompt': self.rag_process_prompt,
                 'use_hyde': self.use_hyde,
-                'use_back_step': self.use_back_step,
+                'use_step_back': self.use_step_back,
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:
