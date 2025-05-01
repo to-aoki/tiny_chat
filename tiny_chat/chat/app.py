@@ -315,10 +315,11 @@ def show_chat_component(logger):
         with col3:
             # RAGモードのチェックボックス
             st.checkbox(
-                "RAG (データベースを利用した回答)",
+                "RAG (データベース検索回答)",
                 value=st.session_state.rag_mode,
                 key="rag_mode_checkbox",
                 on_change=toggle_rag_mode,
+                disabled=st.session_state.is_sending_message,
                 args=(logger,)
             )
 
@@ -400,6 +401,7 @@ def show_chat_component(logger):
             if st.session_state.config["uri_processing"]:
                 uri_processor = URIProcessor()
                 detects_urls = uri_processor.detect_uri(prompt_content)
+
 
             # 拡張プロンプトの取得
             enhanced_prompt = None
@@ -553,8 +555,6 @@ def show_chat_component(logger):
                     st.session_state.rag_sources = []
 
                 except Exception as e:
-                    import traceback
-                    traceback.print_exc()
                     error_message = f"APIエラー: {str(e)}"
                     logger.error(f"APIエラー: {str(e)}")
                     message_placeholder.error(error_message)
