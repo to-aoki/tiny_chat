@@ -489,7 +489,7 @@ def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
     metadata = {
         "source": file_path,
         "file_type": file_ext[1:],  # 拡張子の.を除去
-        "file_size": len(file_bytes),  # 早期にファイルサイズを設定
+        "file_size": len(file_bytes),
     }
 
     # ファイルタイプに応じた処理、is_page=Trueで文字列配列として処理
@@ -537,7 +537,6 @@ def process_file(file_path: str) -> Tuple[List[str], Dict[str, Any]]:
     return text, metadata
 
 
-
 class URIProcessor:
     """URI処理クラス"""
 
@@ -552,7 +551,7 @@ class URIProcessor:
         Returns:
             list: 検出されたURIのリスト
         """
-        uri_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+'
+        uri_pattern = r"https?://[^\s/?#@]+(?::\d+)?(?:/[^\s?#]*)?(?:\?[^\s#]*)?"
         return re.findall(uri_pattern, text)
 
     @staticmethod
@@ -587,44 +586,58 @@ class URIProcessor:
             content_type = response.headers.get('Content-Type', '').lower()
             content = response.content
 
+            metadata = {
+                "file_size": len(content),
+            }
+
             # 各コンテンツタイプごとに処理
             if 'application/pdf' in content_type:
                 extract_text, page_count, error = PDFProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = f"PDFから{page_count}ページのテキストを抽出しました" if not error else error
+                metadata["file_type"] = "pdf"
+                metadata["page_count"] = page_count
 
             elif 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' in content_type or 'application/vnd.ms-excel' in content_type:
                 extract_text, page_count, error = ExcelProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = f"Excelから{page_count}シートのテキストを抽出しました" if not error else error
+                metadata["file_type"] = "xlsx"
+                metadata["page_count"] = page_count
 
             elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or 'application/msword' in content_type:
                 extract_text, page_count, error = WordProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = "Wordドキュメントからテキストを抽出しました" if not error else error
+                metadata["file_type"] = "doc"
+                metadata["page_count"] = page_count
 
             elif 'application/vnd.openxmlformats-officedocument.presentationml.presentation' in content_type or 'application/vnd.ms-powerpoint' in content_type:
                 extract_text, page_count, error = PowerPointProcessor.extract_text_from_bytes(content, is_page=is_page)
                 message = f"PowerPointから{page_count}スライドのテキストを抽出しました" if not error else error
+                metadata["file_type"] = "pptx"
+                metadata["page_count"] = page_count
 
             elif 'text/html' in content_type:
-                extract_text, message = HTMLProcessor.extract_text_from_bytes(content)
+                extract_text, error = HTMLProcessor.extract_text_from_bytes(content)
+                message = "HTMLコンテンツを取得しました" if not error else error
+                metadata["file_type"] = "html"
 
             # その他のテキスト形式
             elif 'text/' in content_type:
                 extract_text, error = TextFileProcessor.extract_text_from_bytes(content)
                 message = "テキストコンテンツを取得しました" if not error else error
+                metadata["file_type"] = "text"
 
             else:
                 extract_text, message = None, f"サポートされていないコンテンツタイプです: {content_type}"
 
-            if extract_text:
-                if isinstance(extract_text, list):  # is_page=True の場合（ページ配列）
-                    max_length_by_page = int(max_length/len(extract_text))
-                    # 各ページに対して文字数制限を適用
-                    for i in range(len(extract_text)):
-                        extract_text[i] = extract_text[i][:max_length_by_page]
-                else:  # 通常のテキスト
-                    extract_text = extract_text[:max_length]
+            if not extract_text:
+                return None, f"URIからコンテンツ取得ができませんでした。"
 
-            return extract_text, message
+            if isinstance(extract_text, list):  # is_page=True の場合（ページ配列）
+                return extract_text, metadata
+
+            else:  # 通常のテキスト
+                extract_text = extract_text[:max_length]
+                return extract_text, message
 
         except Exception as e:
             return None, f"URLコンテンツ取得中にエラーが発生しました: {str(e)}"
