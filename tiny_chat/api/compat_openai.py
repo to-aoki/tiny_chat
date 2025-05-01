@@ -49,16 +49,16 @@ async def chat_completions_proxy(
             query_processer = HypotheticalDocument(
                 openai_client=llm_api,
                 model_name=chat_config.selected_model,
-                temperature=chat_config.selected_model.temperature,
-                top_p=chat_config.selected_model.top_p,
+                temperature=chat_config.temperature,
+                top_p=chat_config.top_p,
             )
         elif chat_config.use_step_back:
             from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
             query_processer = StepBackQuery(
                 openai_client=llm_api,
                 model_name=chat_config.selected_model,
-                temperature=chat_config.selected_model.temperature,
-                top_p=chat_config.selected_model.top_p,
+                temperature=chat_config.temperature,
+                top_p=chat_config.top_p,
             )
 
         search_result = search(

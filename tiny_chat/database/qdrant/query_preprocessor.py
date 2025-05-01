@@ -16,7 +16,7 @@ class HypotheticalDocument(QueryPreprocessor):
         self.model_name = model_name
         self.temperature = temperature
         self.top_p = top_p
-        self.prefix = prefix
+        self.prefix = prefix  # embeddings(ruri)都合で変更する
 
     def transform(self, query=None):
         messages_for_api = [
@@ -70,6 +70,7 @@ class HypotheticalDocument(QueryPreprocessor):
                 messages=messages_for_api,
                 temperature=self.temperature,
                 top_p=self.top_p,
+                max_completion_tokens=len(query) * 5,  # FIXME 出力長
                 stream=False
             )
             return self.prefix + response.choices[0].message.content
@@ -136,6 +137,7 @@ class StepBackQuery(QueryPreprocessor):
                 messages=messages_for_api,
                 temperature=self.temperature,
                 top_p=self.top_p,
+                max_completion_tokens=int(len(query) * 1.5),  # FIXME 出力長
                 stream=False
             )
             return response.choices[0].message.content
