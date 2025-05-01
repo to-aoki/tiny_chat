@@ -42,10 +42,13 @@ def get_collections(manager: QdrantManager) -> Dict[str, Collection]:
     return collections_dict
 
 
-def search(query: str, manager: QdrantManager, collection_info: Collection, chat_config: ChatConfig) -> Dict[str, Any]:
+def search(query: str, manager: QdrantManager, collection_info: Collection, chat_config: ChatConfig,
+    query_processor=None
+) -> Dict[str, Any]:
     collection_name = collection_info.collection_name
     top_k = collection_info.top_k
     score_threshold = collection_info.score_threshold
+
 
     try:
         results = search_documents(
@@ -54,6 +57,7 @@ def search(query: str, manager: QdrantManager, collection_info: Collection, chat
             collection_name=collection_name,
             top_k=top_k,
             score_threshold=score_threshold,
+            query_processor=query_processor
         )
         search_context = ""
         if results:

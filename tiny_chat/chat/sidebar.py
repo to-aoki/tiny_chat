@@ -276,7 +276,7 @@ def sidebar(config_file_path, logger):
                 session_only_mode=server_mode,
                 rag_process_prompt=st.session_state.config["rag_process_prompt"],
                 use_hyde=st.session_state.config["use_hyde"],
-                use_back_step=st.session_state.config["use_back_step"]
+                use_step_back=st.session_state.config["use_step_back"]
             )
 
             if config.save(config_file_path):
@@ -319,7 +319,7 @@ def sidebar(config_file_path, logger):
             # 検索用サイドバー設定
             st.sidebar.markdown("RAG")
 
-            with (st.expander("検索設定", expanded=False)):
+            with (((st.expander("検索設定", expanded=False)))):
                 # top_kの設定
                 rag_top_k = st.slider(
                     "最大検索件数 (top_k)",
@@ -375,27 +375,33 @@ def sidebar(config_file_path, logger):
                         
                         # 変更前の値を記録
                         old_hyde = st.session_state.config["use_hyde"]
-                        old_back_step = st.session_state.config["use_back_step"]
+                        old_step_back = st.session_state.config["use_step_back"]
                         
                         # モードに応じて設定値を更新
                         if new_mode == 0:
                             st.session_state.config["use_hyde"] = False
-                            st.session_state.config["use_back_step"] = False
+                            st.session_state.config["use_step_back"] = False
                         elif new_mode == 1:
                             st.session_state.config["use_hyde"] = True
-                            st.session_state.config["use_back_step"] = False
+                            st.session_state.config["use_step_back"] = False
                         else:  # new_mode == 2
                             st.session_state.config["use_hyde"] = False
-                            st.session_state.config["use_back_step"] = True
+                            st.session_state.config["use_step_back"] = True
                         
                         # 設定変更フラグを更新
                         nonlocal settings_changed
-                        if old_hyde != st.session_state.config["use_hyde"] or old_back_step != st.session_state.config["use_back_step"]:
+                        if old_hyde != st.session_state.config["use_hyde"] or \
+                            old_step_back != st.session_state.config["use_step_back"]:
                             settings_changed = True
 
                 # セッション状態に初期値を設定
                 if "query_conversion_mode" not in st.session_state:
-                    current_mode = 0 if not (st.session_state.config["use_hyde"] or st.session_state.config["use_back_step"]) else (1 if st.session_state.config["use_hyde"] else 2)
+                    if not (st.session_state.config["use_hyde"] or st.session_state.config["use_step_back"]):
+                        current_mode = 0
+                    elif st.session_state.config["use_hyde"]:
+                        current_mode = 1
+                    else:
+                        current_mode = 2
                     st.session_state.query_conversion_mode = current_mode
                 
                 # オプション定義
