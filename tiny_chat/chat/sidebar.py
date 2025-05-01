@@ -352,33 +352,69 @@ def sidebar(config_file_path, logger):
                     help="検索後の情報活用をLLM指示する文字列を入力してください",
                     disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
                 )
+
                 # クエリ変換方式をラジオボタンで選択
+                # コールバック関数 - ラジオボタン選択時に即時反映する
+                def on_query_conversion_change():
+                    """ラジオボタン選択変更時のコールバック関数"""
+                    # 選択値を取得して数値インデックスに変換
+                    option_name = st.session_state.query_conversion_radio
+                    if option_name == "変換なし":
+                        new_mode = 0
+                    elif option_name == "クエリ変換（仮クエリ回答）":
+                        new_mode = 1
+                    else:  # "クエリ変換（質問汎化）"
+                        new_mode = 2
+                    
+                    # 前回値と比較して変更があれば設定を更新
+                    if "query_conversion_mode" not in st.session_state or st.session_state.query_conversion_mode != new_mode:
+                        # モードインデックスを更新
+                        st.session_state.query_conversion_mode = new_mode
+                        
+                        # 変更前の値を記録
+                        old_hyde = st.session_state.config["use_hyde"]
+                        old_back_step = st.session_state.config["use_back_step"]
+                        
+                        # モードに応じて設定値を更新
+                        if new_mode == 0:
+                            st.session_state.config["use_hyde"] = False
+                            st.session_state.config["use_back_step"] = False
+                        elif new_mode == 1:
+                            st.session_state.config["use_hyde"] = True
+                            st.session_state.config["use_back_step"] = False
+                        else:  # new_mode == 2
+                            st.session_state.config["use_hyde"] = False
+                            st.session_state.config["use_back_step"] = True
+                        
+                        # 設定変更フラグを更新
+                        nonlocal settings_changed
+                        if old_hyde != st.session_state.config["use_hyde"] or old_back_step != st.session_state.config["use_back_step"]:
+                            settings_changed = True
+
+                # セッション状態に初期値を設定
+                if "query_conversion_mode" not in st.session_state:
+                    current_mode = 0 if not (st.session_state.config["use_hyde"] or st.session_state.config["use_back_step"]) else (1 if st.session_state.config["use_hyde"] else 2)
+                    st.session_state.query_conversion_mode = current_mode
+                
+                # オプション定義
+                query_options = ["変換なし", "クエリ変換（仮クエリ回答）", "クエリ変換（質問汎化）"]
+                
+                # モード値を安全に取得（範囲チェック）
+                current_mode = st.session_state.query_conversion_mode 
+                if current_mode < 0 or current_mode >= len(query_options):
+                    current_mode = 0
+                    st.session_state.query_conversion_mode = current_mode
+
+                # 単一のラジオボタンコントロールを表示
                 query_conversion_mode = st.radio(
                     "クエリ変換方式",
-                    options=["変換なし", "クエリ変換（仮クエリ回答）", "クエリ変換（質問汎化）"],
-                    index=0 if not (st.session_state.config["use_hyde"] or st.session_state.config["use_back_step"]) else 
-                           (1 if st.session_state.config["use_hyde"] else 2),
+                    options=query_options,
+                    index=current_mode,
                     help="RAG利用時のクエリ変換方式を選択します。",
-                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+                    disabled=st.session_state.is_sending_message,
+                    key="query_conversion_radio",
+                    on_change=on_query_conversion_change
                 )
-                
-                # 選択結果に基づいてフラグを設定
-                old_hyde = st.session_state.config["use_hyde"]
-                old_back_step = st.session_state.config["use_back_step"]
-                
-                if query_conversion_mode == "変換なし":
-                    st.session_state.config["use_hyde"] = False
-                    st.session_state.config["use_back_step"] = False
-                elif query_conversion_mode == "クエリ変換（仮クエリ回答）":
-                    st.session_state.config["use_hyde"] = True
-                    st.session_state.config["use_back_step"] = False
-                else:  # "クエリ変換（質問汎化）"
-                    st.session_state.config["use_hyde"] = False
-                    st.session_state.config["use_back_step"] = True
-                
-                # いずれかの設定が変更された場合
-                if old_hyde != st.session_state.config["use_hyde"] or old_back_step != st.session_state.config["use_back_step"]:
-                    settings_changed = True
 
                 if rag_process_prompt != st.session_state.config["rag_process_prompt"]:
                     st.session_state.config["rag_process_prompt"] = rag_process_prompt
