@@ -164,7 +164,6 @@ def toggle_rag_mode(logger):
 
 
 # キャッシュ可能な検索関数 - RAGモード専用
-@functools.lru_cache(maxsize=32)
 def cached_search_documents(prompt_content, logger):
     if not st.session_state.rag_mode:
         return []
@@ -593,17 +592,16 @@ def show_chat_component(logger):
                          f"- 添付ファイルを減らすか\n"
                          f"- サイドバー設定のメッセージ長制限を引き上げてください。")
             else:
-                # ユーザーメッセージを追加（RAG情報はこの時点ではまだ含まれていない）
+                # メッセージ送信中フラグをON
+                st.session_state.is_sending_message = True
+                st.session_state.status_message = "メッセージを処理中..."
+                st.session_state.initial_message_sent = True
+
                 user_message = st.session_state.chat_manager.add_user_message(prompt.text)
 
                 # UIに表示 (UIには元のメッセージだけを表示)
                 with st.chat_message("user"):
                     st.write(user_message["content"])
-
-                # メッセージ送信中フラグをON
-                st.session_state.is_sending_message = True
-                st.session_state.status_message = "メッセージを処理中..."
-                st.session_state.initial_message_sent = True
 
                 # 処理を実行
                 process_and_send_message()
