@@ -318,23 +318,18 @@ def show_registration(
                     for i, uri in enumerate(uris):
                         try:
                             # URIからコンテンツを取得（is_page=Trueでページ単位でテキストを取得）
-                            text, message = URIProcessor.process_uri(uri, is_page=True)
+                            text, meta_data = URIProcessor.process_uri(uri, is_page=True)
                             
                             if text:
-                                # メタデータの設定
-                                metadata = {
-                                    "source": uri,  # URIをソースとして使用
-                                    "file_type": "uri"
-                                }
-                                
                                 # テキストが文字列の場合は配列に変換
                                 if isinstance(text, str):
                                     text = [text]
-                                
+
                                 texts.append(text)
-                                metadatas.append(metadata)
+                                meta_data["source"] = uri
+                                metadatas.append(meta_data)
                             else:
-                                st.warning(f"URI処理エラー: {uri}, {message}")
+                                st.warning(f"URI処理エラー: {uri}, {meta_data}")
                         except Exception as e:
                             st.error(f"URI処理エラー: {uri}, {str(e)}")
                         
