@@ -76,6 +76,16 @@ def sidebar(config_file_path, logger):
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
 
+            max_completion_tokens = st.number_input(
+                "生成トークン長",
+                min_value=100,
+                max_value=100000,
+                value=st.session_state.config["max_completion_tokens"],
+                step=100,
+                help="出力最大トークン長を決定します",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
+
             context_length = st.number_input(
                 "添付ファイル文字列長",
                 min_value=500,
@@ -249,6 +259,10 @@ def sidebar(config_file_path, logger):
             st.session_state.config["message_length"] = message_length
             settings_changed = True
 
+        if max_completion_tokens != st.session_state.config["max_completion_tokens"]:
+            st.session_state.config["max_completion_tokens"] = max_completion_tokens
+            settings_changed = True
+
         if context_length != st.session_state.config["context_length"]:
             st.session_state.config["context_length"] = context_length
             settings_changed = True
@@ -270,6 +284,7 @@ def sidebar(config_file_path, logger):
                 selected_model=st.session_state.config["selected_model"],
                 meta_prompt=meta_prompt,
                 message_length=st.session_state.config["message_length"],
+                max_completion_tokens=st.session_state.config["max_completion_tokens"],
                 context_length=st.session_state.config["context_length"],
                 uri_processing=st.session_state.config["uri_processing"],
                 is_azure=st.session_state.config["is_azure"],

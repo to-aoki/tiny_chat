@@ -55,6 +55,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "selected_model": file_config.selected_model,
             "meta_prompt": file_config.meta_prompt,
             "message_length": file_config.message_length,
+            "max_completion_tokens": file_config.max_completion_tokens,
             "context_length": file_config.context_length,
             "uri_processing": file_config.uri_processing,
             "is_azure": file_config.is_azure,
@@ -495,6 +496,7 @@ def show_chat_component(logger):
                     response = client.chat.completions.create(
                         model=st.session_state.config["selected_model"],
                         messages=messages_for_api,
+                        max_completion_tokens=st.session_state.config["max_completion_tokens"],
                         temperature=st.session_state.config["temperature"],
                         top_p=st.session_state.config["top_p"],
                         stream=True

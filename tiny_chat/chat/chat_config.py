@@ -17,6 +17,7 @@ class ChatConfig:
         selected_model: str = "hf.co/mmnga/llm-jp-3-980m-instruct3-gguf:Q4_K_M",
         meta_prompt: str = "",
         message_length: int = 8000,
+        max_completion_tokens: int = 1000,
         context_length: int = 2000,
         uri_processing: bool = True,
         is_azure: bool = False,
@@ -33,6 +34,7 @@ class ChatConfig:
         self.selected_model = selected_model
         self.meta_prompt = meta_prompt
         self.message_length = message_length
+        self.max_completion_tokens = max_completion_tokens
         self.context_length = context_length
         self.uri_processing = uri_processing
         self.is_azure = is_azure
@@ -85,6 +87,7 @@ class ChatConfig:
                 'selected_model': self.selected_model,
                 'meta_prompt': self.meta_prompt,
                 'message_length': self.message_length,
+                'max_completion_tokens': self.max_completion_tokens,
                 'context_length': self.context_length,
                 'uri_processing': self.uri_processing,
                 'is_azure': self.is_azure,
