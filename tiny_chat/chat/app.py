@@ -2,7 +2,6 @@ import os
 from datetime import datetime
 import logging
 import tempfile
-import functools
 import webbrowser
 import urllib.parse
 
@@ -479,7 +478,7 @@ def show_chat_component(logger):
 
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
-                message_placeholder.markdown("応答を生成中..._")
+                message_placeholder.markdown("応答を生成中...")
 
                 try:
                     # クライアントインスタンスが存在しない場合は初期化
