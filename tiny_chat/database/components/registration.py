@@ -7,7 +7,7 @@ import functools
 import streamlit as st
 import pandas as pd
 
-from tiny_chat.utils.file_processor import process_file
+from tiny_chat.utils.file_processor import process_file, URIProcessor
 from tiny_chat.database.qdrant.collection import Collection
 from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory
 
@@ -136,7 +136,7 @@ def show_registration(
     # 登録方法の選択
     register_method = st.radio(
         "登録方法を選択",
-        ["ファイルアップロード", "ディレクトリ指定"]
+        ["ファイルアップロード", "ディレクトリ指定", "URI指定"]
     )
 
     if register_method == "ファイルアップロード":
@@ -214,7 +214,7 @@ def show_registration(
                     else:
                         st.warning("登録できるドキュメントがありませんでした")
 
-    else:  # ディレクトリ指定
+    elif register_method == "ディレクトリ指定":
         # ディレクトリパス入力
         directory_path = st.text_input("ディレクトリパスを入力", "")
 
@@ -292,3 +292,74 @@ def show_registration(
                         st.warning("指定されたディレクトリに登録可能なファイルが見つかりませんでした")
         elif directory_path:
             st.error("指定されたディレクトリが存在しません")
+            
+    elif register_method == "URI指定":
+        # URIの入力インターフェース
+        uri_input = st.text_area(
+            "URIを入力",
+            "",
+            height=150,
+            help="登録するコンテンツのURIを入力してください。複数のURIを入力する場合は、1行に1つずつ入力してください。"
+        )
+        
+        # 処理の実行
+        if uri_input and st.button("URIからコンテンツを登録", type="primary"):
+            # URIのリストを作成（空行を除去）
+            uris = [uri.strip() for uri in uri_input.split('\n') if uri.strip()]
+            
+            if uris:
+                with st.spinner("URIからコンテンツを取得中..."):
+                    texts = []
+                    metadatas = []
+                    
+                    progress_bar = st.progress(0)
+                    total_uris = len(uris)
+                    
+                    for i, uri in enumerate(uris):
+                        try:
+                            # URIからコンテンツを取得（is_page=Trueでページ単位でテキストを取得）
+                            text, message = URIProcessor.process_uri(uri, is_page=True)
+                            
+                            if text:
+                                # メタデータの設定
+                                metadata = {
+                                    "source": uri,  # URIをソースとして使用
+                                    "file_type": "uri"
+                                }
+                                
+                                # テキストが文字列の場合は配列に変換
+                                if isinstance(text, str):
+                                    text = [text]
+                                
+                                texts.append(text)
+                                metadatas.append(metadata)
+                            else:
+                                st.warning(f"URI処理エラー: {uri}, {message}")
+                        except Exception as e:
+                            st.error(f"URI処理エラー: {uri}, {str(e)}")
+                        
+                        # 進捗を更新
+                        progress_bar.progress((i + 1) / total_uris)
+                    
+                    if texts:
+                        # コレクション名を設定して処理
+                        collection = Collection.load(
+                            collection_name=collection_name, qdrant_manager=qdrant_manager)
+                        if collection is None:
+                            collection = Collection(collection_name)
+                            collection.save(qdrant_manager)
+                        
+                        # Qdrantに追加
+                        added_ids = add_files_to_qdrant(
+                            texts, metadatas, qdrant_manager, collection_name=collection_name,
+                            strategy=RagStrategyFactory.get_strategy(collection.rag_strategy, collection.use_gpu),
+                            chunk_size=collection.chunk_size, chunk_overlap=collection.chunk_overlap
+                        )
+                        
+                        # 結果表示
+                        st.success(f"{len(added_ids)}件のドキュメントを「{collection_name}」コレクションに登録しました")
+                        
+                        metadata_df = pd.DataFrame(metadatas)
+                        st.dataframe(metadata_df, use_container_width=True)
+                    else:
+                        st.warning("登録できるコンテンツがありませんでした")
