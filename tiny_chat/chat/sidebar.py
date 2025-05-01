@@ -326,7 +326,8 @@ def sidebar(config_file_path, logger):
                     min_value=1,
                     max_value=20,
                     value=st.session_state.db_config.top_k,
-                    help="RAG検索で取得する最大文書数を設定します"
+                    help="RAG検索で取得する最大文書数を設定します",
+                    disabled=st.session_state.is_sending_message,
                 )
 
                 if rag_top_k != st.session_state.db_config.top_k:
@@ -339,7 +340,8 @@ def sidebar(config_file_path, logger):
                     max_value=1.0,
                     value=st.session_state.db_config.score_threshold,
                     step=0.01,
-                    help="RAG検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）"
+                    help="RAG検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）",
+                    disabled=st.session_state.is_sending_message,
                 )
 
                 if rag_score_threshold != st.session_state.db_config.score_threshold:

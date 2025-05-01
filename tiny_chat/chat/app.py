@@ -596,21 +596,38 @@ def show_chat_component(logger):
                 st.session_state.is_sending_message = True
                 st.session_state.status_message = "メッセージを処理中..."
                 st.session_state.initial_message_sent = True
+                
+                # 一時データとしてプロンプトテキストを保存
+                st.session_state.temp_prompt_text = prompt.text
+                
+                # 即座に再描画してUIを無効化
+                st.rerun()
+    
+    # 送信中フラグが立っていて、一時保存されたプロンプトがある場合の処理
+    if st.session_state.is_sending_message and "temp_prompt_text" in st.session_state:
+        # 一時保存されたプロンプトテキストを取得
+        prompt_text = st.session_state.temp_prompt_text
+        
+        # ユーザーメッセージを追加
+        user_message = st.session_state.chat_manager.add_user_message(prompt_text)
 
-                user_message = st.session_state.chat_manager.add_user_message(prompt.text)
+        # UIに表示 (UIには元のメッセージだけを表示)
+        with st.chat_message("user"):
+            st.write(user_message["content"])
 
-                # UIに表示 (UIには元のメッセージだけを表示)
-                with st.chat_message("user"):
-                    st.write(user_message["content"])
+        # 処理を実行
+        process_and_send_message()
 
-                # 処理を実行
-                process_and_send_message()
-
-                # 処理終了フラグを設定
-                st.session_state.is_sending_message = False
-                st.session_state.status_message = "処理完了"
-                st.session_state.initial_message_sent = False
-                st.rerun()  # 再描画
+        # 処理終了フラグを設定
+        st.session_state.is_sending_message = False
+        st.session_state.status_message = "処理完了"
+        st.session_state.initial_message_sent = False
+        
+        # 一時データをクリア
+        if "temp_prompt_text" in st.session_state:
+            del st.session_state.temp_prompt_text
+            
+        st.rerun()  # 再描画
 
 
 def run_chat_app(server_mode=False):
