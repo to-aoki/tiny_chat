@@ -405,7 +405,7 @@ def sidebar(config_file_path, logger):
                     st.session_state.query_conversion_mode = current_mode
                 
                 # オプション定義
-                query_options = ["変換なし", "クエリ変換（仮クエリ回答）", "クエリ変換（質問汎化）"]
+                query_options = ["変換なし", "仮クエリ回答(HYDE)", "クエリ汎化(Step Back)"]
                 
                 # モード値を安全に取得（範囲チェック）
                 current_mode = st.session_state.query_conversion_mode 
