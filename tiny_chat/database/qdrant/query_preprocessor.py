@@ -1,4 +1,8 @@
 from abc import ABC
+import re
+
+# DeepSeek-R1/Qwen3向け
+THINK_PATTERN = r"^<think>[\s\S]*?</think>"
 
 
 class QueryPreprocessor(ABC):
@@ -73,7 +77,11 @@ class HypotheticalDocument(QueryPreprocessor):
                 max_completion_tokens=len(query) * 5,  # FIXME 出力長
                 stream=False
             )
-            return self.prefix + response.choices[0].message.content
+
+            # DeepSeek-R1/Qwen3
+            response_text = re.sub(THINK_PATTERN, "", response.choices[0].message.content)
+
+            return self.prefix + response_text
         except:
             # 例外時はそのまま返す
             return query
@@ -140,7 +148,10 @@ class StepBackQuery(QueryPreprocessor):
                 max_completion_tokens=int(len(query) * 1.5),  # FIXME 出力長
                 stream=False
             )
-            return response.choices[0].message.content
+            # DeepSeek-R1/Qwen3
+            response_text = re.sub(THINK_PATTERN, "", response.choices[0].message.content)
+
+            return response_text
         except:
             import traceback
             traceback.print_exc()
