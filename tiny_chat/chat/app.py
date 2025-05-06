@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 import logging
 import tempfile
@@ -22,6 +23,9 @@ CONFIG_FILE = DEFAULT_CHAT_CONFIG_PATH
 
 # サポートする拡張子
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
+
+# DeepSeek-R1/Qwen3向け
+THINK_PATTERN = r"^<think>[\s\S]*?</think>"
 
 # ファイルタイプと表示単位のキャッシュ
 FILE_TYPES = {
@@ -545,6 +549,9 @@ def show_chat_component(logger):
                         st.session_state.reference_files = reference_files
 
                     message_placeholder.empty()
+
+                    # DeepSeek-R1/Qwen3
+                    full_response = re.sub(THINK_PATTERN, "", full_response)
 
                     # 応答をメッセージ履歴に追加
                     st.session_state.chat_manager.add_assistant_message(full_response)
