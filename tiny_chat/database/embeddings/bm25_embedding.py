@@ -85,7 +85,7 @@ class BM25TextEmbedding(SparseTextEmbedding):
         if self.is_japanese:
             self._tokenizer = dictionary.Dictionary().create()
             self._tokenizer_mode = tokenizer.Tokenizer.SplitMode.B
-            self._stopwords = stopwordsiso.stopwords("ja")
+            self._stopwords = stopwordsiso.stopwords("ja").union(set(' '))
 
     def _remove_symbols(self, morphemes: List) -> List:
         """補助記号を削除します。
