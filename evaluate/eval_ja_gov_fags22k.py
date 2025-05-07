@@ -212,7 +212,6 @@ if __name__ == "__main__":
     from tqdm import tqdm
 
     query_processor = None
-    print(args.query)
     if args.query is not None:
         from tiny_chat.api.api_util import get_llm_api
         llm_api, chat_config = get_llm_api()
