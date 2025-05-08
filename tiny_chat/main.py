@@ -5,8 +5,9 @@ import argparse
 # https://discuss.streamlit.io/t/message-error-about-torch/90886/9
 # RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
 import torch
-
 torch.classes.__path__ = []
+
+os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
 def main():
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

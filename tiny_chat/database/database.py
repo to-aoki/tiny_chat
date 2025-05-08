@@ -1,6 +1,8 @@
 import os
 import threading
 
+
+os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 import streamlit as st
 
 from tiny_chat.database.database_config import DatabaseConfig, DEFAULT_CONFIG_PATH
