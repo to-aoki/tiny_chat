@@ -1,11 +1,9 @@
 import streamlit as st
-
-CONFIG_FILE = "database_config.json"
-
+from tiny_chat.database.database_config import DEFAULT_CONFIG_PATH
 
 def show_settings(
     logger=None,
-    config_file_path=CONFIG_FILE,
+    config_file_path=DEFAULT_CONFIG_PATH,
 ):
     url = st.text_input("データベースURL", value=st.session_state.db_config.server_url)
     api_key = st.text_input("データベース接続API-Key（必要なデータベースの場合）", value=st.session_state.db_config.api_key)
