@@ -1,4 +1,7 @@
 from typing import Optional
+
+from sympy import resultant
+
 from tiny_chat.database.qdrant.rag_strategy import RagStrategyFactory, NoopRAGStrategy
 
 NOOP_STRATEGY = NoopRAGStrategy()
@@ -68,16 +71,17 @@ class Collection:
 
         # INFO ファイル検索向けに件数を取得
         doc_count = qdrant_manager.count_documents(collection_name=self.STORED_COLLECTION_NAME)
-
-        results = qdrant_manager.query_points(
-            query="",  # 空のクエリで全件取得
-            filter_params={"collection_name": self.collection_name},
-            collection_name=self.STORED_COLLECTION_NAME,
-            top_k=doc_count,
-            strategy=NOOP_STRATEGY,
-            score_threshold=-1.   # スコア不問(0返却）
-        )
-        if not results:
+        results = None
+        if doc_count > 0:
+            results = qdrant_manager.query_points(
+                query="",  # 空のクエリで全件取得
+                filter_params={"collection_name": self.collection_name},
+                collection_name=self.STORED_COLLECTION_NAME,
+                top_k=doc_count,
+                strategy=NOOP_STRATEGY,
+                score_threshold=-1.   # スコア不問(0返却）
+            )
+        if doc_count == 0 or not results:
             # コレクション情報をメタデータとして保存
             qdrant_manager.add_document(
                 collection_name=self.STORED_COLLECTION_NAME,
@@ -116,6 +120,8 @@ class Collection:
 
         # INFO ファイル検索向けに件数を取得
         doc_count = qdrant_manager.count_documents(collection_name=cls.STORED_COLLECTION_NAME)
+        if doc_count == 0:
+            return None
 
         results = qdrant_manager.query_points(
             query="",  # 空のクエリで全件取得
@@ -131,7 +137,7 @@ class Collection:
 
         result = results[0]
         payload = result.payload
-        
+
         # ペイロードからCollectionインスタンスを生成
         return cls(
             collection_name=payload.get("collection_name", collection_name),
