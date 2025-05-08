@@ -463,7 +463,6 @@ def _manage_collections(qdrant_manager, logger):
                         try:
                             # コレクション管理から削除
                             Collection.delete(selected_collection_to_delete, qdrant_manager=qdrant_manager)
-                            qdrant_manager.delete_collection(selected_collection_to_delete)
                             # 常に成功メッセージを表示
                             st.success(f"コレクション '{selected_collection_to_delete}' の削除が完了しました")
                             # 確認状態をリセット
