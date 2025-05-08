@@ -283,6 +283,7 @@ def _manage_collections(qdrant_manager, logger):
                         "ruri_xsmall",
                         "ruri_base",
                         "ruri_xsmall_openvino",
+                        "ruri_xsmall_reranker",
                         "bm25_static",
                         "bm25_ruri_xsmall",
                         "bm25_ruri_base",
