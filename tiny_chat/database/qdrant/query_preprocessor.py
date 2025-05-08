@@ -15,12 +15,13 @@ class HypotheticalDocument(QueryPreprocessor):
     # Precise Zero-Shot Dense Retrieval without Relevance Labels
     # https://arxiv.org/abs/2212.10496
 
-    def __init__(self, openai_client, model_name, temperature, top_p, prefix="検索文章: "):
+    def __init__(self, openai_client, model_name, temperature, top_p, prefix="検索文章: ", meta_prompt=None):
         self.openai_client = openai_client
         self.model_name = model_name
         self.temperature = temperature
         self.top_p = top_p
         self.prefix = prefix  # embeddings(ruri)都合で変更する
+        self.meta_prompt = meta_prompt
 
     def transform(self, query=None):
         messages_for_api = [
@@ -63,18 +64,30 @@ class HypotheticalDocument(QueryPreprocessor):
                            "優先度ベースプリエンプティブ方式、ラウンドロビン方式、Rate Monotonic (RM)、Earliest Deadline First (EDF) の特徴、"
                            "応答性、スケジューラビリティ解析について解説。"
             },
+        ]
+
+        if self.meta_prompt is not None:
+            messages_for_api.append(
+                {
+                    "role": "system",
+                    "content": self.meta_prompt
+                },
+            )
+
+        messages_for_api.append(
             {
                 "role": "user",
                 "content": query
             },
-        ]
+        )
+
         try:
             response = self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages_for_api,
                 temperature=self.temperature,
                 top_p=self.top_p,
-                max_completion_tokens=len(query) * 5,  # FIXME 出力長
+                max_completion_tokens=len(query) * 3,  # FIXME 出力長
                 stream=False
             )
 
@@ -91,11 +104,12 @@ class StepBackQuery(QueryPreprocessor):
     # Take a Step Back: Evoking Reasoning via Abstraction in Large Language Models
     # https://arxiv.org/abs/2310.06117
 
-    def __init__(self, openai_client, model_name, temperature, top_p):
+    def __init__(self, openai_client, model_name, temperature, top_p, meta_prompt=None):
         self.openai_client = openai_client
         self.model_name = model_name
         self.temperature = temperature
         self.top_p = top_p
+        self.meta_prompt = meta_prompt
 
     def transform(self, query=None):
         messages_for_api = [
@@ -134,11 +148,23 @@ class StepBackQuery(QueryPreprocessor):
                 "role": "assistant",
                 "content": "京都の清水寺の歴史を教えてください。"
             },
+        ]
+
+        if self.meta_prompt is not None:
+            messages_for_api.append(
+                {
+                    "role": "system",
+                    "content": self.meta_prompt
+                },
+            )
+
+        messages_for_api.append(
             {
                 "role": "user",
                 "content": query
             },
-        ]
+        )
+
         try:
             response = self.openai_client.chat.completions.create(
                 model=self.model_name,
