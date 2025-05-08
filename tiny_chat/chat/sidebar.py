@@ -119,19 +119,19 @@ def sidebar(config_file_path, logger):
                 help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
+            if st.session_state.config["use_web"]:
+                uri_processing = st.checkbox(
+                    "メッセージURL取得",
+                    value=st.session_state.config["uri_processing"],
+                    help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
+                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+                )
 
-            uri_processing = st.checkbox(
-                "メッセージURL取得",
-                value=st.session_state.config["uri_processing"],
-                help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
-                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-            )
-
-            # 設定値変更の検出（フラグの一元管理）
-            if uri_processing != st.session_state.config["uri_processing"] and not st.session_state.is_sending_message:
-                st.session_state.config["uri_processing"] = uri_processing
-                logger.info(f"URI処理設定を変更: {uri_processing}")
-                settings_changed = True
+                # 設定値変更の検出（フラグの一元管理）
+                if uri_processing != st.session_state.config["uri_processing"] and not st.session_state.is_sending_message:
+                    st.session_state.config["uri_processing"] = uri_processing
+                    logger.info(f"URI処理設定を変更: {uri_processing}")
+                    settings_changed = True
 
             # サーバー関連設定の変更をチェック
             server_url_changed = server_url != st.session_state.config["server_url"]
@@ -295,7 +295,8 @@ def sidebar(config_file_path, logger):
                 session_only_mode=server_mode,
                 rag_process_prompt=st.session_state.config["rag_process_prompt"],
                 use_hyde=st.session_state.config["use_hyde"],
-                use_step_back=st.session_state.config["use_step_back"]
+                use_step_back=st.session_state.config["use_step_back"],
+                use_web=st.session_state.config["use_web"]
             )
 
             if config.save(config_file_path):

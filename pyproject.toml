@@ -38,9 +38,10 @@ dependencies = [
     "stopwordsiso",
     "torch",
     "sentence-transformers",
-    "mcp",
+    "mcp==1.6.0",
     "sentencepiece==0.2.0",
     "fastapi",
+    "duckduckgo_search==8.0.1"
 ]
 
 [project.urls]

@@ -216,7 +216,7 @@ if __name__ == "__main__":
         from tiny_chat.api.api_util import get_llm_api
         llm_api, chat_config = get_llm_api()
         if args.query == 'hyde':
-            from tiny_chat.database.qdrant.query_preprocessor import HypotheticalDocument
+            from tiny_chat.utils.query_preprocessor import HypotheticalDocument
             query_processor = HypotheticalDocument(
                 openai_client=llm_api,
                 model_name=chat_config.selected_model,
@@ -225,7 +225,7 @@ if __name__ == "__main__":
                 meta_prompt=chat_config.meta_prompt
             )
         elif args.query == 'back':
-            from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
+            from tiny_chat.utils.query_preprocessor import StepBackQuery
             query_processor = StepBackQuery(
                 openai_client=llm_api,
                 model_name=chat_config.selected_model,

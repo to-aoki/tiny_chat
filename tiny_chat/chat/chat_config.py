@@ -14,7 +14,7 @@ class ChatConfig:
         self,
         server_url: str = "http://localhost:11434/v1",
         api_key: str = "dummy-key",
-        selected_model: str = "hf.co/mmnga/llm-jp-3-980m-instruct3-gguf:Q4_K_M",
+        selected_model: str = "hf.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF",
         meta_prompt: str = "",
         message_length: int = 8000,
         max_completion_tokens: int = 1000,
@@ -27,6 +27,7 @@ class ChatConfig:
         rag_process_prompt: str = "関連文書が有効な場合は回答に役立ててください。\n関連文書:\n",
         use_hyde: bool = False,
         use_step_back: bool = False,
+        use_web: bool = True,
         **kwargs
     ):
         self.server_url = server_url
@@ -44,6 +45,7 @@ class ChatConfig:
         self.rag_process_prompt = rag_process_prompt
         self.use_hyde = use_hyde
         self.use_step_back = use_step_back
+        self.use_web = use_web
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -97,6 +99,7 @@ class ChatConfig:
                 'rag_process_prompt': self.rag_process_prompt,
                 'use_hyde': self.use_hyde,
                 'use_step_back': self.use_step_back,
+                'use_web': self.use_web
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:
