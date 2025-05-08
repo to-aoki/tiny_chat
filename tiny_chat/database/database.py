@@ -57,8 +57,6 @@ def get_or_create_qdrant_manager(logger=None, config_file_path=DEFAULT_CONFIG_PA
             with st.spinner("データベースを初期化中..."):
                 from tiny_chat.database.qdrant.qdrant_manager import QdrantManager
 
-                if logger:
-                    logger.info("QdrantManagerを初期化しています...")
                 try:
                     db_config = st.session_state.db_config
                     _qdrant_manager = QdrantManager(

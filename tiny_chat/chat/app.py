@@ -61,14 +61,15 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "message_length": file_config.message_length,
             "max_completion_tokens": file_config.max_completion_tokens,
             "context_length": file_config.context_length,
-            "uri_processing": file_config.uri_processing,
+            "uri_processing": file_config.uri_processing if file_config.use_web else False,
             "is_azure": file_config.is_azure,
             "session_only_mode": file_config.session_only_mode,
             "temperature": file_config.temperature,
             "top_p": file_config.top_p,
             "rag_process_prompt": file_config.rag_process_prompt,
             "use_hyde": file_config.use_hyde,
-            "use_step_back": file_config.use_step_back
+            "use_step_back": file_config.use_step_back,
+            "use_web": file_config.use_web,
         }
 
     # その他のセッション状態を初期化
@@ -115,6 +116,10 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
 
+    # Web検索モードのフラグ
+    if "web_search_mode" not in st.session_state:
+        st.session_state.web_search_mode = False
+
     # RAGモードが一度でも有効になったことがあるかを追跡するフラグ
     if "rag_mode_ever_enabled" not in st.session_state:
         st.session_state.rag_mode_ever_enabled = False
@@ -138,6 +143,19 @@ def clear_chat():
     # 参照ファイル情報もクリア
     st.session_state.reference_files = []
 
+def toggle_web_search_mode():
+    # チェックボックスの状態を取得
+    current_state = st.session_state.web_search_mode_checkbox
+    # セッション状態を更新
+    st.session_state.web_search_mode = current_state
+
+    if current_state:
+        st.session_state.rag_mode = False
+
+    if not current_state:
+        st.session_state.rag_sources = []
+        st.session_state.reference_files = []
+
 
 # RAGモード切り替え用の関数
 def toggle_rag_mode(logger):
@@ -145,8 +163,10 @@ def toggle_rag_mode(logger):
     current_state = st.session_state.rag_mode_checkbox
     # セッション状態を更新
     st.session_state.rag_mode = current_state
-    
+
     if current_state:
+        st.session_state.web_search_mode = False
+
         # RAGモードが有効になった場合
         try:
             # RAGモードが一度でも有効になったことを記録（この値は保持される）
@@ -167,11 +187,10 @@ def toggle_rag_mode(logger):
         st.session_state.reference_files = []
 
 
-# キャッシュ可能な検索関数 - RAGモード専用
-def cached_search_documents(prompt_content, logger):
+def rag_search(prompt_content, logger):
     if not st.session_state.rag_mode:
         return []
-    
+
     # RAGモードが有効な場合のみ検索関数をインポートして実行
     from tiny_chat.database.database import get_or_create_qdrant_manager
     from tiny_chat.database.components.search import search_documents
@@ -184,7 +203,7 @@ def cached_search_documents(prompt_content, logger):
     query_processer = None
 
     if st.session_state.config["use_hyde"]:
-        from tiny_chat.database.qdrant.query_preprocessor import HypotheticalDocument
+        from tiny_chat.utils.query_preprocessor import HypotheticalDocument
         query_processer = HypotheticalDocument(
             openai_client=st.session_state.openai_client,
             model_name=st.session_state.config["selected_model"],
@@ -193,7 +212,7 @@ def cached_search_documents(prompt_content, logger):
             meta_prompt=st.session_state.config["meta_prompt"]
         )
     elif st.session_state.config["use_step_back"]:
-        from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
+        from tiny_chat.utils.query_preprocessor import StepBackQuery
         query_processer = StepBackQuery(
             openai_client=st.session_state.openai_client,
             model_name=st.session_state.config["selected_model"],
@@ -226,9 +245,12 @@ def show_chat_component(logger):
                     with st.container():
                         st.write("参照情報を開く:")
                         for idx, file_info in enumerate(st.session_state.reference_files):
+                            page_str = ""
+                            if file_info['page'] is not None and file_info['page'] != "":
+                                page_str = f" ページ: {file_info['page']}"
                             if not file_info["path"].startswith(('http://', 'https://')):
                                 if st.button(
-                                        f"[{file_info['index']}] {file_info['path']} ページ: {file_info['page']}",
+                                        f"[{file_info['index']}] {file_info['path']}{page_str}",
                                         key=f"open_ref_{i}_{idx}"):
                                     try:
                                         webbrowser.open(file_info["path"])
@@ -236,7 +258,7 @@ def show_chat_component(logger):
                                         st.error(f"ファイルを開けませんでした: {str(e)}")
                             else:
                                 st.markdown(
-                                    f"[\\[{file_info['index']}\\] {file_info['path']} ページ: {file_info['page']}]"
+                                    f"[\\[{file_info['index']}\\] {file_info['path']}{page_str}]"
                                     f"({urllib.parse.quote(file_info['path'], safe=':/')})")
 
     # 添付ファイル一覧を表示
@@ -282,12 +304,14 @@ def show_chat_component(logger):
             accept_file=True,
             file_type=[ext.lstrip(".") for ext in SUPPORT_EXTENSIONS]
         )
-
-        col1, col2, col3 = st.columns(3)
+        if st.session_state.config["use_web"]:
+            col1, col2, _, col3, col4 = st.columns([2, 2, 3, 2, 2])
+        else:
+            col1, col2, _, col3 = st.columns([2, 2, 4, 2])
 
         with col1:
             st.button(
-                "チャットクリア",
+                "チャット破棄",
                 disabled=st.session_state.is_sending_message,
                 use_container_width=True,
                 key="clear_chat_history_button",
@@ -321,13 +345,24 @@ def show_chat_component(logger):
         with col3:
             # RAGモードのチェックボックス
             st.checkbox(
-                "RAG (データベース検索回答)",
+                "RAG (DB検索)",
                 value=st.session_state.rag_mode,
                 key="rag_mode_checkbox",
                 on_change=toggle_rag_mode,
                 disabled=st.session_state.is_sending_message,
                 args=(logger,)
             )
+
+        if st.session_state.config["use_web"]:
+            with col4:
+                # DDGSモードのチェックボックス
+                st.checkbox(
+                    "RAG (Web検索)",
+                    value=st.session_state.web_search_mode,
+                    key="web_search_mode_checkbox",
+                    on_change=toggle_web_search_mode,
+                    disabled=st.session_state.is_sending_message,
+                )
 
     # ファイル処理関数
     def process_uploaded_file(uploaded_file):
@@ -408,31 +443,22 @@ def show_chat_component(logger):
                 uri_processor = URIProcessor()
                 detects_urls = uri_processor.detect_uri(prompt_content)
 
-
             # 拡張プロンプトの取得
             enhanced_prompt = None
             if st.session_state.chat_manager.attachments or (
                     st.session_state.config["uri_processing"] and detects_urls):
-                # 拡張プロンプトを生成
-                enhanced_prompt = st.session_state.chat_manager.get_enhanced_prompt(
-                    prompt_content,
-                    max_length=st.session_state.config["context_length"],
-                    uri_processor=uri_processor
-                )
+                with st.spinner("Webから情報取得中です... しばらくお待ちください"):
+                    # 拡張プロンプトを生成
+                    enhanced_prompt = st.session_state.chat_manager.get_enhanced_prompt(
+                        prompt_content,
+                        max_length=st.session_state.config["context_length"],
+                        uri_processor=uri_processor
+                    )
 
-            # RAGモードが有効な場合のみ、DBに接続して検索を実行
-            if st.session_state.rag_mode:
-                try:
-                    # RAGモードが有効な場合のみQdrantマネージャを取得・初期化
-                    from tiny_chat.database.database import get_or_create_qdrant_manager
-                    get_or_create_qdrant_manager(logger)
-                    
-                    # 最新のユーザーメッセージで検索
-                    search_results = cached_search_documents(prompt_content, logger)
-                    
-                    # 検索結果の状態をログに記録
-                    logger.info(f"RAG検索結果: {len(search_results) if search_results else 0}件")
-
+            if st.session_state.web_search_mode:
+                with st.spinner("インターネットを検索中です... しばらくお待ちください"):
+                    from tiny_chat.utils.web_search_processor import search_web
+                    search_results = search_web(prompt_content)
                     if search_results:
                         # 検索結果を整形
                         search_context = st.session_state.config["rag_process_prompt"]
@@ -442,7 +468,7 @@ def show_chat_component(logger):
 
                         for result in search_results:
                             source = result.payload.get('source', '')
-                            page = result.payload.get('page', '')
+                            page = ''
 
                             # テキスト内容を取得（長さ制限あり）
                             text = result.payload.get('text', '')[:st.session_state.config["context_length"]]
@@ -461,9 +487,51 @@ def show_chat_component(logger):
                             enhanced_prompt += f"\n\n{search_context}"
                         else:
                             enhanced_prompt = prompt_content + f"\n\n{search_context}"
-                except Exception as e:
-                    logger.error(f"RAG検索処理中にエラー: {str(e)}")
-                    # エラーが発生しても続行、ただしRAG検索なしで
+
+            if st.session_state.rag_mode:
+                with st.spinner("データベースを検索中です... しばらくお待ちください"):
+                    try:
+                        # RAGモードが有効な場合のみQdrantマネージャを取得・初期化
+                        from tiny_chat.database.database import get_or_create_qdrant_manager
+                        get_or_create_qdrant_manager(logger)
+
+                        # 最新のユーザーメッセージで検索
+                        search_results = rag_search(prompt_content, logger)
+
+                        # 検索結果の状態をログに記録
+                        logger.info(f"RAG検索結果: {len(search_results) if search_results else 0}件")
+
+                        if search_results:
+                            # 検索結果を整形
+                            search_context = st.session_state.config["rag_process_prompt"]
+
+                            # 参照情報をリセット
+                            st.session_state.rag_sources = []
+
+                            for result in search_results:
+                                source = result.payload.get('source', '')
+                                page = result.payload.get('page', '')
+
+                                # テキスト内容を取得（長さ制限あり）
+                                text = result.payload.get('text', '')[:st.session_state.config["context_length"]]
+
+                                # 参照情報を保存
+                                source_info = {
+                                    "page": page,
+                                    "source": source
+                                }
+                                st.session_state.rag_sources.append(source_info)
+
+                                search_context += f"{source}:\n{text}\n\n"
+
+                            # 検索結果を含めた拡張プロンプトを作成
+                            if enhanced_prompt:
+                                enhanced_prompt += f"\n\n{search_context}"
+                            else:
+                                enhanced_prompt = prompt_content + f"\n\n{search_context}"
+                    except Exception as e:
+                        logger.error(f"RAG検索処理中にエラー: {str(e)}")
+                        # エラーが発生しても続行、ただしRAG検索なしで
 
             # 拡張プロンプトがあれば更新
             if enhanced_prompt:
@@ -521,7 +589,7 @@ def show_chat_component(logger):
                     message_placeholder.markdown(full_response)
 
                     # RAGモードで検索結果がある場合のみ、参照情報を追加
-                    if st.session_state.rag_mode and st.session_state.rag_sources:
+                    if (st.session_state.rag_mode or st.session_state.web_search_mode) and st.session_state.rag_sources:
                         reference_files = []
                         refer = 0
                         exist_path = set()
@@ -674,18 +742,19 @@ def run_chat_app(server_mode=False):
     if st.session_state.active_tab == tab_items[1]:
         # データベース機能の表示
         if st.session_state.rag_mode_ever_enabled:
-            try:
-                from tiny_chat.database.database import get_or_create_qdrant_manager, show_database_component
+            with st.spinner("データベース操作画面をレンダリング中..."):
+                try:
+                    from tiny_chat.database.database import get_or_create_qdrant_manager, show_database_component
 
-                # チャットアプリからの呼び出しなので、ページ設定を重複して行わない（set_config=False）
-                get_or_create_qdrant_manager(LOGGER)
-                show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+                    # チャットアプリからの呼び出しなので、ページ設定を重複して行わない（set_config=False）
+                    get_or_create_qdrant_manager(LOGGER)
+                    show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
 
-            except Exception as e:
-                LOGGER.error(f"データベース接続エラー: {str(e)}")
-                st.error(f"データベース接続中にエラーが発生しました: {str(e)}")
+                except Exception as e:
+                    LOGGER.error(f"データベース接続エラー: {str(e)}")
+                    st.error(f"データベース接続中にエラーが発生しました: {str(e)}")
         else:
-            st.warning("データベース機能を有効にするには以下のボタンをクリックしてください。")
+            st.warning("データベース機能を利用する場合はボタンを押下してください。")
 
             def enable_database():
                 st.session_state.rag_mode_ever_enabled = True

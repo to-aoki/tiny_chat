@@ -45,7 +45,7 @@ async def chat_completions_proxy(
         query = request_body["messages"][-1]["content"]
 
         if chat_config.use_hyde:
-            from tiny_chat.database.qdrant.query_preprocessor import HypotheticalDocument
+            from tiny_chat.utils.query_preprocessor import HypotheticalDocument
             query_processer = HypotheticalDocument(
                 openai_client=llm_api,
                 model_name=chat_config.selected_model,
@@ -53,7 +53,7 @@ async def chat_completions_proxy(
                 top_p=chat_config.top_p,
             )
         elif chat_config.use_step_back:
-            from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
+            from tiny_chat.utils.query_preprocessor import StepBackQuery
             query_processer = StepBackQuery(
                 openai_client=llm_api,
                 model_name=chat_config.selected_model,

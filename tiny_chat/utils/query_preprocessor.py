@@ -179,7 +179,5 @@ class StepBackQuery(QueryPreprocessor):
 
             return response_text
         except:
-            import traceback
-            traceback.print_exc()
             # 例外時はそのまま返す
             return query
