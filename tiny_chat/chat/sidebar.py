@@ -338,7 +338,7 @@ def sidebar(config_file_path, logger):
             # 検索用サイドバー設定
             st.sidebar.markdown("RAG")
 
-            with (((st.expander("検索設定", expanded=False)))):
+            with st.expander("検索設定", expanded=False):
                 # top_kの設定
                 rag_top_k = st.slider(
                     "最大検索件数 (top_k)",
@@ -442,6 +442,19 @@ def sidebar(config_file_path, logger):
                     key="query_conversion_radio",
                     on_change=on_query_conversion_change
                 )
+
+                if query_conversion_mode != current_mode:
+                    if current_mode == 0:
+                        st.session_state.config["use_hyde"] = False
+                        st.session_state.config["use_step_back"] = False
+                    elif current_mode == 1:
+                        st.session_state.config["use_hyde"] = True
+                        st.session_state.config["use_step_back"] = False
+                    elif current_mode == 2:
+                        st.session_state.config["use_hyde"] = False
+                        st.session_state.config["use_step_back"] = True
+                    st.session_state.query_conversion_mode = current_mode
+                    settings_changed = True
 
                 if rag_process_prompt != st.session_state.config["rag_process_prompt"]:
                     st.session_state.config["rag_process_prompt"] = rag_process_prompt
