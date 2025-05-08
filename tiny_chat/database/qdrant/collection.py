@@ -66,11 +66,14 @@ class Collection:
         if qdrant_manager is None:
             raise ValueError("QdrantManagerが設定されていません")
 
+        # INFO ファイル検索向けに件数を取得
+        doc_count = qdrant_manager.count_documents(collection_name=self.STORED_COLLECTION_NAME)
+
         results = qdrant_manager.query_points(
             query="",  # 空のクエリで全件取得
             filter_params={"collection_name": self.collection_name},
             collection_name=self.STORED_COLLECTION_NAME,
-            top_k=1,  # 1件だけ取得,
+            top_k=doc_count,
             strategy=NOOP_STRATEGY,
             score_threshold=-1.   # スコア不問(0返却）
         )
@@ -110,11 +113,15 @@ class Collection:
         Returns:
             Optional[Collection]: 読み込まれたCollectionインスタンス（見つからない場合はNone）
         """
+
+        # INFO ファイル検索向けに件数を取得
+        doc_count = qdrant_manager.count_documents(collection_name=self.STORED_COLLECTION_NAME)
+
         results = qdrant_manager.query_points(
             query="",  # 空のクエリで全件取得
             filter_params={"collection_name": collection_name},
             collection_name=cls.STORED_COLLECTION_NAME,
-            top_k=1,  # 1件だけ取得,
+            top_k=doc_count,
             strategy=NOOP_STRATEGY,  # ベクトル検索なし
             score_threshold=-1.      # スコア不問(0返却）
         )
