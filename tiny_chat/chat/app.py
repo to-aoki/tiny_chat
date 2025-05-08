@@ -190,6 +190,7 @@ def cached_search_documents(prompt_content, logger):
             model_name=st.session_state.config["selected_model"],
             temperature=st.session_state.config["temperature"],
             top_p=st.session_state.config["top_p"],
+            meta_prompt=st.session_state.config["meta_prompt"]
         )
     elif st.session_state.config["use_step_back"]:
         from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
@@ -198,6 +199,7 @@ def cached_search_documents(prompt_content, logger):
             model_name=st.session_state.config["selected_model"],
             temperature=st.session_state.config["temperature"],
             top_p=st.session_state.config["top_p"],
+            meta_prompt=st.session_state.config["meta_prompt"]
         )
 
     return search_documents(

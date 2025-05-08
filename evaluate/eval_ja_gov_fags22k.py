@@ -222,6 +222,7 @@ if __name__ == "__main__":
                 model_name=chat_config.selected_model,
                 temperature=chat_config.temperature,
                 top_p=chat_config.top_p,
+                meta_prompt=chat_config.meta_prompt
             )
         elif args.query == 'back':
             from tiny_chat.database.qdrant.query_preprocessor import StepBackQuery
@@ -230,6 +231,7 @@ if __name__ == "__main__":
                 model_name=chat_config.selected_model,
                 temperature=chat_config.temperature,
                 top_p=chat_config.top_p,
+                meta_prompt=chat_config.meta_prompt
             )
         else:
             raise ValueError('not found :' + args.query)
