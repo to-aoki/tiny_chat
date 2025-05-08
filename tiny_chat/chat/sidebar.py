@@ -1,7 +1,7 @@
 import streamlit as st
 
 
-from tiny_chat.utils.llm_utils import get_llm_client
+from tiny_chat.utils.llm_utils import get_llm_client, reset_ollama_model
 from tiny_chat.chat.chat_config import ChatConfig, ModelManager
 
 
@@ -40,6 +40,9 @@ def sidebar(config_file_path, logger):
 
             # 入力されたモデルを使用
             if model_input != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
+                # ollama向け操作
+                reset_ollama_model(server_url=st.session_state.config["server_url"],
+                                   model=st.session_state.config["selected_model"] )
                 st.session_state.config["selected_model"] = model_input
                 logger.info(f"モデルを変更: {model_input}")
                 settings_changed = True
