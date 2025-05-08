@@ -45,9 +45,9 @@ class RagStrategyFactory:
             strategy = DenseOnly("intfloat/multilingual-e5-large", use_gpu=use_gpu)
         elif strategy_name == "ruri_base_reranker":
             strategy = DenseReranker(strategy_name, use_gpu=use_gpu)
-        elif strategy_name == "ruri_tiny_reranker":
+        elif strategy_name == "ruri_xsmall_reranker":
             strategy = DenseReranker(strategy_name, use_gpu=use_gpu)
-        elif strategy_name == "ruri_openvino_reranker":
+        elif strategy_name == "ruri_tiny_reranker":
             strategy = DenseReranker(strategy_name, use_gpu=use_gpu)
         elif strategy_name == "bm25_static":
             strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
@@ -183,7 +183,7 @@ class DenseOnly(RAGStrategy):
 
 class DenseReranker(DenseOnly):
 
-    def __init__(self, strategy="cl-nagoya/ruri-v3-30m", use_gpu=False, **kwargs):
+    def __init__(self, strategy="ruri_xsmall_reranker", use_gpu=False, **kwargs):
 
         if strategy == "ruri_base_reranker":
             self.dense_vector_field_name = "dense"
@@ -192,7 +192,7 @@ class DenseReranker(DenseOnly):
             from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
             self.reanker = SentenceTransformerCrossEncoder(
                 device='cuda' if use_gpu else 'cpu')
-        elif strategy == "ruri_openvino_reranker":
+        elif strategy == "ruri_tiny_reranker":
             self.dense_vector_field_name = "dense"
             self.model = SentenceTransformerEmbedding("cl-nagoya/ruri-v3-30m", device='cpu',
                                  file_name="openvino/openvino_model_qint8_quantized.xml", **kwargs)
@@ -205,7 +205,7 @@ class DenseReranker(DenseOnly):
                 model_name="cl-nagoya/ruri-v3-30m", device='cuda' if use_gpu else 'cpu', **kwargs)
             from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
             self.reanker = SentenceTransformerCrossEncoder(
-                model_name="hotchpotch/japanese-reranker-tiny-v2",
+                model_name="hotchpotch/japanese-reranker-xsmall-v2",
                 device='cuda' if use_gpu else 'cpu')
         self.strategy = strategy
 
