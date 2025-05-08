@@ -180,6 +180,6 @@ class Collection:
     @classmethod
     def delete(cls, collection_name, qdrant_manager):
         filter_params = {"collection_name": collection_name}
-        qdrant_manager.delete_by_filter(filter_params,
+        qdrant_manager.delete_by_filter(filter_params=filter_params,
                                         collection_name=Collection.STORED_COLLECTION_NAME)
         qdrant_manager.delete_collection(collection_name=collection_name)

@@ -612,11 +612,6 @@ class QdrantManager:
         """
         # コレクション名を確定
         collection_name = collection_name if collection_name is not None else self.collection_name
-        collections = self.client.get_collections().collections
-        collection_names = [c.name for c in collections if c.name != Collection.STORED_COLLECTION_NAME]
-
-        if collection_name not in collection_names:
-            return 0  # 削除対象のコレクションが存在しない
 
         filter_conditions = []
         for key, value in filter_params.items():
@@ -643,14 +638,12 @@ class QdrantManager:
         delete_filter = models.Filter(
             must=filter_conditions
         )
-
         result = self.client.delete(
             collection_name=collection_name,
             points_selector=models.FilterSelector(
                 filter=delete_filter
             )
         )
-
         return result.operation_id
 
 
