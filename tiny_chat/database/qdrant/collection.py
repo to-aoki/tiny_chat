@@ -115,7 +115,7 @@ class Collection:
         """
 
         # INFO ファイル検索向けに件数を取得
-        doc_count = qdrant_manager.count_documents(collection_name=self.STORED_COLLECTION_NAME)
+        doc_count = qdrant_manager.count_documents(collection_name=cls.STORED_COLLECTION_NAME)
 
         results = qdrant_manager.query_points(
             query="",  # 空のクエリで全件取得
