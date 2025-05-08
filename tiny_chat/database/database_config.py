@@ -56,7 +56,7 @@ class DatabaseConfig:
         except Exception:
             return cls()
 
-    def save(self, file_path: str) -> bool:
+    def save(self, file_path: str = DEFAULT_CONFIG_PATH) -> bool:
         """
         設定をファイルに保存する
 

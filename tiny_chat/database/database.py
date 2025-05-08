@@ -43,6 +43,8 @@ def get_or_create_qdrant_manager(logger=None, config_file_path=DEFAULT_CONFIG_PA
         logger.info(f"DB設定ファイルを読み込みました: {config_file_path}")
         # セッション状態に設定オブジェクトを初期化
         st.session_state.db_config = db_config
+        if not os.path.exists(config_file_path):
+            db_config.save(config_file_path)
         logger.info("設定オブジェクトをセッション状態に初期化しました")
 
     global _qdrant_manager

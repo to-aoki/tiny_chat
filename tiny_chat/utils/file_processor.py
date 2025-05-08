@@ -617,12 +617,16 @@ class URIProcessor:
 
             elif 'text/html' in content_type:
                 extract_text, error = HTMLProcessor.extract_text_from_bytes(content)
+                if is_page:
+                    extract_text = [extract_text]
                 message = "HTMLコンテンツを取得しました" if not error else error
                 metadata["file_type"] = "html"
 
             # その他のテキスト形式
             elif 'text/' in content_type:
                 extract_text, error = TextFileProcessor.extract_text_from_bytes(content)
+                if is_page:
+                    extract_text = [extract_text]
                 message = "テキストコンテンツを取得しました" if not error else error
                 metadata["file_type"] = "text"
 

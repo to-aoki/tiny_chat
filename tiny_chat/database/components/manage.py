@@ -243,6 +243,8 @@ def _manage_collections(qdrant_manager, logger):
                             st.session_state[f"collection_active_{other_collection_name}"] = False
                     # qdrant_managerのcollection_nameを変更
                     qdrant_manager.collection_name = collection_name
+                    st.session_state.db_config.selected_collection_name = collection_name
+                    st.session_state.db_config.save()
                     st.success(f"コレクション '{collection_name}' を使用するように設定しました。")
                     st.rerun()
 
