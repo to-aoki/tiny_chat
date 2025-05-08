@@ -44,7 +44,11 @@ class RagStrategyFactory:
         elif strategy_name == "m_e5":
             strategy = DenseOnly("intfloat/multilingual-e5-large", use_gpu=use_gpu)
         elif strategy_name == "ruri_base_reranker":
-            strategy = DenseReranker("cl-nagoya/ruri-v3-130m", use_gpu=use_gpu)
+            strategy = DenseReranker(strategy_name, use_gpu=use_gpu)
+        elif strategy_name == "ruri_tiny_reranker":
+            strategy = DenseReranker(strategy_name, use_gpu=use_gpu)
+        elif strategy_name == "ruri_openvino_reranker":
+            strategy = DenseReranker(strategy_name, use_gpu=use_gpu)
         elif strategy_name == "bm25_static":
             strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_xsmall":
@@ -180,12 +184,30 @@ class DenseOnly(RAGStrategy):
 class DenseReranker(DenseOnly):
 
     def __init__(self, strategy="cl-nagoya/ruri-v3-30m", use_gpu=False, **kwargs):
+
+        if strategy == "ruri_base_reranker":
+            self.dense_vector_field_name = "dense"
+            self.model = SentenceTransformerEmbedding(
+                model_name="cl-nagoya/ruri-v3-130m", device='cuda' if use_gpu else 'cpu', **kwargs)
+            from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
+            self.reanker = SentenceTransformerCrossEncoder(
+                device='cuda' if use_gpu else 'cpu')
+        elif strategy == "ruri_openvino_reranker":
+            self.dense_vector_field_name = "dense"
+            self.model = SentenceTransformerEmbedding("cl-nagoya/ruri-v3-30m", device='cpu',
+                                 file_name="openvino/openvino_model_qint8_quantized.xml", **kwargs)
+            from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
+            self.reanker = SentenceTransformerCrossEncoder(
+                model_name="hotchpotch/japanese-reranker-tiny-v2", device='cpu')
+        else:
+            self.dense_vector_field_name = "dense"
+            self.model = SentenceTransformerEmbedding(
+                model_name="cl-nagoya/ruri-v3-30m", device='cuda' if use_gpu else 'cpu', **kwargs)
+            from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
+            self.reanker = SentenceTransformerCrossEncoder(
+                model_name="hotchpotch/japanese-reranker-tiny-v2",
+                device='cuda' if use_gpu else 'cpu')
         self.strategy = strategy
-        self.dense_vector_field_name = "dense"
-        self.model = SentenceTransformerEmbedding(
-            model_name=strategy, device='cuda' if use_gpu else 'cpu', **kwargs)
-        from tiny_chat.database.embeddings.stransformer_cross_encoder import SentenceTransformerCrossEncoder
-        self.reanker = SentenceTransformerCrossEncoder(device='cuda' if use_gpu else 'cpu')
 
     def rerank(self, query, results, top_k, score_threshold=0.5):
         documents = [result.payload.get("text", "") for result in results]
