@@ -337,7 +337,7 @@ def sidebar(config_file_path, logger):
             from tiny_chat.database.qdrant.collection import Collection
 
             # 検索用サイドバー設定
-            st.sidebar.markdown("RAG")
+            st.sidebar.markdown("RAG（データベース）")
 
             with st.expander("検索設定", expanded=False):
                 # top_kの設定
