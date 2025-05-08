@@ -160,7 +160,7 @@ def show_search_component(qdrant_manager, logger=None):
                 "index": i + 1, # 表示上のインデックス
                 "score": result.score,
                 "source": str(result.payload['source']),
-                "page": str(result.payload['page'], ""),
+                "page": str(result.payload.get('page', "")),
                 "file_type": str(result.payload['file_type']),
                 "text": str(result.payload['text'][:500]),
             }
