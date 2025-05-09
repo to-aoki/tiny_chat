@@ -27,9 +27,9 @@ class HypotheticalDocument(QueryPreprocessor):
         messages_for_api = [
             {
                 "role": "user",
-                "content": "あなたは知識検索の専門家です。\nあなたのタスクは、与えられた元の検索クエリに対して、"
+                "content": "タスクは、与えられた元の検索クエリに対して、"
                            "該当する文書内容を例示することです。文書内容の例示はデータベースの検索に利用されます。\n"
-                           "以後、質問に対して文書内容の例示を応答してください。"
+                           "以後、「検索クエリ:」と付記した入力に対して文書内容の例示を応答してください。"
             },
             {
                 "role": "assistant",
@@ -37,7 +37,7 @@ class HypotheticalDocument(QueryPreprocessor):
             },
             {
                 "role": "user",
-                "content": "茶道を体験したいです。京都で初心者が楽しめる場所はありますか？"
+                "content": "検索クエリ: 茶道を体験したいです。京都で初心者が楽しめる場所はありますか？"
             },
             {
                 "role": "assistant",
@@ -47,7 +47,7 @@ class HypotheticalDocument(QueryPreprocessor):
             },
             {
                 "role": "user",
-                "content": "折り紙 鶴 簡単な折り方 子供向け"
+                "content": "検索クエリ: 折り紙 鶴 簡単な折り方 子供向け"
             },
             {
                 "role": "assistant",
@@ -56,7 +56,7 @@ class HypotheticalDocument(QueryPreprocessor):
             },
             {
                 "role": "user",
-                "content": "リアルタイムOSでタスクをスケジューリングするアルゴリズムが知りたいです。"
+                "content": "検索クエリ: リアルタイムOSでタスクをスケジューリングするアルゴリズムが知りたいです。"
             },
             {
                 "role": "assistant",
@@ -77,7 +77,7 @@ class HypotheticalDocument(QueryPreprocessor):
         messages_for_api.append(
             {
                 "role": "user",
-                "content": query
+                "content": "検索クエリ: " + query
             },
         )
 
@@ -115,10 +115,10 @@ class StepBackQuery(QueryPreprocessor):
         messages_for_api = [
             {
                 "role": "user",
-                "content": "あなたは知識検索の専門家です。\nあなたのタスクは、与えられた元の検索クエリを一歩下がって、"
+                "content": "タスクは、与えられた元の検索クエリを一歩下がって、"
                            "より一般的で、より高レベルで、回答しやすい「ステップバック質問」に言い換えることです。\n"
                            "ステップバック質問は、元のクエリに直接答えるために必要な全体的なコンテキストや基本的な情報、"
-                           "原則を取得するのに役立ちます。\n以後質問に対して、「ステップバック質問」を応答してください。"
+                           "原則を取得するのに役立ちます。\n以後、「検索クエリ:」と付記した入力に対して、ステップバック質問を応答してください。"
             },
             {
                 "role": "assistant",
@@ -126,7 +126,7 @@ class StepBackQuery(QueryPreprocessor):
             },
             {
                 "role": "user",
-                "content": "明治時代に活躍した夏目漱石は、1905年から1907年の間にどのような作品を発表しましたか？"
+                "content": "検索クエリ: 明治時代に活躍した夏目漱石は、1905年から1907年の間にどのような作品を発表しましたか？"
             },
             {
                 "role": "assistant",
@@ -134,7 +134,7 @@ class StepBackQuery(QueryPreprocessor):
             },
             {
                 "role": "user",
-                "content": "2023年のWBCで優勝した国の決勝戦の対戦相手はどこですか？"
+                "content": "検索クエリ: 2023年のWBCで優勝した国の決勝戦の対戦相手はどこですか？"
             },
             {
                 "role": "assistant",
@@ -142,7 +142,7 @@ class StepBackQuery(QueryPreprocessor):
             },
             {
                 "role": "user",
-                "content": "京都にある清水寺が現在の形になったのは西暦何年ですか？"
+                "content": "検索クエリ: 京都にある清水寺が現在の形になったのは西暦何年ですか？"
             },
             {
                 "role": "assistant",
@@ -161,7 +161,7 @@ class StepBackQuery(QueryPreprocessor):
         messages_for_api.append(
             {
                 "role": "user",
-                "content": query
+                "content": "検索クエリ: " + query
             },
         )
 
