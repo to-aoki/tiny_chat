@@ -1,5 +1,7 @@
 # Tiny Chat
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/to-aoki/tiny_chat)
+
 ## Installation
 
 Tested with Python 3.10 or later
