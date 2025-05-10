@@ -299,7 +299,8 @@ def sidebar(config_file_path, logger):
                 rag_process_prompt=st.session_state.config["rag_process_prompt"],
                 use_hyde=st.session_state.config["use_hyde"],
                 use_step_back=st.session_state.config["use_step_back"],
-                use_web=st.session_state.config["use_web"]
+                use_web=st.session_state.config["use_web"],
+                use_multi=st.session_state.config["use_multi"],
             )
 
             if config.save(config_file_path):
@@ -321,7 +322,7 @@ def sidebar(config_file_path, logger):
     )
 
     # クエリ変換方式をラジオボタンで選択
-    query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)"]
+    query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)", "マルチクエリ生成"]
 
     # コールバック関数 - ラジオボタン選択時に即時反映する
     def on_query_conversion_change():
@@ -334,6 +335,8 @@ def sidebar(config_file_path, logger):
             new_mode = 1
         elif option_name == query_options[2]:
             new_mode = 2
+        elif option_name == query_options[3]:
+            new_mode = 3
         else:
             return
 
@@ -345,38 +348,52 @@ def sidebar(config_file_path, logger):
             # 変更前の値を記録
             old_hyde = st.session_state.config["use_hyde"]
             old_step_back = st.session_state.config["use_step_back"]
+            ols_use_multi = st.session_state.config["use_multi"]
 
             # モードに応じて設定値を更新
             if new_mode == 0:
                 st.session_state.config["use_hyde"] = False
                 st.session_state.config["use_step_back"] = False
+                st.session_state.config["use_multi"] = False
             elif new_mode == 1:
                 st.session_state.config["use_hyde"] = False
                 st.session_state.config["use_step_back"] = True
+                st.session_state.config["use_multi"] = False
             elif new_mode == 2:
                 st.session_state.config["use_hyde"] = True
                 st.session_state.config["use_step_back"] = False
+                st.session_state.config["use_multi"] = False
+            elif new_mode == 3:
+                st.session_state.config["use_hyde"] = False
+                st.session_state.config["use_step_back"] = False
+                st.session_state.config["use_multi"] = True
             else:
                 pass
 
             # 設定変更フラグを更新
             nonlocal settings_changed
             if old_hyde != st.session_state.config["use_hyde"] or \
-                    old_step_back != st.session_state.config["use_step_back"]:
+                    old_step_back != st.session_state.config["use_step_back"] or \
+                    ols_use_multi != st.session_state.config["use_multi"]:
                 settings_changed = True
 
 
     # セッション状態に初期値を設定
     if "query_conversion_mode" not in st.session_state:
-        if not (st.session_state.config["use_hyde"] or st.session_state.config["use_step_back"]):
+        if not (st.session_state.config["use_hyde"] or \
+                st.session_state.config["use_step_back"] or st.session_state.config["use_multi"]):
             current_mode = 0
-        elif st.session_state.config["use_hyde"]:
+        elif st.session_state.config["use_step_back"]:
             current_mode = 1
-        else:
+        elif st.session_state.config["use_hyde"]:
             current_mode = 2
+        elif st.session_state.config["use_multi"]:
+            current_mode = 3
+        else:
+            current_mode = 0
+
         st.session_state.query_conversion_mode = current_mode
 
-    # モード値を安全に取得（範囲チェック）
     current_mode = st.session_state.query_conversion_mode
     if current_mode < 0 or current_mode >= len(query_options):
         current_mode = 0

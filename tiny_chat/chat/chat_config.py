@@ -28,6 +28,7 @@ class ChatConfig:
         use_hyde: bool = False,
         use_step_back: bool = False,
         use_web: bool = True,
+        use_multi: bool = False,
         **kwargs
     ):
         self.server_url = server_url
@@ -46,6 +47,7 @@ class ChatConfig:
         self.use_hyde = use_hyde
         self.use_step_back = use_step_back
         self.use_web = use_web
+        self.use_multi = use_multi
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -99,7 +101,8 @@ class ChatConfig:
                 'rag_process_prompt': self.rag_process_prompt,
                 'use_hyde': self.use_hyde,
                 'use_step_back': self.use_step_back,
-                'use_web': self.use_web
+                'use_web': self.use_web,
+                'use_multi': self.use_multi
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:

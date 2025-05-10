@@ -6,7 +6,7 @@ class DDGSResult(BaseModel):
     payload: Dict[str, Any]
 
 
-def search_web(query, max_results=3, region='jp-ja'):
+def search_web(query, max_results=3, region='jp-ja', logger=None):
     formatted_results = []
     try:
         with DDGS() as ddgs:
@@ -16,10 +16,15 @@ def search_web(query, max_results=3, region='jp-ja'):
                     DDGSResult(
                         payload={
                             "text": r.get('body', 'No Content'),
-                            "source": r.get('href', '#')
+                            "source": r.get('href', '#'),
+                            "page": ""
                         }
                     )
                 )
             return formatted_results
-    except Exception as e:
+    except:
+        if logger:
+            import traceback
+            error_message = traceback.format_exc()
+            logger.error(f"search_webが失敗しました: {str(error_message)}")
         return formatted_results

@@ -70,7 +70,10 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "use_hyde": file_config.use_hyde,
             "use_step_back": file_config.use_step_back,
             "use_web": file_config.use_web,
+            "use_multi": file_config.use_multi,
         }
+        if not os.path.exists(config_file_path):
+            file_config.save(config_file_path)
 
     # その他のセッション状態を初期化
     if "chat_manager" not in st.session_state:
@@ -190,9 +193,29 @@ def toggle_rag_mode(logger):
         st.session_state.rag_sources = []
         st.session_state.reference_files = []
 
-def rag_web_search(prompt_content, max_query_length=50):
+def rag_web_search(prompt_content, max_query_length=50, max_results=3):
     from tiny_chat.utils.web_search_processor import search_web
     query_processer = None
+    if st.session_state.config["use_multi"]:
+        from tiny_chat.utils.query_preprocessor import QueryPlanner
+        query_processer = QueryPlanner(
+            openai_client=st.session_state.openai_client,
+            model_name=st.session_state.config["selected_model"],
+            temperature=st.session_state.config["temperature"],
+            top_p=st.session_state.config["top_p"],
+            meta_prompt=st.session_state.config["meta_prompt"],
+            is_vllm=True if st.session_state.infer_server_type == 'vllm' else False,
+            generate_queries=3
+        )
+        queries = query_processer.transform(prompt_content)
+        full_result = []
+        for q in queries.queries:
+            st.info(f"変換クエリ: {q.query}")
+            full_result.append(search_web(q.query[:max_query_length], max_results=max_results))
+
+        result = QueryPlanner.result_merge(full_result)
+        return result[:max_results]
+
     if st.session_state.config["use_hyde"]:
         from tiny_chat.utils.query_preprocessor import HypotheticalDocument
         query_processer = HypotheticalDocument(
@@ -212,10 +235,13 @@ def rag_web_search(prompt_content, max_query_length=50):
             top_p=st.session_state.config["top_p"],
             meta_prompt=st.session_state.config["meta_prompt"]
         )
+
     query = prompt_content
     if query_processer is not None:
         query = query_processer.transform(prompt_content)
-    return search_web(query[:max_query_length]) # duckduck-go max query (496 decord char?)
+        st.info(f"変換クエリ: {query}")
+
+    return search_web(query[:max_query_length], max_results=max_results)  # duckduck-go max query (496 decord char?)
 
 
 def rag_search(prompt_content, logger):
@@ -232,6 +258,36 @@ def rag_search(prompt_content, logger):
     score_threshold = st.session_state.db_config.score_threshold
 
     query_processer = None
+
+    if st.session_state.config["use_multi"]:
+        from tiny_chat.utils.query_preprocessor import QueryPlanner
+
+        query_processer = QueryPlanner(
+            openai_client=st.session_state.openai_client,
+            model_name=st.session_state.config["selected_model"],
+            temperature=st.session_state.config["temperature"],
+            top_p=st.session_state.config["top_p"],
+            meta_prompt=st.session_state.config["meta_prompt"],
+            is_vllm=True if st.session_state.infer_server_type == 'vllm' else False,
+            generate_queries=3
+        )
+        queries = query_processer.transform(prompt_content)
+        full_result = []
+        for q in queries.queries:
+            st.info(f"変換クエリ: {q.query}")
+            search_result = search_documents(
+                q.query,                               # sparceもLLMクエリを利用
+                qdrant_manager=qdrant_manager,
+                collection_name=selected_collection,
+                top_k=top_k,
+                score_threshold=score_threshold,
+            )
+            full_result.append(
+                search_result
+            )
+
+        result = QueryPlanner.result_merge(full_result)
+        return result[:top_k]
 
     if st.session_state.config["use_hyde"]:
         from tiny_chat.utils.query_preprocessor import HypotheticalDocument
@@ -252,13 +308,18 @@ def rag_search(prompt_content, logger):
             meta_prompt=st.session_state.config["meta_prompt"]
         )
 
+    dense_text = None
+    if query_processer is not None:
+        dense_text = query_processer.transform(prompt_content)
+        st.info(f"変換クエリ: {dense_text}")
+
     return search_documents(
-        prompt_content, 
+        prompt_content,
         qdrant_manager=qdrant_manager,
         collection_name=selected_collection,
         top_k=top_k,
         score_threshold=score_threshold,
-        query_processor=query_processer
+        dense_text=dense_text
     )
 
 
@@ -561,7 +622,7 @@ def show_chat_component(logger):
                                 enhanced_prompt = prompt_content + f"\n\n{search_context}"
                     except Exception as e:
                         logger.error(f"RAG検索処理中にエラー: {str(e)}")
-                        # エラーが発生しても続行、ただしRAG検索なしで
+                        # エラーが発生しても続行、ただしRAG検索なし
 
             # 拡張プロンプトがあれば更新
             if enhanced_prompt:

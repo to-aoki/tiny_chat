@@ -42,23 +42,49 @@ def get_collections(manager: QdrantManager) -> Dict[str, Collection]:
     return collections_dict
 
 
-def search(query: str, manager: QdrantManager, collection_info: Collection, chat_config: ChatConfig,
-    query_processor=None
+def search(
+    query: str, manager: QdrantManager, collection_info: Collection, chat_config: ChatConfig,
+    query_processer=None
 ) -> Dict[str, Any]:
     collection_name = collection_info.collection_name
     top_k = collection_info.top_k
     score_threshold = collection_info.score_threshold
 
-
     try:
-        results = search_documents(
-            query=query,
-            qdrant_manager=manager,
-            collection_name=collection_name,
-            top_k=top_k,
-            score_threshold=score_threshold,
-            query_processor=query_processor
-        )
+        dense_text = None
+        multi_queries = []
+        if query_processer is not None:
+            modify_queries = query_processer.transform(query)
+            if isinstance(modify_queries, list):
+                multi_queries = modify_queries
+            else:
+                dense_text = modify_queries
+
+        if len(multi_queries) > 0:
+            from tiny_chat.utils.query_preprocessor import QueryPlanner
+            full_result = []
+            for q in multi_queries:
+                search_result = search_documents(
+                    query=q.query,
+                    qdrant_manager=manager,
+                    collection_name=collection_name,
+                    top_k=top_k,
+                    score_threshold=score_threshold,
+                )
+                full_result.append(
+                    search_result
+                )
+            results = QueryPlanner.result_merge(full_result)
+        else:
+            results = search_documents(
+                query=query,
+                qdrant_manager=manager,
+                collection_name=collection_name,
+                top_k=top_k,
+                score_threshold=score_threshold,
+                dense_text=dense_text
+            )
+
         search_context = ""
         if results:
             search_context = chat_config.rag_process_prompt

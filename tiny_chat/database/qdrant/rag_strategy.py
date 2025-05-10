@@ -87,10 +87,10 @@ class RAGStrategy(ABC):
     def vector(self, text):
         return {}
 
-    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
+    def prefetch(self, text, top_k: int = 0, dense_text=None):
         return []
 
-    def query(self, text:str = None, query_preprocessor=None):
+    def query(self, text:str = None, dense_text=None):
         return None
 
 
@@ -132,7 +132,7 @@ class SparseOnly(RAGStrategy):
             self.sparse_vector_field_name: sparse_embedding.as_object(),
         }
 
-    def query(self, text:str = None, query_preprocessor=None):
+    def query(self, text:str = None, dense_text=None):
         query_embedding = list(self.model.query_embed(text))[0]
         return models.SparseVector(
             values=query_embedding.values.tolist(),
@@ -174,9 +174,9 @@ class DenseOnly(RAGStrategy):
             self.dense_vector_field_name: dense_embedding.tolist()
         }
 
-    def query(self, text: str = None, query_preprocessor=None):
-        if query_preprocessor is not None:
-            text = query_preprocessor.transform(text)
+    def query(self, text: str = None, dense_text: str = None):
+        if dense_text is not None:
+            text = dense_text
         query_embedding = list(self.model.query_embed(text))[0]
         return query_embedding.tolist()
 
@@ -248,12 +248,12 @@ class SpaceRRF(RAGStrategy):
         return {name: embeddings[i].as_object()
                 for i, name in enumerate(self.sparse_vector_field_names)}
 
-    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
+    def prefetch(self, text, top_k: int = 0, dense_text=None):
         embeddings = self._get_embeddings(text)
         return [models.Prefetch(query=embeddings[i].as_object(), using=name, limit=top_k)
                 for i, name in enumerate(self.sparse_vector_field_names)]
 
-    def query(self, text: str = None, query_preprocessor=None):
+    def query(self, text: str = None, dense_text=None):
         return models.FusionQuery(fusion=models.Fusion.RRF)
 
 
@@ -327,10 +327,10 @@ class SpaceDenseRRF(RAGStrategy):
             self.dense_vector_field_name: dense_embedding.tolist(),
         }
 
-    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
+    def prefetch(self, text, top_k: int = 0, dense_text=None):
         sparse_embedding = list(self.bm25_model.query_embed(text))[0]
-        if query_preprocessor is not None:
-            text = query_preprocessor.transform(text)
+        if dense_text is not None:
+            text = dense_text
         dense_embedding = list(self.emb_model.query_embed(text))[0]
         return [
             models.Prefetch(
@@ -339,7 +339,7 @@ class SpaceDenseRRF(RAGStrategy):
                 query=dense_embedding.tolist(), using=self.dense_vector_field_name, limit=top_k),
         ]
 
-    def query(self, text: str = None, query_preprocessor=None):
+    def query(self, text: str = None, dense_text=None):
         return models.FusionQuery(fusion=models.Fusion.RRF)
 
 
@@ -392,8 +392,10 @@ class SpaceDenseRRFRerank(RAGStrategy):
             self.dense_vector_field_name: dense_embedding.tolist(),
         }
 
-    def prefetch(self, text, top_k: int = 0, query_preprocessor=None):
+    def prefetch(self, text, top_k: int = 0, dense_text=None):
         sparse_embedding = list(self.bm25_model.query_embed(text))[0]
+        if dense_text is not None:
+            text = dense_text
         dense_embedding = list(self.emb_model.query_embed(text))[0]
         return [
             models.Prefetch(

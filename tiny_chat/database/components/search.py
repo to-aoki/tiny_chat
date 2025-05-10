@@ -33,7 +33,7 @@ def get_page_info_display(metadata: Dict) -> str:
 
 def search_documents(
     query: str, qdrant_manager, top_k: int = None, filter_params_str: str = None,
-    score_threshold=None, collection_name: str = None, query_processor=None,
+    score_threshold=None, collection_name: str = None, dense_text: str =None,
 ) -> List:
     """
     ドキュメントを検索します（キャッシュ機能付き）
@@ -66,8 +66,9 @@ def search_documents(
     results = qdrant_manager.query_points(
         query, top_k=top_k, filter_params=filter_params, score_threshold=score_threshold,
         collection_name=collection_name,
-        strategy=RagStrategyFactory.get_strategy(strategy_name=collection.rag_strategy, use_gpu=collection.use_gpu),
-        query_processor=query_processor
+        strategy=RagStrategyFactory.get_strategy(
+            strategy_name=collection.rag_strategy, use_gpu=collection.use_gpu),
+        dense_text=dense_text
     )
 
     return results
