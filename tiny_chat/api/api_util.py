@@ -75,6 +75,7 @@ def search(
                     search_result
                 )
             results = QueryPlanner.result_merge(full_result)
+            results = results[:top_k]
         else:
             results = search_documents(
                 query=query,

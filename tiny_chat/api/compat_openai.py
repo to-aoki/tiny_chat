@@ -61,6 +61,14 @@ async def chat_completions_proxy(
                 temperature=chat_config.temperature,
                 top_p=chat_config.top_p,
             )
+        elif chat_config.use_multi:
+            from tiny_chat.utils.query_preprocessor import QueryPlanner
+            query_processer = QueryPlanner(
+                openai_client=llm_api,
+                model_name=chat_config.selected_model,
+                temperature=chat_config.temperature,
+                top_p=chat_config.top_p,
+            )
 
         search_result = search(
             query, manager=qdrant_manager, collection_info=collection, chat_config=chat_config,
