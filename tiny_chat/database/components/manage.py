@@ -116,6 +116,7 @@ def _manage_collections(qdrant_manager, logger):
                             "id": point.id,
                             "collection_name": collection_name,
                             "description": point.payload.get("text", ""),
+                            "rag_strategy": point.payload.get("rag_strategy", "unknown"),
                             "metadata": {k: v for k, v in point.payload.items()
                                          if k not in ["text", "collection_name"]}
                         })
@@ -139,15 +140,18 @@ def _manage_collections(qdrant_manager, logger):
                 # コレクション説明を取得
                 show_mcp = False
                 description = ""
+                rag_strategy = "unknown"
                 if collection_name in description_map:
-                    description = description_map[collection_name].get('description', '')
-                    meta_data = description_map[collection_name].get('metadata', None)
+                    description = description_map[collection_name].get("description", "")
+                    meta_data = description_map[collection_name].get("metadata", None)
+                    rag_strategy = description_map[collection_name].get("rag_strategy", "unknown")
                     if meta_data:
-                        show_mcp = meta_data.get('show_mcp', False)
+                        show_mcp = meta_data.get("show_mcp", False)
                 # コレクションに関する情報を収集
                 collection_infos.append({
                     "name": collection_name,
                     "show_mcp": show_mcp,
+                    "rag_strategy": rag_strategy,
                     "description": description if collection_name != Collection.STORED_COLLECTION_NAME else "管理用のコレクションです",
                     "doc_count": doc_count,
                     "is_current": collection_name == original_collection
@@ -162,7 +166,7 @@ def _manage_collections(qdrant_manager, logger):
                 })
         # カスタムテーブルでコレクション一覧とチェックボックスを一緒に表示
         # テーブルヘッダー
-        col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 2, 4, 1, 1])
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 2, 4, 2, 1, 1])
         with col1:
             st.write("**選択**")
         with col2:
@@ -172,8 +176,10 @@ def _manage_collections(qdrant_manager, logger):
         with col4:
             st.write("**説明**")
         with col5:
-            st.write("**文書数**")
+            st.write("**戦略**")
         with col6:
+            st.write("**文書数**")
+        with col7:
             st.write("**削除**")
         # 区切り線
         st.markdown("---")
@@ -181,6 +187,7 @@ def _manage_collections(qdrant_manager, logger):
         for col_info in collection_infos:
             collection_name = col_info["name"]
             show_mcp = col_info.get("show_mcp", False)
+            rag_strategy =  col_info.get("rag_strategy", "unknown")
             description = col_info["description"]
             is_current = col_info["is_current"]
             # セッション状態の初期化
@@ -189,7 +196,7 @@ def _manage_collections(qdrant_manager, logger):
             if f"collection_active_{collection_name}_show_mcp" not in st.session_state:
                 st.session_state[f"collection_active_{collection_name}_show_mcp"] = show_mcp
             # 行の表示
-            col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 2, 4, 1, 1])
+            col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 2, 4, 2, 1, 1])
             # チェックボックスを表示
             with col1:
                 checkbox_selected = st.checkbox(
@@ -213,11 +220,13 @@ def _manage_collections(qdrant_manager, logger):
             # 説明を表示
             with col4:
                 st.write(f"{description}" if description else "")
-            # 文書数
+            # 戦略
             with col5:
+                st.write(f"{rag_strategy}")
+            with col6:
                 st.write(f"{col_info['doc_count']}")
             # 削除ボタン
-            with col6:
+            with col7:
                 # デフォルトコレクションは削除不可
                 button_disabled = is_current or collection_name == Collection.STORED_COLLECTION_NAME
                 delete_button = st.button(

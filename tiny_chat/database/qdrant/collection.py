@@ -51,7 +51,6 @@ class Collection:
         self.score_threshold = score_threshold
         self.rag_strategy = rag_strategy
         self.use_gpu = use_gpu
-        self.rag_strategy = rag_strategy
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.show_mcp = show_mcp
