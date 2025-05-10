@@ -1,3 +1,4 @@
+from typing import Type
 from urllib.parse import urlparse, urlunparse
 
 import requests
@@ -48,7 +49,7 @@ def reset_ollama_model(server_url="http://localhost:11434/v1", model="llama3"):
         return False
 
 
-def convert_openai_response_format(pydantic_instance:BaseModel):
+def convert_openai_response_format(pydantic_instance:Type[BaseModel]):
     # response_format用の表現に変える
     return {
         "type": "json_schema",

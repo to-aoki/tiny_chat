@@ -189,8 +189,9 @@ class StepBackQuery(QueryPreprocessor):
 
 
 class QueryResponse(BaseModel):
-    query: str
     reason: str
+    query: str
+
 
 class QueryResponseList(BaseModel):
     queries: list[QueryResponse]
@@ -229,12 +230,12 @@ class QueryPlanner:
                 "content": """{
                     "queries": [
                         {
-                            "query": "京都で茶道体験ができる場所はどこですか？",
                             "reason": "ユーザーの主な要望である「京都」「茶道体験」「初心者」を直接的に組み合わせた検索で、基本的な選択肢を得るため。",
+                            "query": "京都で茶道体験ができる場所はどこですか？",
                         },
                         {
-                            "query": "京都の観光客向け茶道教室の予約が取りたいです。",
                             "reason": "「体験」よりも少し本格的な「教室」の情報や、観光客が利用しやすい予約システムの有無を確認するため。",
+                            "query": "京都の観光客向け茶道教室の予約が取りたいです。",
                         }
                     ]
                 }"""
@@ -248,16 +249,16 @@ class QueryPlanner:
                 "content": """{
                     "queries": [
                         {
-                            "query": "Pythonで実現するWebスクレイピングのプログラミングガイドはありますか？",
                             "reason": "「基本的なステップ」という質問に答えるため、網羅的かつ初心者向けの解説記事やチュートリアルを探す。",
+                            "query": "Pythonで実現するWebスクレイピングのプログラミングガイドはありますか？",
                         },
                         {
+                            "reason": "「おすすめのライブラリ」という質問に対し、主要な選択肢の特徴や長所・短所を比較検討できる情報を得るため。",                        
                             "query": "Pythonでスクレイピングする場合のライブラリについて比較したいです。Requests、BeautifulSoup、Seleniumどれが優れていますか？",
-                            "reason": "「おすすめのライブラリ」という質問に対し、主要な選択肢の特徴や長所・短所を比較検討できる情報を得るため。",
                         },
                         {
-                            "query": "Webスクレイピングでインターネットサイトをクロールするときのマナーや注意点を教えてください。",
                             "reason": "Webスクレイピングを実用する上で不可欠な、倫理的・法的な側面や技術的な配慮事項に関する情報を補足するため。",
+                            "query": "Webスクレイピングでインターネットサイトをクロールするときのマナーや注意点を教えてください。",
                         }
                     ]
                 }"""
@@ -271,16 +272,16 @@ class QueryPlanner:
                 "content": """{
                     "queries": [
                         {
-                            "query": "成人男性が一日必要とするでタンパク質の摂取量は？",
                             "reason": "質問の主要な要素である「運動習慣のある成人男性」に特化した「1日のタンパク質摂取量」の具体的な数値や計算方法を調べるため。",
+                            "query": "成人男性が一日必要とするでタンパク質の摂取量は？",
                         },
                         {
-                            "query": "高タンパク質を含む食品の一覧を示してください。含有量が記載されているものがいいです。",
                             "reason": "「タンパク質を多く含む食品の例」という要求に応え、具体的な食品名とそれぞれのタンパク質量をリストアップするため。",
+                            "query": "高タンパク質を含む食品の一覧を示してください。含有量が記載されているものがいいです。",
                         },
                         {
-                            "query": "筋トレで効率的なタンパク質摂取タイミングを教えてください。",
                             "reason": "「運動習慣がある」という文脈を考慮し、タンパク質摂取のタイミングが運動効果（特に筋力トレーニング）にどう影響するかという補足情報を提供するため。",
+                            "query": "筋トレで効率的なタンパク質摂取タイミングを教えてください。",
                         }
                     ]
                 }"""
@@ -331,9 +332,11 @@ class QueryPlanner:
             return QueryResponseList(queries=[QueryResponse(query=query, reason="")])
 
     @classmethod
-    def result_merge(cls, full_result: list[list]):
+    def result_merge(cls, full_result: list[list], black_list=None):
         merged_result = []
         seen_keys = set()
+        if black_list is None:
+            black_list = set()
 
         if not full_result:
             return merged_result
@@ -352,7 +355,8 @@ class QueryPlanner:
                     source = item.payload.get('source')
                     page = item.payload.get('page')
                     key = (source, page)
-
+                    if key in black_list:
+                        continue
                     if key in seen_keys:
                         continue
 
