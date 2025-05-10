@@ -365,7 +365,7 @@ class QdrantManager:
         collection_name: Optional[str] = None,
         filter_params: Optional[Dict[str, Any]] = None,
         strategy : Optional[RAGStrategy] = None,
-        query_processor=None
+        dense_text: Optional[str] = None,
     ) -> List[QueryResponse]:
         """
         クエリに基づいて文書を検索する (ハイブリッド検索)
@@ -422,12 +422,12 @@ class QdrantManager:
             # 2倍にする
             top_k = top_k * 2
 
-        prefetch = strategy.prefetch(query, top_k, query_processor)
+        prefetch = strategy.prefetch(query, top_k, dense_text)
         if prefetch:
             response = self.client.query_points(
                 collection_name=collection_name,
                 prefetch=prefetch,
-                query=strategy.query(query, query_processor),
+                query=strategy.query(query, dense_text),
                 limit=top_k,
                 with_vectors=False,
                 with_payload=True,
@@ -437,7 +437,7 @@ class QdrantManager:
         else:
             response = self.client.query_points(
                 collection_name=collection_name,
-                query=strategy.query(query, query_processor),
+                query=strategy.query(query, dense_text),
                 using=strategy.use_vector_name(),
                 limit=top_k,
                 with_vectors=False,
