@@ -13,7 +13,7 @@ from tiny_chat.chat.chat_config import ChatConfig, ModelManager, DEFAULT_CHAT_CO
 from tiny_chat.chat.chat_manager import ChatManager
 from tiny_chat.utils.file_processor import URIProcessor, FileProcessorFactory
 from tiny_chat.utils.logger import get_logger
-from tiny_chat.utils.llm_utils import get_llm_client
+from tiny_chat.utils.llm_utils import get_llm_client, identify_server
 from tiny_chat.chat.sidebar import sidebar
 from tiny_chat.chat.copy_botton import copy_button
 
@@ -112,6 +112,10 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             st.error(error_msg)
             st.session_state.openai_client = None
 
+    if "infer_server_type" not in st.session_state:
+        st.session_state.infer_server_type = identify_server(
+            st.session_state.config["server_url"]) if not st.session_state.config["is_azure"] else "azure"
+
     # RAGモードのフラグ
     if "rag_mode" not in st.session_state:
         st.session_state.rag_mode = False
@@ -185,6 +189,33 @@ def toggle_rag_mode(logger):
         # RAGモードが無効になった場合、参照情報のみクリア（データベース表示は維持）
         st.session_state.rag_sources = []
         st.session_state.reference_files = []
+
+def rag_web_search(prompt_content, max_query_length=50):
+    from tiny_chat.utils.web_search_processor import search_web
+    query_processer = None
+    if st.session_state.config["use_hyde"]:
+        from tiny_chat.utils.query_preprocessor import HypotheticalDocument
+        query_processer = HypotheticalDocument(
+            openai_client=st.session_state.openai_client,
+            model_name=st.session_state.config["selected_model"],
+            temperature=st.session_state.config["temperature"],
+            top_p=st.session_state.config["top_p"],
+            meta_prompt=st.session_state.config["meta_prompt"],
+            prefix=""
+        )
+    elif st.session_state.config["use_step_back"]:
+        from tiny_chat.utils.query_preprocessor import StepBackQuery
+        query_processer = StepBackQuery(
+            openai_client=st.session_state.openai_client,
+            model_name=st.session_state.config["selected_model"],
+            temperature=st.session_state.config["temperature"],
+            top_p=st.session_state.config["top_p"],
+            meta_prompt=st.session_state.config["meta_prompt"]
+        )
+    query = prompt_content
+    if query_processer is not None:
+        query = query_processer.transform(prompt_content)
+    return search_web(query[:max_query_length]) # duckduck-go max query (496 decord char?)
 
 
 def rag_search(prompt_content, logger):
@@ -457,8 +488,7 @@ def show_chat_component(logger):
 
             if st.session_state.web_search_mode:
                 with st.spinner("インターネットを検索中です... しばらくお待ちください"):
-                    from tiny_chat.utils.web_search_processor import search_web
-                    search_results = search_web(prompt_content)
+                    search_results = rag_web_search(prompt_content)
                     if search_results:
                         # 検索結果を整形
                         search_context = st.session_state.config["rag_process_prompt"]
