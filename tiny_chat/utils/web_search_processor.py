@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import Dict, Any
 from duckduckgo_search import DDGS
 
 class DDGSResult(BaseModel):

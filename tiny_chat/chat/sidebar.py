@@ -1,7 +1,7 @@
 import streamlit as st
 
 
-from tiny_chat.utils.llm_utils import get_llm_client, reset_ollama_model
+from tiny_chat.utils.llm_utils import get_llm_client, reset_ollama_model, identify_server
 from tiny_chat.chat.chat_config import ChatConfig, ModelManager
 
 
@@ -40,8 +40,8 @@ def sidebar(config_file_path, logger):
 
             # 入力されたモデルを使用
             if model_input != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
-                if not st.session_state.config["is_azure"]:
-                    # ollama向け操作
+                if st.session_state.infer_server_type == 'ollama':
+                    # ollama向け操作 （他用途がある場合はアンロードしないほうがいいかもしれない）
                     reset_ollama_model(server_url=st.session_state.config["server_url"],
                                        model=st.session_state.config["selected_model"] )
                 st.session_state.config["selected_model"] = model_input
@@ -149,6 +149,12 @@ def sidebar(config_file_path, logger):
                 current_is_azure = st.session_state.config["is_azure"]
 
                 try:
+                    st.session_state.openai_client = get_llm_client(
+                        server_url=current_server,
+                        api_key=current_api_key,
+                        is_azure=current_is_azure
+                    )
+
                     # モデルリストを再取得
                     models, api_success = ModelManager.fetch_available_models(
                         current_server,
@@ -164,13 +170,6 @@ def sidebar(config_file_path, logger):
                     if not api_success:
                         logger.warning("モデルリスト取得に失敗しました")
                         st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
-
-                    # APIクライアントの再初期化
-                    st.session_state.openai_client = get_llm_client(
-                        server_url=current_server,
-                        api_key=current_api_key,
-                        is_azure=current_is_azure
-                    )
 
                     st.rerun()
                 except Exception as e:
@@ -200,11 +199,7 @@ def sidebar(config_file_path, logger):
 
         if api_key_changed:
             logger.info("APIキーを変更しました")
-        
-        # 各フィールドの更新
-        st.session_state.config["server_url"] = server_url
-        st.session_state.config["api_key"] = api_key
-        st.session_state.config["is_azure"] = is_azure
+
 
         # サーバー変更の場合はモデルリストを更新
         if server_url_changed or is_azure_changed:
@@ -218,6 +213,7 @@ def sidebar(config_file_path, logger):
 
             st.session_state.available_models = new_models
             st.session_state.models_api_success = api_success
+            st.session_state.config["is_azure"] = is_azure
 
             # モデルの自動変更通知 (新しいサーバーで現在のモデルが利用できない場合)
             if selected_model != st.session_state.config["selected_model"] and new_models:
@@ -237,6 +233,7 @@ def sidebar(config_file_path, logger):
                 st.session_state.openai_client,
                 is_azure=is_azure
             )
+            st.session_state.config["api_key"] = api_key
             st.session_state.available_models = models
             st.session_state.models_api_success = api_success
 
@@ -248,6 +245,12 @@ def sidebar(config_file_path, logger):
                 api_key=api_key,
                 is_azure=is_azure
             )
+
+            st.session_state.config["api_key"] = api_key
+            st.session_state.config["server_url"] = server_url
+            st.session_state.infer_server_type = identify_server(
+                server_url) if not st.session_state.config["is_azure"] else "azure"
+
             logger.info("OpenAIクライアント初期化完了")
             settings_changed = True
         except Exception as e:
@@ -317,6 +320,79 @@ def sidebar(config_file_path, logger):
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
+    # クエリ変換方式をラジオボタンで選択
+    query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)"]
+
+    # コールバック関数 - ラジオボタン選択時に即時反映する
+    def on_query_conversion_change():
+        """ラジオボタン選択変更時のコールバック関数"""
+        # 選択値を取得して数値インデックスに変換
+        option_name = st.session_state.query_conversion_radio
+        if option_name == query_options[0]:
+            new_mode = 0
+        elif option_name == query_options[1]:
+            new_mode = 1
+        elif option_name == query_options[2]:
+            new_mode = 2
+        else:
+            return
+
+        # 前回値と比較して変更があれば設定を更新
+        if "query_conversion_mode" not in st.session_state or st.session_state.query_conversion_mode != new_mode:
+            # モードインデックスを更新
+            st.session_state.query_conversion_mode = new_mode
+
+            # 変更前の値を記録
+            old_hyde = st.session_state.config["use_hyde"]
+            old_step_back = st.session_state.config["use_step_back"]
+
+            # モードに応じて設定値を更新
+            if new_mode == 0:
+                st.session_state.config["use_hyde"] = False
+                st.session_state.config["use_step_back"] = False
+            elif new_mode == 1:
+                st.session_state.config["use_hyde"] = False
+                st.session_state.config["use_step_back"] = True
+            elif new_mode == 2:
+                st.session_state.config["use_hyde"] = True
+                st.session_state.config["use_step_back"] = False
+            else:
+                pass
+
+            # 設定変更フラグを更新
+            nonlocal settings_changed
+            if old_hyde != st.session_state.config["use_hyde"] or \
+                    old_step_back != st.session_state.config["use_step_back"]:
+                settings_changed = True
+
+
+    # セッション状態に初期値を設定
+    if "query_conversion_mode" not in st.session_state:
+        if not (st.session_state.config["use_hyde"] or st.session_state.config["use_step_back"]):
+            current_mode = 0
+        elif st.session_state.config["use_hyde"]:
+            current_mode = 1
+        else:
+            current_mode = 2
+        st.session_state.query_conversion_mode = current_mode
+
+    # モード値を安全に取得（範囲チェック）
+    current_mode = st.session_state.query_conversion_mode
+    if current_mode < 0 or current_mode >= len(query_options):
+        current_mode = 0
+        st.session_state.query_conversion_mode = current_mode
+
+    # 単一のラジオボタンコントロールを表示
+    query_conversion_mode = st.radio(
+        "RAGクエリ変換方式",
+        options=query_options,
+        index=current_mode,
+        help="RAG利用時のクエリ変換方式を選択します。",
+        disabled=st.session_state.is_sending_message,
+        key="query_conversion_radio",
+        on_change=on_query_conversion_change
+    )
+
     if uploaded_json is not None:
         content = uploaded_json.getvalue().decode("utf-8")
 
@@ -357,7 +433,7 @@ def sidebar(config_file_path, logger):
                 rag_score_threshold = st.slider(
                     "スコアしきい値",
                     min_value=0.0,
-                    max_value=1.0,
+                    max_value=5.0,
                     value=st.session_state.db_config.score_threshold,
                     step=0.01,
                     help="RAG検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）",
@@ -374,88 +450,6 @@ def sidebar(config_file_path, logger):
                     help="検索後の情報活用をLLM指示する文字列を入力してください",
                     disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
                 )
-
-                # クエリ変換方式をラジオボタンで選択
-                # コールバック関数 - ラジオボタン選択時に即時反映する
-                def on_query_conversion_change():
-                    """ラジオボタン選択変更時のコールバック関数"""
-                    # 選択値を取得して数値インデックスに変換
-                    option_name = st.session_state.query_conversion_radio
-                    if option_name == "変換なし":
-                        new_mode = 0
-                    elif option_name == "クエリ変換（仮クエリ回答）":
-                        new_mode = 1
-                    else:  # "クエリ変換（質問汎化）"
-                        new_mode = 2
-                    
-                    # 前回値と比較して変更があれば設定を更新
-                    if "query_conversion_mode" not in st.session_state or st.session_state.query_conversion_mode != new_mode:
-                        # モードインデックスを更新
-                        st.session_state.query_conversion_mode = new_mode
-                        
-                        # 変更前の値を記録
-                        old_hyde = st.session_state.config["use_hyde"]
-                        old_step_back = st.session_state.config["use_step_back"]
-                        
-                        # モードに応じて設定値を更新
-                        if new_mode == 0:
-                            st.session_state.config["use_hyde"] = False
-                            st.session_state.config["use_step_back"] = False
-                        elif new_mode == 1:
-                            st.session_state.config["use_hyde"] = True
-                            st.session_state.config["use_step_back"] = False
-                        else:  # new_mode == 2
-                            st.session_state.config["use_hyde"] = False
-                            st.session_state.config["use_step_back"] = True
-                        
-                        # 設定変更フラグを更新
-                        nonlocal settings_changed
-                        if old_hyde != st.session_state.config["use_hyde"] or \
-                            old_step_back != st.session_state.config["use_step_back"]:
-                            settings_changed = True
-
-                # セッション状態に初期値を設定
-                if "query_conversion_mode" not in st.session_state:
-                    if not (st.session_state.config["use_hyde"] or st.session_state.config["use_step_back"]):
-                        current_mode = 0
-                    elif st.session_state.config["use_hyde"]:
-                        current_mode = 1
-                    else:
-                        current_mode = 2
-                    st.session_state.query_conversion_mode = current_mode
-                
-                # オプション定義
-                query_options = ["変換なし", "仮クエリ回答(HYDE)", "クエリ汎化(Step Back)"]
-                
-                # モード値を安全に取得（範囲チェック）
-                current_mode = st.session_state.query_conversion_mode 
-                if current_mode < 0 or current_mode >= len(query_options):
-                    current_mode = 0
-                    st.session_state.query_conversion_mode = current_mode
-
-                # 単一のラジオボタンコントロールを表示
-                query_conversion_mode = st.radio(
-                    "クエリ変換方式",
-                    options=query_options,
-                    index=current_mode,
-                    help="RAG利用時のクエリ変換方式を選択します。",
-                    disabled=st.session_state.is_sending_message,
-                    key="query_conversion_radio",
-                    on_change=on_query_conversion_change
-                )
-
-                if query_conversion_mode != current_mode:
-                    if current_mode == 0:
-                        st.session_state.config["use_hyde"] = False
-                        st.session_state.config["use_step_back"] = False
-                    elif current_mode == 1:
-                        st.session_state.config["use_hyde"] = True
-                        st.session_state.config["use_step_back"] = False
-                    elif current_mode == 2:
-                        st.session_state.config["use_hyde"] = False
-                        st.session_state.config["use_step_back"] = True
-                    st.session_state.query_conversion_mode = current_mode
-                    settings_changed = True
 
                 if rag_process_prompt != st.session_state.config["rag_process_prompt"]:
                     st.session_state.config["rag_process_prompt"] = rag_process_prompt

@@ -24,16 +24,17 @@ class HypotheticalDocument(QueryPreprocessor):
         self.meta_prompt = meta_prompt
 
     def transform(self, query=None):
+        N = len(query) * 2
         messages_for_api = [
             {
                 "role": "user",
                 "content": "タスクは、与えられた元の検索クエリに対して、"
-                           "該当する文書内容を例示することです。文書内容の例示はデータベースの検索に利用されます。\n"
-                           "以後、「検索クエリ:」と付記した入力に対して文書内容の例示を応答してください。"
+                           "該当する文書内容を例示することです。文書内容の例示はデータベースの類似度検索に利用されます。\n"
+                           f"以後、「検索クエリ:」に対しての文書内容のみ{N}文字で簡潔に記述してください。返信や補足説明は不要です。"
             },
             {
                 "role": "assistant",
-                "content": "わかりました。適切に文書内容の例示を応答します。"
+                "content": "わかりました。適切に文書内容例を記述します。"
             },
             {
                 "role": "user",
@@ -87,7 +88,7 @@ class HypotheticalDocument(QueryPreprocessor):
                 messages=messages_for_api,
                 temperature=self.temperature,
                 top_p=self.top_p,
-                max_completion_tokens=len(query) * 3,  # FIXME 出力長
+                max_completion_tokens=N,  # FIXME 出力長
                 stream=False
             )
 
@@ -112,17 +113,18 @@ class StepBackQuery(QueryPreprocessor):
         self.meta_prompt = meta_prompt
 
     def transform(self, query=None):
+        N = int(len(query) * 1.5)
         messages_for_api = [
             {
                 "role": "user",
-                "content": "タスクは、与えられた元の検索クエリを一歩下がって、"
+                "content": "タスクは、与えられた検索クエリを一歩下がって、"
                            "より一般的で、より高レベルで、回答しやすい「ステップバック質問」に言い換えることです。\n"
-                           "ステップバック質問は、元のクエリに直接答えるために必要な全体的なコンテキストや基本的な情報、"
-                           "原則を取得するのに役立ちます。\n以後、「検索クエリ:」と付記した入力に対して、ステップバック質問を応答してください。"
+                           "ステップバック質問は、検索クエリに直接答えるために必要な全体的なコンテキストや基本的な情報、"
+                           f"原則を取得するのに役立ちます。\n以後、「検索クエリ:」に対応するステップバック質問のみ{N}文字で簡潔に記述してください。返信や補足説明は不要です。"
             },
             {
                 "role": "assistant",
-                "content": "わかりました。適切に「ステップバック質問」に言い換え応答します。"
+                "content": "わかりました。適切に「ステップバック質問」を記述します。"
             },
             {
                 "role": "user",
@@ -171,7 +173,7 @@ class StepBackQuery(QueryPreprocessor):
                 messages=messages_for_api,
                 temperature=self.temperature,
                 top_p=self.top_p,
-                max_completion_tokens=int(len(query) * 1.5),  # FIXME 出力長
+                max_completion_tokens=N,  # FIXME 出力長
                 stream=False
             )
             # DeepSeek-R1/Qwen3

@@ -67,7 +67,6 @@ def search(query: str, manager: QdrantManager, collection_info: Collection, chat
                 source = result.payload.get('source', '')
                 text = result.payload.get('text', '')[:chat_config.context_length]
                 search_context += f"{source}:\n{text}\n\n"
-
         return search_context
 
     except Exception as e:
