@@ -233,14 +233,45 @@ if __name__ == "__main__":
                 top_p=chat_config.top_p,
                 meta_prompt=chat_config.meta_prompt
             )
+        elif args.query == 'multi':
+            from tiny_chat.utils.query_preprocessor import QueryPlanner
+            query_processor = QueryPlanner(
+                openai_client=llm_api,
+                model_name=chat_config.selected_model,
+                temperature=chat_config.temperature,
+                top_p=chat_config.top_p,
+                meta_prompt=chat_config.meta_prompt
+            )
         else:
             raise ValueError('not found :' + args.query)
 
     for query_text, doc_id in tqdm(zip(queries['query'], queries['docid']), total=num_queries,
                                    desc="Processing queries", unit="query"):
+        dense_text = None
+        multi_queries = []
+        if query_processor is not None:
+            modify_queries = query_processor.transform(query_text)
+            if isinstance(modify_queries, list):
+                multi_queries = modify_queries
+            else:
+                dense_text = modify_queries
+        top_k = max(ks)
+        if len(multi_queries) > 0:
+            from tiny_chat.utils.query_preprocessor import QueryPlanner
 
-        results = manager.query_points(
-            query_text, top_k=max(ks), score_threshold=0., query_processor=query_processor)
+            full_result = []
+            for q in multi_queries:
+                search_result = manager.query_points(
+                    query=q.query, top_k=top_k, score_threshold=0., dense_text=dense_text)
+                full_result.append(
+                    search_result
+                )
+
+            results = QueryPlanner.result_merge(full_result)
+            results = results[:top_k]
+        else:
+            results = manager.query_points(
+                query_text, top_k=top_k, score_threshold=0., dense_text=dense_text)
         hit_doc_ids = [result.payload.get('docid') for result in results]
         ndcg_scores_for_query = calc_one_ndcg(relevant_doc_id=doc_id, top_hits=hit_doc_ids, ks=ks)
         for k, score in ndcg_scores_for_query.items():
