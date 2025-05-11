@@ -220,8 +220,12 @@ class QueryPlanner:
 
     def _call_llm(self, messages_for_api, pydantic_class):
         if self.is_vllm:
-            # vllmはOpenAI APIのresponse_formatに対応していないが、
-            # openai-like api?の仕様のextra_bodyには対応している
+            # vllmはOpenAI APIのresponse_formatに対応していないが、extra_bodyには対応している
+            # FIXME 2025/05/11 現在　v0エンジンのみ対応
+            # https://docs.vllm.ai/en/stable/features/reasoning_outputs.html#structured-output
+            # It is only supported in v0 engine now.
+            # VLLM_USE_V1=0 vllm serve deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+            #     --enable-reasoning --reasoning-parser deepseek_r1
             response = self.openai_client.chat.completions.create(
                 model=self.model_name,
                 messages=messages_for_api,
@@ -346,7 +350,7 @@ class QueryPlanner:
                 import traceback
                 error_trace_str = traceback.format_exc()
                 self.logger.error("クエリプラン変換エラー: " + error_trace_str)
-            return QueryResponseList(queries=[QueryResponse(query=query, reason="")])
+            return QueryResponseList(queries=[QueryResponse(reason="クエリプラン変換エラー", query=query)])
 
     @classmethod
     def result_merge(cls, full_result: list[list], black_list=None):
@@ -383,7 +387,7 @@ class QueryPlanner:
         return merged_result
 
     def evaluate(self, question: str, query: QueryResponse, search_results=None,
-                 knowledge="", black_list=None):
+                 knowledge="", exists_valid_list=None, black_list=None):
         if question is None or question == '':
             raise ValueError('require question')
 
@@ -391,6 +395,9 @@ class QueryPlanner:
             raise ValueError('require query')
 
         original_indices = list(range(len(search_results)))
+        if exists_valid_list is None:
+            exists_valid_list = set()
+
         if black_list is None:
             black_list = set()
 
@@ -400,6 +407,8 @@ class QueryPlanner:
             page = result.payload.get('page')
             key = (source, page)
             if key in black_list:
+                continue
+            if key in exists_valid_list:
                 continue
             white_search_result.append(result)
             original_indices.append(i)
@@ -472,14 +481,15 @@ class QueryPlanner:
                 key = (source, page)
                 if (i+1) in evaluate_result.valid_index:
                     valid_results.append(result)
+                    exists_valid_list.add(key)
                 else:
                     black_list.add(key)
 
-            return new_knowledge, new_query, valid_results, black_list
+            return new_knowledge, new_query, valid_results, exists_valid_list, black_list
         except Exception as e:
             if self.logger:
                 import traceback
                 error_trace_str = traceback.format_exc()
                 self.logger.error("クエリ評価エラー: " + error_trace_str)
-            return knowledge, None, search_results, black_list
+            return knowledge, None, search_results, exists_valid_list, black_list
 
