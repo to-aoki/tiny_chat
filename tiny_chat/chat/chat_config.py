@@ -28,7 +28,9 @@ class ChatConfig:
         use_hyde: bool = False,
         use_step_back: bool = False,
         use_web: bool = True,
+        web_top_k: int = 3,
         use_multi: bool = False,
+        use_deep: bool = False,
         **kwargs
     ):
         self.server_url = server_url
@@ -47,7 +49,9 @@ class ChatConfig:
         self.use_hyde = use_hyde
         self.use_step_back = use_step_back
         self.use_web = use_web
+        self.web_top_k = web_top_k
         self.use_multi = use_multi
+        self.use_deep = use_deep
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -102,7 +106,9 @@ class ChatConfig:
                 'use_hyde': self.use_hyde,
                 'use_step_back': self.use_step_back,
                 'use_web': self.use_web,
-                'use_multi': self.use_multi
+                'web_top_k': self.web_top_k,
+                'use_multi': self.use_multi,
+                "use_deep": self.use_deep
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:

@@ -70,7 +70,9 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "use_hyde": file_config.use_hyde,
             "use_step_back": file_config.use_step_back,
             "use_web": file_config.use_web,
+            "web_top_k": file_config.web_top_k,
             "use_multi": file_config.use_multi,
+            "use_deep": file_config.use_deep
         }
         if not os.path.exists(config_file_path):
             file_config.save(config_file_path)
@@ -193,10 +195,14 @@ def toggle_rag_mode(logger):
         st.session_state.rag_sources = []
         st.session_state.reference_files = []
 
-def rag_web_search(prompt_content, max_query_length=50, max_results=3):
+def rag_web_search(
+    prompt_content, max_query_length=50, max_results=3,
+    generate_queries=3, eval_iter=3, logger=None
+):
     from tiny_chat.utils.web_search_processor import search_web
     query_processer = None
-    if st.session_state.config["use_multi"]:
+
+    if st.session_state.config["use_multi"] or st.session_state.config["use_deep"]:
         from tiny_chat.utils.query_preprocessor import QueryPlanner
         query_processer = QueryPlanner(
             openai_client=st.session_state.openai_client,
@@ -205,13 +211,32 @@ def rag_web_search(prompt_content, max_query_length=50, max_results=3):
             top_p=st.session_state.config["top_p"],
             meta_prompt=st.session_state.config["meta_prompt"],
             is_vllm=True if st.session_state.infer_server_type == 'vllm' else False,
-            generate_queries=3
+            generate_queries=generate_queries,
+            logger=logger
         )
         queries = query_processer.transform(prompt_content)
         full_result = []
+        black_list = None
+
         for q in queries.queries:
             st.info(f"変換クエリ: {q.query}")
-            full_result.append(search_web(q.query[:max_query_length], max_results=max_results))
+            result = search_web(q.query[:max_query_length], max_results=max_results)
+
+            if st.session_state.config["use_deep"]:
+                knowledge = ""
+                iteration_query = q
+                for _ in range(eval_iter):
+                    knowledge, iteration_query, valid_results, black_list = query_processer.evaluate(
+                        question=prompt_content, query=iteration_query, search_results=result,
+                        knowledge=knowledge, black_list=black_list)
+                    if valid_results:
+                        full_result.append(valid_results)
+                    if iteration_query is None:
+                        break
+                    st.info(f"推敲クエリ: {iteration_query.query}")
+                    result = search_web(iteration_query.query[:max_query_length], max_results=max_results)
+            else:
+                full_result.append(result)
 
         result = QueryPlanner.result_merge(full_result)
         return result[:max_results]
@@ -244,7 +269,10 @@ def rag_web_search(prompt_content, max_query_length=50, max_results=3):
     return search_web(query[:max_query_length], max_results=max_results)  # duckduck-go max query (496 decord char?)
 
 
-def rag_search(prompt_content, logger):
+def rag_search(
+    prompt_content, logger=None,
+    generate_queries = 3, eval_iter = 3
+):
     if not st.session_state.rag_mode:
         return []
 
@@ -259,9 +287,8 @@ def rag_search(prompt_content, logger):
 
     query_processer = None
 
-    if st.session_state.config["use_multi"]:
+    if st.session_state.config["use_multi"] or st.session_state.config["use_deep"]:
         from tiny_chat.utils.query_preprocessor import QueryPlanner
-
         query_processer = QueryPlanner(
             openai_client=st.session_state.openai_client,
             model_name=st.session_state.config["selected_model"],
@@ -269,22 +296,42 @@ def rag_search(prompt_content, logger):
             top_p=st.session_state.config["top_p"],
             meta_prompt=st.session_state.config["meta_prompt"],
             is_vllm=True if st.session_state.infer_server_type == 'vllm' else False,
-            generate_queries=3
+            generate_queries=generate_queries,
+            logger=logger
         )
         queries = query_processer.transform(prompt_content)
         full_result = []
+        black_list = None
         for q in queries.queries:
             st.info(f"変換クエリ: {q.query}")
-            search_result = search_documents(
+            result = search_documents(
                 q.query,                               # sparceもLLMクエリを利用
                 qdrant_manager=qdrant_manager,
                 collection_name=selected_collection,
                 top_k=top_k,
                 score_threshold=score_threshold,
             )
-            full_result.append(
-                search_result
-            )
+            if st.session_state.config["use_deep"]:
+                knowledge = ""
+                iteration_query = q
+                for _ in range(eval_iter):
+                    knowledge, iteration_query, valid_results, black_list = query_processer.evaluate(
+                        question=prompt_content, query=iteration_query, search_results=result,
+                        knowledge=knowledge, black_list=black_list)
+                    if valid_results:
+                        full_result.append(valid_results)
+                    if iteration_query is None:
+                        break
+                    st.info(f"推敲クエリ: {iteration_query.query}")
+                    result = search_documents(
+                        iteration_query.query,                               # sparceもLLMクエリを利用
+                        qdrant_manager=qdrant_manager,
+                        collection_name=selected_collection,
+                        top_k=top_k,
+                        score_threshold=score_threshold,
+                    )
+            else:
+                full_result.append(result)
 
         result = QueryPlanner.result_merge(full_result)
         return result[:top_k]
@@ -549,7 +596,8 @@ def show_chat_component(logger):
 
             if st.session_state.web_search_mode:
                 with st.spinner("インターネットを検索中です... しばらくお待ちください"):
-                    search_results = rag_web_search(prompt_content)
+                    search_results = rag_web_search(
+                        prompt_content, max_results=st.session_state.config["web_top_k"], logger=logger)
                     if search_results:
                         # 検索結果を整形
                         search_context = st.session_state.config["rag_process_prompt"]

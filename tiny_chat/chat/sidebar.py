@@ -300,7 +300,9 @@ def sidebar(config_file_path, logger):
                 use_hyde=st.session_state.config["use_hyde"],
                 use_step_back=st.session_state.config["use_step_back"],
                 use_web=st.session_state.config["use_web"],
+                web_top_k=st.session_state.config["web_top_k"],
                 use_multi=st.session_state.config["use_multi"],
+                use_deep=st.session_state.config["use_deep"],
             )
 
             if config.save(config_file_path):
@@ -322,7 +324,7 @@ def sidebar(config_file_path, logger):
     )
 
     # クエリ変換方式をラジオボタンで選択
-    query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)", "マルチクエリ生成"]
+    query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)", "マルチクエリ生成", "DeepSearch"]
 
     # コールバック関数 - ラジオボタン選択時に即時反映する
     def on_query_conversion_change():
@@ -337,6 +339,8 @@ def sidebar(config_file_path, logger):
             new_mode = 2
         elif option_name == query_options[3]:
             new_mode = 3
+        elif option_name == query_options[4]:
+            new_mode = 4
         else:
             return
 
@@ -346,27 +350,37 @@ def sidebar(config_file_path, logger):
             st.session_state.query_conversion_mode = new_mode
 
             # 変更前の値を記録
-            old_hyde = st.session_state.config["use_hyde"]
             old_step_back = st.session_state.config["use_step_back"]
-            ols_use_multi = st.session_state.config["use_multi"]
+            old_hyde = st.session_state.config["use_hyde"]
+            old_use_multi = st.session_state.config["use_multi"]
+            old_use_deep= st.session_state.config["use_deep"]
 
             # モードに応じて設定値を更新
             if new_mode == 0:
-                st.session_state.config["use_hyde"] = False
                 st.session_state.config["use_step_back"] = False
+                st.session_state.config["use_hyde"] = False
                 st.session_state.config["use_multi"] = False
+                st.session_state.config["use_deep"] = False
             elif new_mode == 1:
-                st.session_state.config["use_hyde"] = False
                 st.session_state.config["use_step_back"] = True
-                st.session_state.config["use_multi"] = False
-            elif new_mode == 2:
-                st.session_state.config["use_hyde"] = True
-                st.session_state.config["use_step_back"] = False
-                st.session_state.config["use_multi"] = False
-            elif new_mode == 3:
                 st.session_state.config["use_hyde"] = False
+                st.session_state.config["use_multi"] = False
+                st.session_state.config["use_deep"] = False
+            elif new_mode == 2:
                 st.session_state.config["use_step_back"] = False
+                st.session_state.config["use_hyde"] = True
+                st.session_state.config["use_multi"] = False
+                st.session_state.config["use_deep"] = False
+            elif new_mode == 3:
+                st.session_state.config["use_step_back"] = False
+                st.session_state.config["use_hyde"] = False
                 st.session_state.config["use_multi"] = True
+                st.session_state.config["use_deep"] = False
+            elif new_mode == 4:
+                st.session_state.config["use_step_back"] = False
+                st.session_state.config["use_hyde"] = False
+                st.session_state.config["use_multi"] = False
+                st.session_state.config["use_deep"] = True
             else:
                 pass
 
@@ -374,21 +388,20 @@ def sidebar(config_file_path, logger):
             nonlocal settings_changed
             if old_hyde != st.session_state.config["use_hyde"] or \
                     old_step_back != st.session_state.config["use_step_back"] or \
-                    ols_use_multi != st.session_state.config["use_multi"]:
+                    old_use_multi != st.session_state.config["use_multi"] or \
+                    old_use_deep != st.session_state.config["use_deep"] :
                 settings_changed = True
-
 
     # セッション状態に初期値を設定
     if "query_conversion_mode" not in st.session_state:
-        if not (st.session_state.config["use_hyde"] or \
-                st.session_state.config["use_step_back"] or st.session_state.config["use_multi"]):
-            current_mode = 0
-        elif st.session_state.config["use_step_back"]:
+        if st.session_state.config["use_step_back"]:
             current_mode = 1
         elif st.session_state.config["use_hyde"]:
             current_mode = 2
         elif st.session_state.config["use_multi"]:
             current_mode = 3
+        elif st.session_state.config["use_deep"]:
+            current_mode = 4
         else:
             current_mode = 0
 
@@ -400,7 +413,7 @@ def sidebar(config_file_path, logger):
         st.session_state.query_conversion_mode = current_mode
 
     # 単一のラジオボタンコントロールを表示
-    query_conversion_mode = st.radio(
+    st.radio(
         "RAGクエリ変換方式",
         options=query_options,
         index=current_mode,
@@ -423,6 +436,24 @@ def sidebar(config_file_path, logger):
                 logger.error("メッセージ履歴のインポートに失敗しました: 無効なフォーマット")
                 st.error("JSONのインポートに失敗しました: 無効なフォーマットです")
 
+    if st.session_state.config["use_web"]:
+        # 検索用サイドバー設定
+        st.sidebar.markdown("RAG（Web）")
+
+        with st.expander("Web検索設定", expanded=False):
+            # top_kの設定
+            web_top_k = st.slider(
+                "最大検索件数 (top_k)",
+                min_value=1,
+                max_value=20,
+                value=st.session_state.config["web_top_k"],
+                help="Web検索で取得する最大文書数を設定します",
+                disabled=st.session_state.is_sending_message,
+            )
+
+            if web_top_k != st.session_state.config["web_top_k"]:
+                st.session_state.config["web_top_k"] = web_top_k
+
     # RAGモードがオンの場合は常にデータベース検索機能を表示する
     if st.session_state.rag_mode:
         try:
@@ -432,14 +463,14 @@ def sidebar(config_file_path, logger):
             # 検索用サイドバー設定
             st.sidebar.markdown("RAG（データベース）")
 
-            with st.expander("検索設定", expanded=False):
+            with st.expander("DB検索設定", expanded=False):
                 # top_kの設定
                 rag_top_k = st.slider(
                     "最大検索件数 (top_k)",
                     min_value=1,
                     max_value=20,
                     value=st.session_state.db_config.top_k,
-                    help="RAG検索で取得する最大文書数を設定します",
+                    help="DB検索で取得する最大文書数を設定します",
                     disabled=st.session_state.is_sending_message,
                 )
 
@@ -453,7 +484,7 @@ def sidebar(config_file_path, logger):
                     max_value=5.0,
                     value=st.session_state.db_config.score_threshold,
                     step=0.01,
-                    help="RAG検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）",
+                    help="DB検索で取得する文書の最小類似度スコアを設定します（高いほど関連性の高い文書のみ取得）",
                     disabled=st.session_state.is_sending_message,
                 )
 

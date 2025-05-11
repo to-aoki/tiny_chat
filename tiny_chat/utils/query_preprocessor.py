@@ -1,6 +1,7 @@
 from abc import ABC
 import re
 import json
+from typing import Optional
 from pydantic import BaseModel
 from tiny_chat.utils.llm_utils import convert_openai_response_format
 
@@ -197,10 +198,17 @@ class QueryResponseList(BaseModel):
     queries: list[QueryResponse]
 
 
+class QueryEvaluateResponse(BaseModel):
+    valid_index: list[int] = []
+    knowledge: Optional[str] = ""
+    search_needed: bool = False
+    new_query: Optional[str] = None
+
+
 class QueryPlanner:
 
     def __init__(self, openai_client, model_name, temperature, top_p, meta_prompt=None,
-                 is_vllm=False, generate_queries=3):
+                 is_vllm=False, generate_queries=3, logger=None):
         self.openai_client = openai_client
         self.model_name = model_name
         self.temperature = temperature
@@ -208,6 +216,31 @@ class QueryPlanner:
         self.meta_prompt = meta_prompt
         self.is_vllm = is_vllm
         self.generate_queries = generate_queries if generate_queries > 1 else 3
+        self.logger = logger
+
+    def _call_llm(self, messages_for_api, pydantic_class):
+        if self.is_vllm:
+            # vllmはOpenAI APIのresponse_formatに対応していないが、
+            # openai-like api?の仕様のextra_bodyには対応している
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=messages_for_api,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                stream=False,
+                extra_body={"guided_json": pydantic_class.model_json_schema()},
+            )
+        else:
+            # ollamaはresponse_formatにも対応している
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=messages_for_api,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                stream=False,
+                response_format=convert_openai_response_format(pydantic_class),
+            )
+        return response
 
     def transform(self, query=None):
         messages_for_api = [
@@ -303,32 +336,16 @@ class QueryPlanner:
         )
 
         try:
-            if self.is_vllm:
-                # vllmはOpenAI APIのresponse_formatに対応していないが、
-                # openai-like api?の仕様のextra_bodyには対応している
-                response = self.openai_client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages_for_api,
-                    temperature=self.temperature,
-                    top_p=self.top_p,
-                    stream=False,
-                    extra_body={"guided_json": QueryResponseList.model_json_schema()},
-                )
-            else:
-                # ollamaはresponse_formatにも対応している
-                response = self.openai_client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages_for_api,
-                    temperature=self.temperature,
-                    top_p=self.top_p,
-                    stream=False,
-                    response_format=convert_openai_response_format(QueryResponseList),
-                )
+            response = self._call_llm(messages_for_api, QueryResponseList)
             json_response = json.loads(response.choices[0].message.content)
             result = QueryResponseList(**json_response)
             return result
         except Exception as e:
             # 例外時はそのまま返す
+            if self.logger:
+                import traceback
+                error_trace_str = traceback.format_exc()
+                self.logger.error("クエリプラン変換エラー: " + error_trace_str)
             return QueryResponseList(queries=[QueryResponse(query=query, reason="")])
 
     @classmethod
@@ -364,3 +381,105 @@ class QueryPlanner:
                     seen_keys.add(key)
 
         return merged_result
+
+    def evaluate(self, question: str, query: QueryResponse, search_results=None,
+                 knowledge="", black_list=None):
+        if question is None or question == '':
+            raise ValueError('require question')
+
+        if query is None or query.query == '' or query.reason == '':
+            raise ValueError('require query')
+
+        original_indices = list(range(len(search_results)))
+        if black_list is None:
+            black_list = set()
+
+        white_search_result = []
+        for i, result in enumerate(search_results):
+            source = result.payload.get('source')
+            page = result.payload.get('page')
+            key = (source, page)
+            if key in black_list:
+                continue
+            white_search_result.append(result)
+            original_indices.append(i)
+
+        search_results_text = "検索結果はありません"
+
+        if len(white_search_result) > 0:
+            search_results_text = ""
+            for i, r in enumerate(white_search_result):
+                search_results_text +=f"[{i+1}] {r.payload.get('source')} page:{r.payload.get('page', '-')}\n```\n{r.payload.get('text')} \n```\n\n"
+
+        request_content = f"""# タスク"
+                           "タスクは与えられた質問と検索理由（reason）に対して、有効な検索結果があるか確認し、検索結果が妥当であれば質問回答に役立つ知識（knowledge）を更新することです。\n"
+                           "有効な検索結果があった場合は、その検索結果のインデックスを有効なインデックス（valid_index）として列挙してください。"
+                           "また、クエリは検索結果を得るためにデータベースに発行したクエリです。"
+                           "検索理由を満たした検索結果が無い、あるいは追加で検索が必要な場合は、再検索フラグをtrueとして、検索理由に基づき新しいクエリを記述してください。"
+                           "上記タスク結果をはjson形式で以下のように記述してください。"
+                           "各要素は {{"}} 
+                           "valid_index": "knowledge記述に有効だった検索結果のインデックス番号をリスト記載"
+                           "knowledge": "質問回答に役立つ検索結果があった場合に、知識を検索結果に基づき抜粋して記述する。記述事実に基づき記載し、既存知識がある場合はそれも踏まえて更新すること"
+                           "search_needed": "再検索フラグ。再検索する場合はtrueとする"
+                           "new_query": "再検索が必要な場合は、検索理由からにクエリと重複しない新しい検索クエリを記述。疑問点や要望などの補足説明は記載しない"" {{"}} の形式であるべきです。"
+                           ""
+                           "## 質問"
+                           "{question}"
+                           ""
+                           "## 知識(knowledge)"
+                           "{question}"
+                           ""
+                           "## 検索理由(reason)"
+                           "{query.reason}"
+                           ""
+                           "## クエリ(query)"
+                           "{query.query}"
+                           ""
+                           "## 検索結果"
+                           "{search_results_text}" 
+                           """
+
+        messages_for_api = []
+        if self.meta_prompt is not None:
+            messages_for_api.append(
+                {
+                    "role": "system",
+                    "content": self.meta_prompt
+                },
+            )
+
+        messages_for_api.append(
+            {
+                "role": "user",
+                "content": request_content
+            },
+        )
+
+        try:
+            response = self._call_llm(messages_for_api, QueryEvaluateResponse)
+            json_response = json.loads(response.choices[0].message.content)
+            evaluate_result = QueryEvaluateResponse(**json_response)
+            new_knowledge = evaluate_result.knowledge
+            new_query = None
+            if evaluate_result.search_needed:
+                new_query = QueryResponse(reason=query.reason, query=evaluate_result.new_query)
+
+            valid_results = []
+            for i in original_indices:
+                result = search_results[i]
+                source = result.payload.get('source')
+                page = result.payload.get('page')
+                key = (source, page)
+                if (i+1) in evaluate_result.valid_index:
+                    valid_results.append(result)
+                else:
+                    black_list.add(key)
+
+            return new_knowledge, new_query, valid_results, black_list
+        except Exception as e:
+            if self.logger:
+                import traceback
+                error_trace_str = traceback.format_exc()
+                self.logger.error("クエリ評価エラー: " + error_trace_str)
+            return knowledge, None, search_results, black_list
+
