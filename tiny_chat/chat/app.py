@@ -217,6 +217,7 @@ def rag_web_search(
         queries = query_processer.transform(prompt_content)
         full_result = []
         black_list = None
+        exists_valid_list = None
 
         for q in queries.queries:
             st.info(f"変換クエリ: {q.query}")
@@ -226,9 +227,9 @@ def rag_web_search(
                 knowledge = ""
                 iteration_query = q
                 for _ in range(eval_iter):
-                    knowledge, iteration_query, valid_results, black_list = query_processer.evaluate(
+                    knowledge, iteration_query, valid_results, exists_valid_list, black_list = query_processer.evaluate(
                         question=prompt_content, query=iteration_query, search_results=result,
-                        knowledge=knowledge, black_list=black_list)
+                        knowledge=knowledge, exists_valid_list=exists_valid_list, black_list=black_list)
                     if valid_results:
                         full_result.append(valid_results)
                     if iteration_query is None:
@@ -302,6 +303,7 @@ def rag_search(
         queries = query_processer.transform(prompt_content)
         full_result = []
         black_list = None
+        exists_valid_list = None
         for q in queries.queries:
             st.info(f"変換クエリ: {q.query}")
             result = search_documents(
@@ -315,16 +317,16 @@ def rag_search(
                 knowledge = ""
                 iteration_query = q
                 for _ in range(eval_iter):
-                    knowledge, iteration_query, valid_results, black_list = query_processer.evaluate(
+                    knowledge, iteration_query, valid_results, exists_valid_list, black_list = query_processer.evaluate(
                         question=prompt_content, query=iteration_query, search_results=result,
-                        knowledge=knowledge, black_list=black_list)
+                        knowledge=knowledge, exists_valid_list=exists_valid_list, black_list=black_list)
                     if valid_results:
                         full_result.append(valid_results)
                     if iteration_query is None:
                         break
                     st.info(f"推敲クエリ: {iteration_query.query}")
                     result = search_documents(
-                        iteration_query.query,                               # sparceもLLMクエリを利用
+                        iteration_query.query,
                         qdrant_manager=qdrant_manager,
                         collection_name=selected_collection,
                         top_k=top_k,

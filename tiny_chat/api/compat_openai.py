@@ -44,7 +44,6 @@ async def chat_completions_proxy(
     if collection is not None and request_body["messages"] and request_body["messages"][-1].get("role") == "user":
         query = request_body["messages"][-1]["content"]
         query_processer = None
-        dense_text = None
         if chat_config.use_hyde:
             from tiny_chat.utils.query_preprocessor import HypotheticalDocument
             query_processer = HypotheticalDocument(
