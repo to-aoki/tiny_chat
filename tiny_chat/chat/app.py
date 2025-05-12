@@ -141,9 +141,12 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
     if "reference_files" not in st.session_state:
         st.session_state.reference_files = []
 
-    # 初回チャットメッセージ送信フラグ
-    if "initial_message_sent" not in st.session_state:
-        st.session_state.initial_message_sent = False
+    # キャンセル処理のフラグ
+    if "is_cancelling_message" not in st.session_state:
+        st.session_state.is_cancelling_message = False
+
+    if "message_processed" not in st.session_state:
+        st.session_state.message_processed = False
 
 
 # チャットをクリアするコールバック関数
@@ -151,6 +154,12 @@ def clear_chat():
     st.session_state.chat_manager = ChatManager()
     # 参照ファイル情報もクリア
     st.session_state.reference_files = []
+
+def cancel_message_generation():
+    st.session_state.is_cancelling_message = True
+    st.session_state.is_sending_message = True
+    # キャンセル後に即座に再描画を実行
+    st.rerun()
 
 def toggle_web_search_mode():
     # チェックボックスの状態を取得
@@ -670,6 +679,7 @@ def show_chat_component(logger):
                                 enhanced_prompt += f"\n\n{search_context}"
                             else:
                                 enhanced_prompt = prompt_content + f"\n\n{search_context}"
+
                     except Exception as e:
                         logger.error(f"RAG検索処理中にエラー: {str(e)}")
                         # エラーが発生しても続行、ただしRAG検索なし
@@ -694,7 +704,13 @@ def show_chat_component(logger):
 
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
+                cancel_button_placeholder = st.empty()
                 message_placeholder.markdown("応答を生成中...")
+
+                # キャンセルボタンを表示
+                with cancel_button_placeholder.container():
+                    st.button("応答生成をキャンセル", on_click=cancel_message_generation,
+                              key="cancel_generation_button")
 
                 try:
                     # クライアントインスタンスが存在しない場合は初期化
@@ -708,75 +724,100 @@ def show_chat_component(logger):
                     # 既存のクライアントインスタンスを使用
                     client = st.session_state.openai_client
 
-                    response = client.chat.completions.create(
-                        model=st.session_state.config["selected_model"],
-                        messages=messages_for_api,
-                        max_completion_tokens=st.session_state.config["max_completion_tokens"],
-                        temperature=st.session_state.config["temperature"],
-                        top_p=st.session_state.config["top_p"],
-                        stream=True
-                    )
+                    # キャンセルが要求されていない場合のみAPIリクエストを実行
+                    if not st.session_state.is_cancelling_message:
+                        response = client.chat.completions.create(
+                            model=st.session_state.config["selected_model"],
+                            messages=messages_for_api,
+                            max_completion_tokens=st.session_state.config["max_completion_tokens"],
+                            temperature=st.session_state.config["temperature"],
+                            top_p=st.session_state.config["top_p"],
+                            stream=True
+                        )
 
-                    # ストリーミング応答をリアルタイムで処理
-                    full_response = ""
-                    for chunk in response:
-                        if chunk.choices and chunk.choices[0].delta.content:
-                            full_response += chunk.choices[0].delta.content
-                            # 過度な再描画を防ぐため、10文字ごとに更新
-                            if len(full_response) % 10 == 0:
-                                message_placeholder.markdown(full_response)
+                        # ストリーミング応答をリアルタイムで処理
+                        full_response = ""
+                        for chunk in response:
+                            # キャンセルが要求された場合、ループを終了
+                            if st.session_state.is_cancelling_message:
+                                break
+                            if chunk.choices and chunk.choices[0].delta.content:
+                                full_response += chunk.choices[0].delta.content
+                                # 過度な再描画を防ぐため、10文字ごとに更新
+                                if len(full_response) % 10 == 0:
+                                    message_placeholder.markdown(full_response)
 
-                    # 最終応答を表示
-                    message_placeholder.markdown(full_response)
+                        # キャンセルボタンを削除
+                        cancel_button_placeholder.empty()
 
-                    # RAGモードで検索結果がある場合のみ、参照情報を追加
-                    if (st.session_state.rag_mode or st.session_state.web_search_mode) and st.session_state.rag_sources:
-                        reference_files = []
-                        refer = 0
-                        exist_path = set()
-                        
-                        for source in st.session_state.rag_sources:
-                            source_path = source["source"]
+                        # キャンセルされた場合とそうでない場合の処理
+                        if st.session_state.is_cancelling_message:
+                            cancel_message = "応答生成がキャンセルされました。"
+                            message_placeholder.warning(cancel_message)
+                            # チャット履歴にキャンセルメッセージを追加
+                            st.session_state.chat_manager.add_assistant_message(cancel_message)
+                        else:
+                            # 最終応答を表示
+                            message_placeholder.markdown(full_response)
 
-                            if source_path in exist_path:
-                                # 同じ情報源は表示しない（ページは先頭のみ）
-                                continue
+                            # RAGモードで検索結果がある場合のみ、参照情報を追加
+                            if (st.session_state.rag_mode or st.session_state.web_search_mode) and st.session_state.rag_sources:
+                                reference_files = []
+                                refer = 0
+                                exist_path = set()
 
-                            if not source_path or source_path.startswith(tempfile.gettempdir()):
-                                # 一時ファイルはリンクが貼れない
-                                continue
+                                for source in st.session_state.rag_sources:
+                                    source_path = source["source"]
 
-                            # URLの場合とローカルファイルの場合、両方とも参照ボタンとして表示できるようにする
-                            reference_files.append({
-                                "index": refer+1,
-                                "path": source_path,
-                                "page": source["page"]
-                            })
-                            refer += 1
+                                    if source_path in exist_path:
+                                        # 同じ情報源は表示しない（ページは先頭のみ）
+                                        continue
 
-                            exist_path.add(source_path)
-                        
-                        # セッション状態に参照ファイル情報を保存
-                        st.session_state.reference_files = reference_files
+                                    if not source_path or source_path.startswith(tempfile.gettempdir()):
+                                        # 一時ファイルはリンクが貼れない
+                                        continue
 
-                    message_placeholder.empty()
+                                    # URLの場合とローカルファイルの場合、両方とも参照ボタンとして表示できるようにする
+                                    reference_files.append({
+                                        "index": refer+1,
+                                        "path": source_path,
+                                        "page": source["page"]
+                                    })
+                                    refer += 1
 
-                    # DeepSeek-R1/Qwen3
-                    full_response = re.sub(THINK_PATTERN, "", full_response)
+                                    exist_path.add(source_path)
 
-                    # 応答をメッセージ履歴に追加
-                    st.session_state.chat_manager.add_assistant_message(full_response)
+                                # セッション状態に参照ファイル情報を保存
+                                st.session_state.reference_files = reference_files
 
-                    # 送信後に添付ファイルを削除
-                    st.session_state.chat_manager.clear_attachments()
+                            message_placeholder.empty()
 
-                    # rag_sourcesをクリア
-                    st.session_state.rag_sources = []
+                            # DeepSeek-R1/Qwen3
+                            full_response = re.sub(THINK_PATTERN, "", full_response)
+
+                            # 応答をメッセージ履歴に追加
+                            st.session_state.chat_manager.add_assistant_message(full_response)
+                    else:
+                        # 既にキャンセルされていた場合
+                        cancel_message = "応答生成がキャンセルされました。"
+                        message_placeholder.warning(cancel_message)
+                        st.session_state.chat_manager.add_assistant_message(cancel_message)
 
                 except Exception as e:
+                    cancel_button_placeholder.empty()
                     error_message = f"APIエラー: {str(e)}"
-                    logger.error(f"APIエラー: {str(e)}")
+                    logger.error(error_message)
+                    message_placeholder.empty()
                     message_placeholder.error(error_message)
+                    st.session_state.chat_manager.add_assistant_message(error_message)
+
+                finally:
+                    # 処理完了後にキャンセル状態をリセット
+                    st.session_state.is_cancelling_message = False
+                    # 添付ファイルを削除
+                    st.session_state.chat_manager.clear_attachments()
+                    # rag_sourcesをクリア
+                    st.session_state.rag_sources = []
 
         except Exception as e:
             logger.error(f"エラーが発生しました: {str(e)}")
@@ -814,7 +855,6 @@ def show_chat_component(logger):
                 # メッセージ送信中フラグをON
                 st.session_state.is_sending_message = True
                 st.session_state.status_message = "メッセージを処理中..."
-                st.session_state.initial_message_sent = True
                 
                 # 一時データとしてプロンプトテキストを保存
                 st.session_state.temp_prompt_text = prompt.text
@@ -828,20 +868,35 @@ def show_chat_component(logger):
         prompt_text = st.session_state.temp_prompt_text
         
         # ユーザーメッセージを追加
-        user_message = st.session_state.chat_manager.add_user_message(prompt_text)
+        if not st.session_state.message_processed:
+            user_message = st.session_state.chat_manager.add_user_message(prompt_text)
+            st.session_state.message_processed = True
+            # UIに表示 (UIには元のメッセージだけを表示)
+            with st.chat_message("user"):
+                st.write(user_message["content"])
 
-        # UIに表示 (UIには元のメッセージだけを表示)
-        with st.chat_message("user"):
-            st.write(user_message["content"])
+        if not st.session_state.is_cancelling_message:
+            # 処理を実行
+            process_and_send_message()
+        else:
+            # キャンセルされた場合、キャンセルメッセージを表示
+            with st.chat_message("assistant"):
+                st.warning("応答生成がキャンセルされました。")
+                # キャンセルメッセージをチャット履歴に追加
+                st.session_state.chat_manager.add_assistant_message("応答生成がキャンセルされました。")
+                # 添付ファイルを削除
+                st.session_state.chat_manager.clear_attachments()
+                # rag_sourcesをクリア
+                st.session_state.rag_sources = []
 
-        # 処理を実行
-        process_and_send_message()
+            # キャンセルフラグをリセット
+            st.session_state.is_cancelling_message = False
 
         # 処理終了フラグを設定
         st.session_state.is_sending_message = False
         st.session_state.status_message = "処理完了"
-        st.session_state.initial_message_sent = False
-        
+        st.session_state.message_processed = False
+
         # 一時データをクリア
         if "temp_prompt_text" in st.session_state:
             del st.session_state.temp_prompt_text
