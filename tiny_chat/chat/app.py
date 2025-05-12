@@ -72,7 +72,8 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "use_web": file_config.use_web,
             "web_top_k": file_config.web_top_k,
             "use_multi": file_config.use_multi,
-            "use_deep": file_config.use_deep
+            "use_deep": file_config.use_deep,
+            "timeout": file_config.timeout,
         }
         if not os.path.exists(config_file_path):
             file_config.save(config_file_path)
@@ -108,7 +109,8 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             st.session_state.openai_client = get_llm_client(
                 server_url=st.session_state.config["server_url"],
                 api_key=st.session_state.config["api_key"],
-                is_azure=st.session_state.config["is_azure"]
+                is_azure=st.session_state.config["is_azure"],
+                timeout=st.session_state.config["timeout"],
             )
         except Exception as e:
             if logger is not None:
@@ -720,7 +722,8 @@ def show_chat_component(logger):
                         st.session_state.openai_client = get_llm_client(
                             server_url=st.session_state.config["server_url"],
                             api_key=st.session_state.config["api_key"],
-                            is_azure=st.session_state.config["is_azure"]
+                            is_azure=st.session_state.config["is_azure"],
+                            timeout=st.session_state.config["timeout"],
                         )
 
                     # 既存のクライアントインスタンスを使用

@@ -119,6 +119,17 @@ def sidebar(config_file_path, logger):
                 help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
+
+            client_timeout = st.number_input(
+                "リクエストタイムアウト",
+                min_value=10.0,
+                max_value=180.0,
+                value=float(st.session_state.config["timeout"]),
+                step=1.,
+                help="LLMの接続・応答のタイムアウト値を設定します",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
+
             if st.session_state.config["use_web"]:
                 uri_processing = st.checkbox(
                     "メッセージURL取得",
@@ -137,9 +148,10 @@ def sidebar(config_file_path, logger):
             server_url_changed = server_url != st.session_state.config["server_url"]
             api_key_changed = api_key != st.session_state.config["api_key"]
             is_azure_changed = is_azure != st.session_state.config["is_azure"]
-            
+            timeout_changed = client_timeout != st.session_state.config["timeout"]
+
             # サーバー設定変更フラグ
-            server_settings_changed = server_url_changed or api_key_changed or is_azure_changed
+            server_settings_changed = server_url_changed or api_key_changed or is_azure_changed or timeout_changed
 
             # モデルリスト更新ボタン
             if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
@@ -147,12 +159,14 @@ def sidebar(config_file_path, logger):
                 current_server = st.session_state.config["server_url"]
                 current_api_key = st.session_state.config["api_key"]
                 current_is_azure = st.session_state.config["is_azure"]
+                current_timeout = st.session_state.config["timeout"]
 
                 try:
                     st.session_state.openai_client = get_llm_client(
                         server_url=current_server,
                         api_key=current_api_key,
-                        is_azure=current_is_azure
+                        is_azure=current_is_azure,
+                        timeout=current_timeout,
                     )
 
                     # モデルリストを再取得
@@ -193,13 +207,12 @@ def sidebar(config_file_path, logger):
         # ログ記録
         if server_url_changed:
             logger.info(f"サーバーURLを変更: {server_url}")
-            
+
         if is_azure_changed:
             logger.info(f"Azure設定を変更: {is_azure}")
 
         if api_key_changed:
             logger.info("APIキーを変更しました")
-
 
         # サーバー変更の場合はモデルリストを更新
         if server_url_changed or is_azure_changed:
@@ -224,30 +237,19 @@ def sidebar(config_file_path, logger):
                     f"選択したモデル '{old_model}' は新しいサーバーでは利用できません。"
                     f"'{selected_model}' に変更されました。")
 
-        # APIキーだけ変更された場合
-        elif api_key_changed:
-            logger.info("APIキー変更に伴いモデルリストを更新中...")
-            models, api_success = ModelManager.fetch_available_models(
-                server_url,
-                api_key,
-                st.session_state.openai_client,
-                is_azure=is_azure
-            )
-            st.session_state.config["api_key"] = api_key
-            st.session_state.available_models = models
-            st.session_state.models_api_success = api_success
-
         # クライアントの再初期化
         try:
             logger.info("設定変更に伴いOpenAIクライアントを初期化中...")
             st.session_state.openai_client = get_llm_client(
                 server_url=server_url,
                 api_key=api_key,
-                is_azure=is_azure
+                is_azure=is_azure,
+                timeout=client_timeout,
             )
 
             st.session_state.config["api_key"] = api_key
             st.session_state.config["server_url"] = server_url
+            st.session_state.config["timeout"] = client_timeout
             st.session_state.infer_server_type = identify_server(
                 server_url) if not st.session_state.config["is_azure"] else "azure"
 
@@ -306,6 +308,7 @@ def sidebar(config_file_path, logger):
                 web_top_k=st.session_state.config["web_top_k"],
                 use_multi=st.session_state.config["use_multi"],
                 use_deep=st.session_state.config["use_deep"],
+                timeout=st.session_state.config["timeout"],
             )
 
             if config.save(config_file_path):
