@@ -13,7 +13,7 @@ from tiny_chat.chat.chat_config import ChatConfig, ModelManager, DEFAULT_CHAT_CO
 from tiny_chat.chat.chat_manager import ChatManager
 from tiny_chat.utils.file_processor import URIProcessor, FileProcessorFactory
 from tiny_chat.utils.logger import get_logger
-from tiny_chat.utils.llm_utils import get_llm_client, identify_server
+from tiny_chat.utils.llm_utils import get_llm_client, identify_server, reset_ollama_model
 from tiny_chat.chat.sidebar import sidebar
 from tiny_chat.chat.copy_botton import copy_button
 
@@ -157,6 +157,9 @@ def clear_chat():
 
 def cancel_message_generation():
     st.session_state.is_cancelling_message = True
+    if st.session_state.infer_server_type == "ollama":
+        reset_ollama_model(server_url=st.session_state.config["server_url"],
+                           model=st.session_state.config["selected_model"])
     # キャンセル後に即座に再描画を実行
     st.rerun()
 
@@ -739,6 +742,7 @@ def show_chat_component(logger):
                         for chunk in response:
                             # キャンセルが要求された場合、ループを終了
                             if st.session_state.is_cancelling_message:
+                                response.close()
                                 break
                             if chunk.choices and chunk.choices[0].delta.content:
                                 full_response += chunk.choices[0].delta.content
