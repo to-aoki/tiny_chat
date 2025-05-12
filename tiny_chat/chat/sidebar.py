@@ -260,7 +260,10 @@ def sidebar(config_file_path, logger):
             st.session_state.openai_client = None
 
     # 設定を反映ボタン
-    if not server_mode and st.button("設定を反映", disabled=st.session_state.is_sending_message):
+    if not server_mode and st.button(
+        "設定を反映", disabled=st.session_state.is_sending_message,
+        help="チャット設定をセッションに反映し、設定値をファイル保存します"
+    ):
         # 数値設定の変更を検出して反映
         if message_length != st.session_state.config["message_length"]:
             st.session_state.config["message_length"] = message_length
@@ -315,6 +318,13 @@ def sidebar(config_file_path, logger):
         # 設定変更があった場合は画面を再読み込み
         if settings_changed:
             st.rerun()
+
+    if st.session_state.infer_server_type == "ollama":
+        st.caption("応答異常の場合にリセット")
+        if st.button("モデルリセット", disabled=st.session_state.is_sending_message,
+                     help="LLM(Ollama)の応答が異常な際にクリックし、LLMの再ロードを行ってください"):
+            reset_ollama_model(server_url=st.session_state.config["server_url"],
+                               model=st.session_state.config["selected_model"])
 
     uploaded_json = st.file_uploader(
         "チャット履歴をインポート",
