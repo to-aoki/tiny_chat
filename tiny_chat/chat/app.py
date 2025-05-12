@@ -157,7 +157,6 @@ def clear_chat():
 
 def cancel_message_generation():
     st.session_state.is_cancelling_message = True
-    st.session_state.is_sending_message = True
     # キャンセル後に即座に再描画を実行
     st.rerun()
 
@@ -812,12 +811,8 @@ def show_chat_component(logger):
                     st.session_state.chat_manager.add_assistant_message(error_message)
 
                 finally:
-                    # 処理完了後にキャンセル状態をリセット
+                    # 処理完了後に各種状態をリセット
                     st.session_state.is_cancelling_message = False
-                    # 添付ファイルを削除
-                    st.session_state.chat_manager.clear_attachments()
-                    # rag_sourcesをクリア
-                    st.session_state.rag_sources = []
 
         except Exception as e:
             logger.error(f"エラーが発生しました: {str(e)}")
@@ -884,18 +879,15 @@ def show_chat_component(logger):
                 st.warning("応答生成がキャンセルされました。")
                 # キャンセルメッセージをチャット履歴に追加
                 st.session_state.chat_manager.add_assistant_message("応答生成がキャンセルされました。")
-                # 添付ファイルを削除
-                st.session_state.chat_manager.clear_attachments()
-                # rag_sourcesをクリア
-                st.session_state.rag_sources = []
-
-            # キャンセルフラグをリセット
+            # キャンセル状態をリセット
             st.session_state.is_cancelling_message = False
 
-        # 処理終了フラグを設定
+        # 処理終了フラグとリソースをリセット
         st.session_state.is_sending_message = False
         st.session_state.status_message = "処理完了"
         st.session_state.message_processed = False
+        st.session_state.chat_manager.clear_attachments()
+        st.session_state.rag_sources = []
 
         # 一時データをクリア
         if "temp_prompt_text" in st.session_state:
