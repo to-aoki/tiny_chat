@@ -4,21 +4,25 @@ from urllib.parse import urlparse, urlunparse
 import requests
 from pydantic import BaseModel
 
-def get_llm_client(server_url, api_key='dummy-key', is_azure=False, azure_api_version="2024-06-01"):
+def get_llm_client(
+        server_url, api_key='dummy-key', is_azure=False, azure_api_version="2024-06-01", timeout=30.):
+    import httpx
     if is_azure:
         from openai import AzureOpenAI
 
         return AzureOpenAI(
             api_key=api_key,
             azure_endpoint=server_url,
-            api_version=azure_api_version
+            api_version=azure_api_version,
+            timeout=httpx.Timeout(timeout)
         )
     else:
         from openai import OpenAI
 
         return OpenAI(
             base_url=server_url,
-            api_key=api_key
+            api_key=api_key,
+            timeout = httpx.Timeout(timeout)
         )
 
 def reset_ollama_model(server_url="http://localhost:11434/v1", model="llama3"):

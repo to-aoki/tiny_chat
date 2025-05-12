@@ -23,7 +23,8 @@ def get_llm_api() -> Union[AzureOpenAI | OpenAI]:
     llm_api = get_llm_client(
         server_url=chat_config.server_url,
         api_key=chat_config.api_key,
-        is_azure=chat_config.is_azure
+        is_azure=chat_config.is_azure,
+        timeout=chat_config.timeout,
     )
     return llm_api, chat_config
 
