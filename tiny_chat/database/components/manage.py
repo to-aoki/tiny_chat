@@ -1,4 +1,37 @@
+import os
 import streamlit as st
+
+
+STRATEGY_FILE_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "rag_strategy.txt"
+)
+
+# デフォルト戦略リスト（ファイルが存在しない場合に使用）
+STRATEGY_OPTIONS = [
+    "bm25",
+    "ruri_xsmall",
+    "ruri_xsmall_openvino",
+    "ruri_base",
+    "bm25_static",
+    "bm25_ruri_xsmall",
+    "bm25_ruri_xsmall_openvino",
+    "bm25_ruri_base",
+    "ruri_xsmall_reranker",
+    "ruri_base_reranker"
+]
+
+if os.path.exists(STRATEGY_FILE_PATH):
+    try:
+        with open(STRATEGY_FILE_PATH, 'r', encoding='utf-8') as f:
+            loaded_strategies = [line.strip() for line in f.readlines() if line.strip()]
+            if loaded_strategies:  # 空でなければ上書き
+                STRATEGY_OPTIONS = loaded_strategies
+    except:
+        pass
 
 
 def _manage_sources(qdrant_manager, logger):
@@ -287,20 +320,9 @@ def _manage_collections(qdrant_manager, logger):
                 col1, col2 = st.columns(2)
                 with col1:
                     # RAG戦略の選択
-                    rag_strategy_options = [
-                        "bm25",
-                        "ruri_xsmall",
-                        "ruri_base",
-                        "ruri_xsmall_openvino",
-                        "ruri_xsmall_reranker",
-                        "bm25_static",
-                        "bm25_ruri_xsmall",
-                        "bm25_ruri_base",
-                        "bm25_ruri_large"
-                    ]
                     rag_strategy = st.selectbox(
                         "RAG戦略",
-                        options=rag_strategy_options,
+                        options=STRATEGY_OPTIONS,
                         index=0,
                         help="検索・抽出戦略を選択してください。",
                         key="new_rag_strategy"
