@@ -9,45 +9,48 @@ def sidebar(config_file_path, logger):
     st.header("設定")
 
     server_mode = st.session_state.config["session_only_mode"]
+
     # 設定変更フラグ - すべての変更を追跡する統一変数
     settings_changed = False
+
     # サーバーURL、API Key、Azureフラグの変更を特別に追跡
     server_settings_changed = False
 
-    if not server_mode:
-        with st.expander("モデル設定", expanded=False):
+    with st.expander("モデル設定", expanded=False):
+        if not server_mode:
             st.markdown('<span style="font-size: 12px;">変更時は「設定を反映」してください</span>', unsafe_allow_html=True)
 
-            # モデル選択または入力
-            # APIに接続できる場合はドロップダウンリストを表示し、できない場合はテキスト入力欄を表示
-            if st.session_state.models_api_success and st.session_state.available_models:
-                model_input = st.selectbox(
-                    "モデル",
-                    st.session_state.available_models,
-                    index=st.session_state.available_models.index(
-                        st.session_state.config["selected_model"]
-                    ) if st.session_state.config["selected_model"] in st.session_state.available_models else 0,
-                    help="API から取得したモデル一覧から選択します",
-                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-                )
-            else:
-                model_input = st.text_input(
-                    "モデル",
-                    value=st.session_state.config["selected_model"],
-                    help="使用するモデル名を入力してください",
-                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-                )
+        # モデル選択または入力
+        # APIに接続できる場合はドロップダウンリストを表示し、できない場合はテキスト入力欄を表示
+        if st.session_state.models_api_success and st.session_state.available_models:
+            model_input = st.selectbox(
+                "モデル",
+                st.session_state.available_models,
+                index=st.session_state.available_models.index(
+                    st.session_state.config["selected_model"]
+                ) if st.session_state.config["selected_model"] in st.session_state.available_models else 0,
+                help="API から取得したモデル一覧から選択します",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
+        else:
+            model_input = st.text_input(
+                "モデル",
+                value=st.session_state.config["selected_model"],
+                help="使用するモデル名を入力してください",
+                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+            )
 
-            # 入力されたモデルを使用
-            if model_input != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
-                if st.session_state.infer_server_type == 'ollama':
-                    # ollama向け操作 （他用途がある場合はアンロードしないほうがいいかもしれない）
-                    reset_ollama_model(server_url=st.session_state.config["server_url"],
-                                       model=st.session_state.config["selected_model"] )
-                st.session_state.config["selected_model"] = model_input
-                logger.info(f"モデルを変更: {model_input}")
-                settings_changed = True
+        # 入力されたモデルを使用
+        if model_input != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
+            if st.session_state.infer_server_type == 'ollama':
+                # ollama向け操作 （他用途がある場合はアンロードしないほうがいいかもしれない）
+                reset_ollama_model(server_url=st.session_state.config["server_url"],
+                                   model=st.session_state.config["selected_model"] )
+            st.session_state.config["selected_model"] = model_input
+            logger.info(f"モデルを変更: {model_input}")
+            settings_changed = True
 
+        if not server_mode:
             server_url = st.text_input(
                 "サーバーURL",
                 value=st.session_state.config["server_url"],
@@ -70,126 +73,129 @@ def sidebar(config_file_path, logger):
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
 
-            message_length = st.number_input(
-                "メッセージ長",
-                min_value=1000,
-                max_value=2000000,
-                value=st.session_state.config["message_length"],
-                step=1000,
-                help="入力最大メッセージ長を決定します",
+        message_length = st.number_input(
+            "メッセージ長",
+            min_value=1000,
+            max_value=2000000,
+            value=st.session_state.config["message_length"],
+            step=1000,
+            help="入力最大メッセージ長を決定します",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
+        max_completion_tokens = st.number_input(
+            "生成トークン長",
+            min_value=100,
+            max_value=100000,
+            value=st.session_state.config["max_completion_tokens"],
+            step=100,
+            help="出力最大トークン長を決定します",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
+        context_length = st.number_input(
+            "添付ファイル文字列長",
+            min_value=500,
+            max_value=1000000,
+            value=st.session_state.config["context_length"],
+            step=500,
+            help="添付ファイルやURLコンテンツの取得最大長（切り詰める）文字数を指定します",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
+        temperature = st.number_input(
+            "温度",
+            min_value=0.0,
+            max_value=2.0,
+            value=float(st.session_state.config["temperature"]),
+            step=0.1,
+            help="LLMの応答単語の確率分布を制御します（値が大きいと創造的/ハルシーネションが起こりやすいです）",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
+        top_p = st.number_input(
+            "確率累積値（top_p）",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(st.session_state.config["top_p"]),
+            step=0.1,
+            help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
+        client_timeout = st.number_input(
+            "リクエストタイムアウト",
+            min_value=10.0,
+            max_value=180.0,
+            value=float(st.session_state.config["timeout"]),
+            step=1.,
+            help="LLMの接続・応答のタイムアウト値を設定します",
+            disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+        )
+
+        if st.session_state.config["use_web"]:
+            uri_processing = st.checkbox(
+                "メッセージURL取得",
+                value=st.session_state.config["uri_processing"],
+                help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
                 disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
             )
 
-            max_completion_tokens = st.number_input(
-                "生成トークン長",
-                min_value=100,
-                max_value=100000,
-                value=st.session_state.config["max_completion_tokens"],
-                step=100,
-                help="出力最大トークン長を決定します",
-                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-            )
+            # 設定値変更の検出（フラグの一元管理）
+            if uri_processing != st.session_state.config["uri_processing"] and not st.session_state.is_sending_message:
+                st.session_state.config["uri_processing"] = uri_processing
+                logger.info(f"URI処理設定を変更: {uri_processing}")
+                settings_changed = True
 
-            context_length = st.number_input(
-                "添付ファイル文字列長",
-                min_value=500,
-                max_value=1000000,
-                value=st.session_state.config["context_length"],
-                step=500,
-                help="添付ファイルやURLコンテンツの取得最大長（切り詰める）文字数を指定します",
-                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-            )
-
-            temperature = st.number_input(
-                "温度",
-                min_value=0.0,
-                max_value=2.0,
-                value=float(st.session_state.config["temperature"]),
-                step=0.1,
-                help="LLMの応答単語の確率分布を制御します（値が大きいと創造的/ハルシーネションが起こりやすいです）",
-                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-            )
-
-            top_p = st.number_input(
-                "確率累積値（top_p）",
-                min_value=0.0,
-                max_value=1.0,
-                value=float(st.session_state.config["top_p"]),
-                step=0.1,
-                help="LLMの応答単語の生起確率累積値を制御します（値が大きくすると多様性をある程度維持します）",
-                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-            )
-
-            client_timeout = st.number_input(
-                "リクエストタイムアウト",
-                min_value=10.0,
-                max_value=180.0,
-                value=float(st.session_state.config["timeout"]),
-                step=1.,
-                help="LLMの接続・応答のタイムアウト値を設定します",
-                disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-            )
-
-            if st.session_state.config["use_web"]:
-                uri_processing = st.checkbox(
-                    "メッセージURL取得",
-                    value=st.session_state.config["uri_processing"],
-                    help="メッセージの最初のURLからコンテキストを取得し、プロンプトを拡張します",
-                    disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-                )
-
-                # 設定値変更の検出（フラグの一元管理）
-                if uri_processing != st.session_state.config["uri_processing"] and not st.session_state.is_sending_message:
-                    st.session_state.config["uri_processing"] = uri_processing
-                    logger.info(f"URI処理設定を変更: {uri_processing}")
-                    settings_changed = True
-
-            # サーバー関連設定の変更をチェック
+        # サーバー関連設定の変更をチェック
+        if not server_mode:
             server_url_changed = server_url != st.session_state.config["server_url"]
             api_key_changed = api_key != st.session_state.config["api_key"]
             is_azure_changed = is_azure != st.session_state.config["is_azure"]
-            timeout_changed = client_timeout != st.session_state.config["timeout"]
 
+        timeout_changed = client_timeout != st.session_state.config["timeout"]
+
+        if not server_mode:
             # サーバー設定変更フラグ
             server_settings_changed = server_url_changed or api_key_changed or is_azure_changed or timeout_changed
 
-            # モデルリスト更新ボタン
-            if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
-                # 現在の設定値を使用
-                current_server = st.session_state.config["server_url"]
-                current_api_key = st.session_state.config["api_key"]
-                current_is_azure = st.session_state.config["is_azure"]
-                current_timeout = st.session_state.config["timeout"]
+        # モデルリスト更新ボタン
+        if st.button("モデルリスト更新", disabled=st.session_state.is_sending_message):
+            # 現在の設定値を使用
+            current_server = st.session_state.config["server_url"]
+            current_api_key = st.session_state.config["api_key"]
+            current_is_azure = st.session_state.config["is_azure"]
+            current_timeout = st.session_state.config["timeout"]
 
-                try:
-                    st.session_state.openai_client = get_llm_client(
-                        server_url=current_server,
-                        api_key=current_api_key,
-                        is_azure=current_is_azure,
-                        timeout=current_timeout,
-                    )
+            try:
+                st.session_state.openai_client = get_llm_client(
+                    server_url=current_server,
+                    api_key=current_api_key,
+                    is_azure=current_is_azure,
+                    timeout=current_timeout,
+                )
 
-                    # モデルリストを再取得
-                    models, api_success = ModelManager.fetch_available_models(
-                        current_server,
-                        current_api_key,
-                        st.session_state.openai_client,
-                        is_azure=current_is_azure
-                    )
+                # モデルリストを再取得
+                models, api_success = ModelManager.fetch_available_models(
+                    current_server,
+                    current_api_key,
+                    st.session_state.openai_client,
+                    is_azure=current_is_azure
+                )
 
-                    # 状態を更新
-                    st.session_state.available_models = models
-                    st.session_state.models_api_success = api_success
+                # 状態を更新
+                st.session_state.available_models = models
+                st.session_state.models_api_success = api_success
 
-                    if not api_success:
-                        logger.warning("モデルリスト取得に失敗しました")
-                        st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
+                if not api_success:
+                    logger.warning("モデルリスト取得に失敗しました")
+                    st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
 
-                    st.rerun()
-                except Exception as e:
-                    error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
-                    logger.error(error_msg)
-                    st.error(error_msg)
+                st.rerun()
+            except Exception as e:
+                error_msg = f"モデルリスト更新中にエラーが発生しました: {str(e)}"
+                logger.error(error_msg)
+                st.error(error_msg)
 
     meta_prompt = st.text_area(
         "メタプロンプト",
@@ -261,31 +267,36 @@ def sidebar(config_file_path, logger):
             st.error(error_msg)
             st.session_state.openai_client = None
 
+    # 数値設定の変更を検出して反映
+    if message_length != st.session_state.config["message_length"]:
+        st.session_state.config["message_length"] = message_length
+        settings_changed = True
+
+    if max_completion_tokens != st.session_state.config["max_completion_tokens"]:
+        st.session_state.config["max_completion_tokens"] = max_completion_tokens
+        settings_changed = True
+
+    if context_length != st.session_state.config["context_length"]:
+        st.session_state.config["context_length"] = context_length
+        settings_changed = True
+
+    if temperature != st.session_state.config["temperature"]:
+        st.session_state.config["temperature"] = temperature
+        settings_changed = True
+
+    if top_p != st.session_state.config["top_p"]:
+        st.session_state.config["top_p"] = top_p
+        settings_changed = True
+
+    if client_timeout != st.session_state.config["timeout"]:
+        st.session_state.config["timeout"] = client_timeout
+        settings_changed = True
+
     # 設定を反映ボタン
     if not server_mode and st.button(
         "設定を反映", disabled=st.session_state.is_sending_message,
         help="チャット設定をセッションに反映し、設定値をファイル保存します"
     ):
-        # 数値設定の変更を検出して反映
-        if message_length != st.session_state.config["message_length"]:
-            st.session_state.config["message_length"] = message_length
-            settings_changed = True
-
-        if max_completion_tokens != st.session_state.config["max_completion_tokens"]:
-            st.session_state.config["max_completion_tokens"] = max_completion_tokens
-            settings_changed = True
-
-        if context_length != st.session_state.config["context_length"]:
-            st.session_state.config["context_length"] = context_length
-            settings_changed = True
-
-        if temperature != st.session_state.config["temperature"]:
-            st.session_state.config["temperature"] = temperature
-            settings_changed = True
-
-        if top_p != st.session_state.config["top_p"]:
-            st.session_state.config["top_p"] = top_p
-            settings_changed = True
 
         # サーバーモードでなければ設定ファイルに保存
         if not server_mode:
@@ -515,9 +526,9 @@ def sidebar(config_file_path, logger):
                 if rag_process_prompt != st.session_state.config["rag_process_prompt"]:
                     st.session_state.config["rag_process_prompt"] = rag_process_prompt
                     settings_changed = True
-
-                st.markdown('<span style="font-size: 12px;">保存する場合は「設定を反映」してください</span>',
-                            unsafe_allow_html=True)
+                if not server_mode:
+                    st.markdown('<span style="font-size: 12px;">保存する場合は「設定を反映」してください</span>',
+                                unsafe_allow_html=True)
 
             # コレクション名の選択（サイドバーに表示）
             manager = get_or_create_qdrant_manager(logger)
