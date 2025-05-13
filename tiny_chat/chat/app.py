@@ -234,7 +234,7 @@ def rag_web_search(
 
         for q in queries.queries:
             st.info(f"変換クエリ: {q.query}")
-            result = search_web(q.query[:max_query_length], max_results=max_results)
+            result = search_web(q.query[:max_query_length], max_results=max_results, logger=logger)
 
             if st.session_state.config["use_deep"]:
                 knowledge = ""
@@ -248,7 +248,8 @@ def rag_web_search(
                     if iteration_query is None:
                         break
                     st.info(f"推敲クエリ: {iteration_query.query}")
-                    result = search_web(iteration_query.query[:max_query_length], max_results=max_results)
+                    result = search_web(iteration_query.query[:max_query_length],
+                                        max_results=max_results, logger=logger)
             else:
                 full_result.append(result)
 
@@ -280,7 +281,8 @@ def rag_web_search(
         query = query_processer.transform(prompt_content)
         st.info(f"変換クエリ: {query}")
 
-    return search_web(query[:max_query_length], max_results=max_results)  # duckduck-go max query (496 decord char?)
+    # duckduck-go max query (496 decord char?)
+    return search_web(query[:max_query_length], max_results=max_results, logger=logger)
 
 
 def rag_search(

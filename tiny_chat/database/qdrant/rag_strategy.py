@@ -53,6 +53,8 @@ class RagStrategyFactory:
             strategy = SpaceDenseRRF("bm25_static", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_xsmall":
             strategy = SpaceDenseRRF("bm25_ruri_xsmall", use_gpu=use_gpu)
+        elif strategy_name == "bm25_ruri_xsmall_openvino":
+            strategy = SpaceDenseRRF("bm25_ruri_xsmall_openvino", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_base":
             strategy = SpaceDenseRRF("bm25_ruri_base", use_gpu=use_gpu)
         elif strategy_name == "bm25_ruri_large":
@@ -272,6 +274,14 @@ class SpaceDenseRRF(RAGStrategy):
             self.bm25_model = BM25TextEmbedding()
             self.emb_model = SentenceTransformerEmbedding(
                 device='cuda' if use_gpu else 'cpu')
+
+        elif strategy == 'bm25_ruri_xsmall_openvino':
+            self.sparse_vector_field_name = "sparse"
+            self.dense_vector_field_name = "dense"
+            self.bm25_model = BM25TextEmbedding()
+            self.emb_model = SentenceTransformerEmbedding(
+                model_name="cl-nagoya/ruri-v3-30m", device='cpu',
+                file_name="openvino/openvino_model_qint8_quantized.xml")
 
         elif strategy == 'bm25_ruri_base':
             self.sparse_vector_field_name = "sparse"
