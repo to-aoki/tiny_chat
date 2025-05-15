@@ -237,12 +237,6 @@ def main():
         lifespan=lifespan_manager  # Assign lifespan function
     )
 
-    # Set binary mode for stdin/stdout on Windows if running in local mode
-    if args.mode == "local" and sys.platform == 'win32':
-        import msvcrt
-        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
-    
     # Run FastMCP with either stdio or SSE transport based on mode
     transport = "stdio" if args.mode == "local" else "sse"
     print(f"Starting TinyChat Search MCP Server in {args.mode} mode")
