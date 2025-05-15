@@ -142,12 +142,6 @@ async def main():
         server_path = os.path.dirname(__file__) + "/search_mcp.py"
     else:
         server_path = sys.argv[1]
-        
-    # Set binary mode for stdin/stdout on Windows
-    if sys.platform == 'win32':
-        import msvcrt
-        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
             
     client = QdrantSearchClient()
     try:
