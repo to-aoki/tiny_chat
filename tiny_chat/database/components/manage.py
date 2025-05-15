@@ -1,6 +1,8 @@
 import os
 import streamlit as st
 
+from tiny_chat.database.qdrant.collection import Collection
+
 
 STRATEGY_FILE_PATH = os.path.join(
     os.path.dirname(__file__),
@@ -10,8 +12,9 @@ STRATEGY_FILE_PATH = os.path.join(
     "rag_strategy.txt"
 )
 
+
 # デフォルト戦略リスト（ファイルが存在しない場合に使用）
-STRATEGY_OPTIONS = [
+DEFAULT_STRATEGY_OPTIONS = [
     "bm25",
     "ruri_xsmall",
     "ruri_xsmall_openvino",
@@ -24,14 +27,22 @@ STRATEGY_OPTIONS = [
     "ruri_base_reranker"
 ]
 
-if os.path.exists(STRATEGY_FILE_PATH):
-    try:
-        with open(STRATEGY_FILE_PATH, 'r', encoding='utf-8') as f:
-            loaded_strategies = [line.strip() for line in f.readlines() if line.strip()]
-            if loaded_strategies:  # 空でなければ上書き
-                STRATEGY_OPTIONS = loaded_strategies
-    except:
-        pass
+
+@st.cache_data
+def load_strategy_options(file_path, default_options):
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                loaded_strategies = [line.strip() for line in f.readlines() if line.strip()]
+                if loaded_strategies:
+                    return loaded_strategies
+        except:
+            pass
+    return default_options
+
+
+
+STRATEGY_OPTIONS = load_strategy_options(STRATEGY_FILE_PATH, DEFAULT_STRATEGY_OPTIONS)
 
 
 def _manage_sources(qdrant_manager, logger):
@@ -125,7 +136,7 @@ def _manage_collections(qdrant_manager, logger):
     if not collections:
         st.warning("データベースにコレクションが見つかりません。")
     else:
-        from tiny_chat.database.qdrant.collection import Collection
+
         # コレクション情報を表示
         st.write(f"利用可能なコレクション: {len(collections) - 1}個")
         try:
