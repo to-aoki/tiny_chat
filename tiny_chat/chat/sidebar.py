@@ -348,24 +348,31 @@ def sidebar(config_file_path, logger):
     )
 
     # クエリ変換方式をラジオボタンで選択
-    query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)", "マルチクエリ生成", "DeepSearch"]
+    query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)"]
+    if st.session_state.infer_server_type != 'other':
+        query_options = query_options + ["マルチクエリ生成", "DeepSearch"]
 
     # コールバック関数 - ラジオボタン選択時に即時反映する
     def on_query_conversion_change():
         """ラジオボタン選択変更時のコールバック関数"""
         # 選択値を取得して数値インデックスに変換
         option_name = st.session_state.query_conversion_radio
+        new_mode = -1
+
         if option_name == query_options[0]:
             new_mode = 0
         elif option_name == query_options[1]:
             new_mode = 1
         elif option_name == query_options[2]:
             new_mode = 2
-        elif option_name == query_options[3]:
-            new_mode = 3
-        elif option_name == query_options[4]:
-            new_mode = 4
-        else:
+
+        if st.session_state.infer_server_type != 'other' and new_mode < 0:
+            if option_name == query_options[3]:
+                new_mode = 3
+            elif option_name == query_options[4]:
+                new_mode = 4
+
+        if new_mode < 0:
             return
 
         # 前回値と比較して変更があれば設定を更新
@@ -418,16 +425,17 @@ def sidebar(config_file_path, logger):
 
     # セッション状態に初期値を設定
     if "query_conversion_mode" not in st.session_state:
+        current_mode = 0
         if st.session_state.config["use_step_back"]:
             current_mode = 1
         elif st.session_state.config["use_hyde"]:
             current_mode = 2
-        elif st.session_state.config["use_multi"]:
-            current_mode = 3
-        elif st.session_state.config["use_deep"]:
-            current_mode = 4
-        else:
-            current_mode = 0
+
+        if st.session_state.infer_server_type != "other":
+            if st.session_state.config["use_multi"]:
+                current_mode = 3
+            elif st.session_state.config["use_deep"]:
+                current_mode = 4
 
         st.session_state.query_conversion_mode = current_mode
 
