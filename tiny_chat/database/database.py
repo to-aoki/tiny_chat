@@ -9,7 +9,6 @@ from tiny_chat.database.database_config import DatabaseConfig, DEFAULT_CONFIG_PA
 from tiny_chat.database.components.search import show_search_component
 from tiny_chat.database.components.registration import show_registration
 from tiny_chat.database.components.manage import show_manage_component
-from tiny_chat.database.components.settings import show_settings
 
 
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
@@ -151,6 +150,7 @@ def show_database_component(logger, extensions=SUPPORT_EXTENSIONS):
         show_manage_component(_qdrant_manager, logger=logger)
 
     if not is_server_mode:
+        from tiny_chat.database.components.settings import show_settings
         # 設定タブ
         if st.session_state.active_select_db == mode[3]:
             show_settings(logger=logger, config_file_path=DEFAULT_CONFIG_PATH)
