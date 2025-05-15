@@ -941,23 +941,12 @@ def run_chat_app(server_mode=False):
 
     # データベース機能タブ
     if st.session_state.active_tab == tab_items[1]:
-        # データベース機能の表示
-        if st.session_state.rag_mode_ever_enabled:
-            with st.spinner("データベース操作画面をレンダリング中..."):
-                try:
-                    from tiny_chat.database.database import get_or_create_qdrant_manager, show_database_component
-
-                    # チャットアプリからの呼び出しなので、ページ設定を重複して行わない（set_config=False）
-                    get_or_create_qdrant_manager(LOGGER)
-                    show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
-
-                except Exception as e:
-                    LOGGER.error(f"データベース接続エラー: {str(e)}")
-                    st.error(f"データベース接続中にエラーが発生しました: {str(e)}")
-        else:
-            st.warning("データベース機能を利用する場合はボタンを押下してください。")
-
-            def enable_database():
-                st.session_state.rag_mode_ever_enabled = True
-
-            st.button("データベースを有効にする", on_click=enable_database, use_container_width=True)
+        st.session_state.rag_mode_ever_enabled = True
+        with st.spinner("データベース操作画面をレンダリング中..."):
+            try:
+                from tiny_chat.database.database import get_or_create_qdrant_manager, show_database_component
+                get_or_create_qdrant_manager(LOGGER)
+                show_database_component(logger=LOGGER, extensions=SUPPORT_EXTENSIONS)
+            except Exception as e:
+                LOGGER.error(f"データベース接続エラー: {str(e)}")
+                st.error(f"データベース接続中にエラーが発生しました: {str(e)}")
