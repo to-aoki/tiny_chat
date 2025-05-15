@@ -121,7 +121,11 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
 
     if "infer_server_type" not in st.session_state:
         st.session_state.infer_server_type = identify_server(
-            st.session_state.config["server_url"]) if not st.session_state.config["is_azure"] else "azure"
+            st.session_state.config["server_url"]) if not st.session_state.config["is_azure"] else "other"
+
+    if st.session_state.infer_server_type == "other":
+        st.session_state.config["use_multi"] = False
+        st.session_state.config["use_deep"] = False
 
     # RAGモードのフラグ
     if "rag_mode" not in st.session_state:
