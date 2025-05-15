@@ -113,9 +113,9 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
                 timeout=st.session_state.config["timeout"],
             )
         except Exception as e:
+            error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
             if logger is not None:
-                error_msg = f"OpenAI クライアントの初期化に失敗しました: {str(e)}"
-            logger.error(error_msg)
+                logger.error(error_msg)
             st.error(error_msg)
             st.session_state.openai_client = None
 
