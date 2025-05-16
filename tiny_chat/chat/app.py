@@ -603,7 +603,7 @@ def show_chat_component(logger):
         # ユーザー入力
         # 添付ファイルは streamlit v1.43.2 以降
         prompt = st.chat_input(
-            "メッセージを入力してください...",
+            "プロンプトを入力してください...",
             disabled=st.session_state.is_sending_message,
             accept_file=True,
             file_type=[ext.lstrip(".") for ext in SUPPORT_EXTENSIONS]
