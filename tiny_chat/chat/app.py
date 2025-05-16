@@ -415,7 +415,11 @@ def show_chat_component(logger):
                 )
                 col1, col2 = st.columns([1, 1])
                 with col1:
-                    if st.button("保存", key=f"save_edit_{i}"):
+                    if st.button("保存", 
+                               key=f"save_edit_{i}", 
+                               use_container_width=True,
+                               type="primary",  # Streamlitの緑色（プライマリ）ボタン
+                               help="編集内容を保存します"):
                         # 編集内容を保存
                         # ユーザーメッセージの場合、full_messagesも更新する
                         if message["role"] == "user":
@@ -442,7 +446,10 @@ def show_chat_component(logger):
                         st.session_state.editing_message_content = ""
                         st.rerun()
                 with col2:
-                    if st.button("キャンセル", key=f"cancel_edit_{i}"):
+                    if st.button("キャンセル", 
+                               key=f"cancel_edit_{i}", 
+                               use_container_width=True,
+                               help="編集をキャンセルします"):
                         # 編集をキャンセル
                         st.session_state.editing_message_index = -1
                         st.session_state.editing_message_content = ""
@@ -452,9 +459,11 @@ def show_chat_component(logger):
                 st.write(message["content"])
                 
                 # 操作ボタン表示
-                col1, col2, col3 = st.columns([1, 1, 8])
+                col1, col2, col3 = st.columns([2, 2, 8])
                 with col1:
-                    if st.button("編集", key=f"edit_{i}"):
+                    if st.button("編集", key=f"edit_{i}", 
+                                use_container_width=True,
+                                help="メッセージを編集します"):
                         # 編集モードに切り替え
                         st.session_state.editing_message_index = i
                         
@@ -477,15 +486,41 @@ def show_chat_component(logger):
                     # 削除ボタンはユーザーメッセージに対してのみ表示
                     # 削除時はユーザーとアシスタントのメッセージ対を削除
                     if message["role"] == "user" and i < len(messages) - 1 and messages[i + 1]["role"] == "assistant":
-                        if st.button("削除", key=f"delete_{i}"):
-                            # メッセージ対を削除
-                            st.session_state.chat_manager.delete_message_pair(i)
-                            st.rerun()
-                
-                # アシスタントメッセージの場合はコピーボタンを表示
-                if message["role"] == "assistant":
-                    copy_button(message["content"])
-                
+                        # 削除確認状態変数の初期化
+                        if f"confirm_delete_{i}" not in st.session_state:
+                            st.session_state[f"confirm_delete_{i}"] = False
+                            
+                        if st.session_state[f"confirm_delete_{i}"]:
+                            # 確認ダイアログを表示
+                            st.error("このメッセージを削除しますか？")
+                            confirm_col1, confirm_col2 = st.columns(2)
+                            with confirm_col1:
+                                if st.button("はい", key=f"confirm_yes_{i}", 
+                                           use_container_width=True,
+                                           type="primary",
+                                           help="削除を実行します"):
+                                    # メッセージ対を削除
+                                    st.session_state.chat_manager.delete_message_pair(i)
+                                    st.session_state[f"confirm_delete_{i}"] = False
+                                    st.rerun()
+                            with confirm_col2:
+                                if st.button("いいえ", key=f"confirm_cancel_{i}",
+                                           use_container_width=True,
+                                           help="削除をキャンセルします"):
+                                    st.session_state[f"confirm_delete_{i}"] = False
+                                    st.rerun()
+                        else:
+                            # 削除ボタン（赤色）
+                            if st.button("削除", key=f"delete_{i}", 
+                                       use_container_width=True,
+                                       type="secondary",  # 削除ボタンの色を赤く
+                                       help="このメッセージとその応答を削除します"):
+                                st.session_state[f"confirm_delete_{i}"] = True
+                                st.rerun()
+                    # アシスタントメッセージの場合はコピーボタンを表示
+                    if message["role"] == "assistant":
+                        copy_button(message["content"])
+
                 # 参照ファイルがある場合、最後の応答に対してのみボタンを表示する
                 if message["role"] == "assistant" and i == len(messages) - 1 and st.session_state.reference_files:
                     with st.container():

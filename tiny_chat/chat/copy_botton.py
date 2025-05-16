@@ -17,12 +17,13 @@ def copy_button(text, button_text="コピー", height=50):
     # text内にJavaScriptの式展開 (${expression}) が含まれない前提
     escaped_text = escaped_text.replace('$', '\\$')
 
+    # Streamlit標準の緑色: #00AB41（メインの緑）または #00CD52（明るい緑）
     copy_button_script = f"""
-    <div>
+    <div style="display: flex; align-items: center; margin-top: -4px;">
         <button 
             id="copyButton_{unique_id}"
             onclick="copyToClipboard_{unique_id}()"
-            style="background-color: #4CAF50; 
+            style="background-color: #00AB41; 
                    border: none; 
                    color: white; 
                    padding: 8px 16px; 
@@ -30,9 +31,10 @@ def copy_button(text, button_text="コピー", height=50):
                    text-decoration: none; 
                    display: inline-block; 
                    font-size: 14px; 
-                   margin: 4px 2px; 
                    cursor: pointer; 
-                   border-radius: 4px;"
+                   border-radius: 4px;
+                   height: 34px;
+                   line-height: 1;"
         >{button_text}</button>
         <span id="copyStatus_{unique_id}" style="display: none; margin-left: 10px; font-size: 12px; color: #666;"></span>
     </div>
@@ -104,9 +106,9 @@ def copy_button(text, button_text="コピー", height=50):
             function showSuccess() {{
                 console.log('showSuccess called for ID {unique_id}');
                 const originalColor = copyButton.style.backgroundColor;
-                copyButton.style.backgroundColor = '#45a049'; // 少し暗い緑
+                copyButton.style.backgroundColor = '#00CD52'; // Streamlitの明るい緑色
                 copyStatus.textContent = 'コピーしました!';
-                copyStatus.style.color = '#45a049';
+                copyStatus.style.color = '#00AB41'; // Streamlitの標準緑色
                 copyStatus.style.display = 'inline';
 
                 setTimeout(() => {{
