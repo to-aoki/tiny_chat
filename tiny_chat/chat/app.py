@@ -459,7 +459,7 @@ def show_chat_component(logger):
                 st.write(message["content"])
                 
                 # 操作ボタン表示
-                col1, col2, col3 = st.columns([2, 2, 8])
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 6])
                 with col1:
                     if st.button("編集", key=f"edit_{i}", 
                                 use_container_width=True,
@@ -520,6 +520,29 @@ def show_chat_component(logger):
                     # アシスタントメッセージの場合はコピーボタンを表示
                     if message["role"] == "assistant":
                         copy_button(message["content"])
+                    
+                with col3:
+                    # ユーザーメッセージの場合は.promptファイルとしてダウンロードするボタンを表示
+                    if message["role"] == "user":
+                        # メッセージ内容から添付ファイル情報を除去
+                        content = message["content"].split("\n\n[添付ファイル:")[0].strip()
+                        # 特殊文字を除去（ファイル名に使えない文字を置換）
+                        safe_content = re.sub(r'[\\/*?:"<>|]', "_", content)
+                        # 先頭20文字を取得してファイル名にする
+                        file_prefix = safe_content[:20]
+                        if not file_prefix:
+                            file_prefix = "prompt"
+                        
+                        # ダウンロードボタン
+                        st.download_button(
+                            label=".promptとして保存",
+                            data=content,
+                            file_name=f"{file_prefix}.prompt",
+                            mime="text/plain",
+                            use_container_width=True,
+                            key=f"download_prompt_{i}",
+                            help="メッセージを.promptファイルとしてダウンロードします"
+                        )
 
                 # 参照ファイルがある場合、最後の応答に対してのみボタンを表示する
                 if message["role"] == "assistant" and i == len(messages) - 1 and st.session_state.reference_files:
