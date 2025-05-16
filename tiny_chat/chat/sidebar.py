@@ -340,13 +340,6 @@ def sidebar(config_file_path, logger):
             reset_ollama_model(server_url=st.session_state.config["server_url"],
                                model=st.session_state.config["selected_model"])
 
-    uploaded_json = st.file_uploader(
-        "チャット履歴をインポート",
-        type=["json"],
-        help="以前に保存したチャット履歴JSONファイルをアップロードします",
-        disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
-    )
-
     # クエリ変換方式をラジオボタンで選択
     query_options = ["変換なし", "クエリ汎化(Step Back)", "仮クエリ回答(HYDE)"]
     if st.session_state.infer_server_type != 'other':
@@ -444,34 +437,22 @@ def sidebar(config_file_path, logger):
         current_mode = 0
         st.session_state.query_conversion_mode = current_mode
 
-    # 単一のラジオボタンコントロールを表示
-    st.radio(
-        "RAGクエリ変換方式",
-        options=query_options,
-        index=current_mode,
-        help="RAG利用時のクエリ変換方式を選択します。",
-        disabled=st.session_state.is_sending_message,
-        key="query_conversion_radio",
-        on_change=on_query_conversion_change
-    )
+    if st.session_state.config["use_web"] or st.session_state.rag_mode:
+        st.sidebar.markdown("RAG設定")
 
-    if uploaded_json is not None:
-        content = uploaded_json.getvalue().decode("utf-8")
-
-        if st.button("インポートした履歴を適用", disabled=st.session_state.is_sending_message):
-            success = st.session_state.chat_manager.apply_imported_history(content)
-            if success:
-                logger.info("メッセージ履歴のインポートに成功しました")
-                st.success("メッセージ履歴を正常にインポートしました")
-                st.rerun()
-            else:
-                logger.error("メッセージ履歴のインポートに失敗しました: 無効なフォーマット")
-                st.error("JSONのインポートに失敗しました: 無効なフォーマットです")
+        with st.expander("クエリ変換設定", expanded=False):
+            # 単一のラジオボタンコントロールを表示
+            st.radio(
+                "クエリ変換方式",
+                options=query_options,
+                index=current_mode,
+                help="RAG利用時のクエリ変換方式を選択します。",
+                disabled=st.session_state.is_sending_message,
+                key="query_conversion_radio",
+                on_change=on_query_conversion_change
+            )
 
     if st.session_state.config["use_web"]:
-        # 検索用サイドバー設定
-        st.sidebar.markdown("RAG（Web）")
-
         with st.expander("Web検索設定", expanded=False):
             # top_kの設定
             web_top_k = st.slider(
@@ -491,9 +472,6 @@ def sidebar(config_file_path, logger):
         try:
             from tiny_chat.database.database import get_or_create_qdrant_manager
             from tiny_chat.database.qdrant.collection import Collection
-
-            # 検索用サイドバー設定
-            st.sidebar.markdown("RAG（データベース）")
 
             with st.expander("DB検索設定", expanded=False):
                 # top_kの設定
@@ -599,3 +577,23 @@ def sidebar(config_file_path, logger):
             # データベース接続時のエラーを表示
             logger.error(f"データベース接続エラー: {str(e)}")
             st.sidebar.error("データベース接続エラー")
+
+    uploaded_json = st.file_uploader(
+        "チャット履歴をインポート",
+        type=["json"],
+        help="以前に保存したチャット履歴JSONファイルをアップロードします",
+        disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
+    )
+
+    if uploaded_json is not None:
+        content = uploaded_json.getvalue().decode("utf-8")
+
+        if st.button("インポートした履歴を適用", disabled=st.session_state.is_sending_message):
+            success = st.session_state.chat_manager.apply_imported_history(content)
+            if success:
+                logger.info("メッセージ履歴のインポートに成功しました")
+                st.success("メッセージ履歴を正常にインポートしました")
+                st.rerun()
+            else:
+                logger.error("メッセージ履歴のインポートに失敗しました: 無効なフォーマット")
+                st.error("JSONのインポートに失敗しました: 無効なフォーマットです")
