@@ -504,14 +504,14 @@ def sidebar(config_file_path, logger):
             )
 
     if st.session_state.config["use_web"]:
-        with st.expander("Web検索設定", expanded=False):
+        with st.expander("DDGS検索設定", expanded=False):
             # top_kの設定
             web_top_k = st.slider(
                 "最大検索件数 (top_k)",
                 min_value=1,
                 max_value=20,
                 value=st.session_state.config["web_top_k"],
-                help="Web検索で取得する最大文書数を設定します",
+                help="DuckDuckGo検索で取得する最大文書数を設定します",
                 disabled=st.session_state.is_sending_message,
             )
 

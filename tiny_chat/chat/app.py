@@ -459,7 +459,7 @@ def show_chat_component(logger):
                 st.write(message["content"])
                 
                 # 操作ボタン表示
-                col1, col2, col3, col4 = st.columns([2, 2, 2, 6])
+                col1, col2, col3, col4 = st.columns([2, 2, 3, 5])
                 with col1:
                     if st.button("編集", key=f"edit_{i}", 
                                 use_container_width=True,
@@ -483,45 +483,6 @@ def show_chat_component(logger):
                         st.rerun()
                 
                 with col2:
-                    # 削除ボタンはユーザーメッセージに対してのみ表示
-                    # 削除時はユーザーとアシスタントのメッセージ対を削除
-                    if message["role"] == "user" and i < len(messages) - 1 and messages[i + 1]["role"] == "assistant":
-                        # 削除確認状態変数の初期化
-                        if f"confirm_delete_{i}" not in st.session_state:
-                            st.session_state[f"confirm_delete_{i}"] = False
-                            
-                        if st.session_state[f"confirm_delete_{i}"]:
-                            # 確認ダイアログを表示
-                            st.error("この対話を削除しますか？")
-                            confirm_col1, confirm_col2 = st.columns(2)
-                            with confirm_col1:
-                                if st.button("はい", key=f"confirm_yes_{i}", 
-                                           use_container_width=True,
-                                           type="primary",
-                                           help="削除を実行します"):
-                                    # メッセージ対を削除
-                                    st.session_state.chat_manager.delete_message_pair(i)
-                                    st.session_state[f"confirm_delete_{i}"] = False
-                                    st.rerun()
-                            with confirm_col2:
-                                if st.button("いいえ", key=f"confirm_cancel_{i}",
-                                           use_container_width=True,
-                                           help="削除をキャンセルします"):
-                                    st.session_state[f"confirm_delete_{i}"] = False
-                                    st.rerun()
-                        else:
-                            # 削除ボタン（赤色）
-                            if st.button("削除", key=f"delete_{i}", 
-                                       use_container_width=True,
-                                       type="secondary",  # 削除ボタンの色を赤く
-                                       help="このメッセージとその応答を削除します"):
-                                st.session_state[f"confirm_delete_{i}"] = True
-                                st.rerun()
-                    # アシスタントメッセージの場合はコピーボタンを表示
-                    if message["role"] == "assistant":
-                        copy_button(message["content"])
-                    
-                with col3:
                     # ユーザーメッセージの場合は.promptファイルとしてダウンロードするボタンを表示
                     if message["role"] == "user":
                         # メッセージ内容から添付ファイル情報を除去
@@ -532,7 +493,7 @@ def show_chat_component(logger):
                         file_prefix = safe_content[:20]
                         if not file_prefix:
                             file_prefix = "prompt"
-                        
+
                         # ダウンロードボタン
                         st.download_button(
                             label="保存",
@@ -543,6 +504,45 @@ def show_chat_component(logger):
                             key=f"download_prompt_{i}",
                             help="メッセージを.promptファイルとしてダウンロードします"
                         )
+                    # アシスタントメッセージの場合はコピーボタンを表示
+                    elif message["role"] == "assistant":
+                        copy_button(message["content"])
+
+                with col3:
+                    # 削除ボタンはユーザーメッセージに対してのみ表示
+                    # 削除時はユーザーとアシスタントのメッセージ対を削除
+                    if message["role"] == "user" and i < len(messages) - 1 and messages[i + 1]["role"] == "assistant":
+                        # 削除確認状態変数の初期化
+                        if f"confirm_delete_{i}" not in st.session_state:
+                            st.session_state[f"confirm_delete_{i}"] = False
+
+                        if st.session_state[f"confirm_delete_{i}"]:
+                            # 確認ダイアログを表示
+                            st.error("対話を削除しますか？")
+                            confirm_col1, confirm_col2 = st.columns(2)
+                            with confirm_col1:
+                                if st.button("はい", key=f"confirm_yes_{i}",
+                                             use_container_width=True,
+                                             type="primary",
+                                             help="削除を実行します"):
+                                    # メッセージ対を削除
+                                    st.session_state.chat_manager.delete_message_pair(i)
+                                    st.session_state[f"confirm_delete_{i}"] = False
+                                    st.rerun()
+                            with confirm_col2:
+                                if st.button("いいえ", key=f"confirm_cancel_{i}",
+                                             use_container_width=True,
+                                             help="削除をキャンセルします"):
+                                    st.session_state[f"confirm_delete_{i}"] = False
+                                    st.rerun()
+                        else:
+                            # 削除ボタン（赤色）
+                            if st.button("削除", key=f"delete_{i}",
+                                         use_container_width=True,
+                                         type="secondary",  # 削除ボタンの色を赤く
+                                         help="このメッセージとその応答を削除します"):
+                                st.session_state[f"confirm_delete_{i}"] = True
+                                st.rerun()
 
                 # 参照ファイルがある場合、最後の応答に対してのみボタンを表示する
                 if message["role"] == "assistant" and i == len(messages) - 1 and st.session_state.reference_files:
@@ -676,7 +676,7 @@ def show_chat_component(logger):
             with col4:
                 # DDGSモードのチェックボックス
                 st.checkbox(
-                    "RAG (DDGS検索)",
+                    "RAG (DDGS)",
                     value=st.session_state.web_search_mode,
                     key="web_search_mode_checkbox",
                     on_change=toggle_web_search_mode,
