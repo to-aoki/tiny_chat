@@ -492,7 +492,7 @@ def show_chat_component(logger):
                             
                         if st.session_state[f"confirm_delete_{i}"]:
                             # 確認ダイアログを表示
-                            st.error("このメッセージを削除しますか？")
+                            st.error("この対話を削除しますか？")
                             confirm_col1, confirm_col2 = st.columns(2)
                             with confirm_col1:
                                 if st.button("はい", key=f"confirm_yes_{i}", 
@@ -612,11 +612,26 @@ def show_chat_component(logger):
             else:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 chat_history = st.session_state.chat_manager.to_json()
+                
+                # 最後のユーザーメッセージの先頭20文字を取得
+                last_message_prefix = ""
+                for msg in reversed(st.session_state.chat_manager.messages):
+                    if msg["role"] == "user":
+                        # メッセージ内容から添付ファイル情報を除去
+                        content = msg["content"].split("\n\n[添付ファイル:")[0].strip()
+                        # 特殊文字を除去（ファイル名に使えない文字を置換）
+                        content = re.sub(r'[\\/*?:"<>|]', "_", content)
+                        # 先頭20文字を取得
+                        last_message_prefix = content[:20]
+                        break
+                
+                # ファイル名を生成（先頭20文字がない場合はタイムスタンプのみ）
+                file_name = f"{timestamp}_{last_message_prefix}.json" if last_message_prefix else f"{timestamp}.json"
 
                 st.download_button(
                     label="チャット保存",
                     data=chat_history,
-                    file_name=f"{timestamp}.json",
+                    file_name=file_name,
                     mime="application/json",
                     disabled=st.session_state.is_sending_message,
                     use_container_width=True,
