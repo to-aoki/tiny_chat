@@ -467,3 +467,117 @@ class ChatManager:
         would_exceed = total_estimated_length > max_message_length
 
         return would_exceed, total_estimated_length, max_message_length
+        
+    def edit_message(self, index, new_content):
+        """
+        特定のインデックスのメッセージを編集する
+
+        Args:
+            index (int): 編集するメッセージのインデックス
+            new_content (str): 新しいメッセージ内容
+
+        Returns:
+            bool: 編集が成功したかどうか
+        """
+        if index < 0 or index >= len(self.messages):
+            return False
+            
+        # メッセージを更新
+        role = self.messages[index]["role"]
+        self.messages[index]["content"] = new_content
+        
+        # full_messagesも更新
+        # ユーザーメッセージの場合、対応するfull_messagesのエントリを見つける
+        if role == "user":
+            for i, msg in enumerate(self.full_messages):
+                if msg["role"] == "user" and "message_id" in msg and msg["message_id"] == index:
+                    # 通常の内容と同期する（拡張プロンプトは次の応答生成時に再計算される）
+                    self.full_messages[i]["content"] = new_content
+                    break
+        else:
+            # アシスタントメッセージの場合は対応するインデックスを探す
+            # messagesとfull_messagesの対応を見つけるため
+            assistant_count = 0
+            target_assistant_index = None
+            
+            for i, msg in enumerate(self.messages):
+                if msg["role"] == "assistant":
+                    if i == index:
+                        target_assistant_index = assistant_count
+                        break
+                    assistant_count += 1
+            
+            if target_assistant_index is not None:
+                # 対応するfull_messagesのアシスタントメッセージを探す
+                assistant_count = 0
+                for i, msg in enumerate(self.full_messages):
+                    if msg["role"] == "assistant":
+                        if assistant_count == target_assistant_index:
+                            self.full_messages[i]["content"] = new_content
+                            break
+                        assistant_count += 1
+        
+        return True
+        
+    def delete_message_pair(self, index):
+        """
+        特定のインデックスのメッセージ対（ユーザーとアシスタント）を削除する
+        
+        Args:
+            index (int): 削除するメッセージ対の開始インデックス（ユーザーメッセージ）
+            
+        Returns:
+            bool: 削除が成功したかどうか
+        """
+        if index < 0 or index >= len(self.messages) - 1:
+            return False
+            
+        # 対象がユーザーメッセージで、その次がアシスタントメッセージかを確認
+        if self.messages[index]["role"] != "user" or self.messages[index + 1]["role"] != "assistant":
+            return False
+            
+        # メッセージ対を削除（ユーザーとアシスタント）
+        user_message = self.messages.pop(index)
+        assistant_message = self.messages.pop(index)  # インデックスが1つずれるので再度同じインデックス
+        
+        # full_messagesからも対応するメッセージを削除
+        # ユーザーメッセージを削除
+        for i in range(len(self.full_messages) - 1, -1, -1):
+            msg = self.full_messages[i]
+            if msg["role"] == "user" and "message_id" in msg and msg["message_id"] == index:
+                self.full_messages.pop(i)
+                break
+                
+        # アシスタントメッセージを削除（順番に基づいて探す）
+        assistant_count = 0
+        target_assistant_index = None
+        
+        # messagesにおけるアシスタントメッセージのインデックスを計算
+        for i, msg in enumerate(self.messages):
+            if msg["role"] == "assistant" and i >= index:
+                target_assistant_index = assistant_count
+                break
+            if msg["role"] == "assistant":
+                assistant_count += 1
+        
+        if target_assistant_index is not None:
+            # 対応するfull_messagesのアシスタントメッセージを探す
+            assistant_count = 0
+            for i in range(len(self.full_messages) - 1, -1, -1):
+                msg = self.full_messages[i]
+                if msg["role"] == "assistant":
+                    if assistant_count == target_assistant_index:
+                        self.full_messages.pop(i)
+                        break
+                    assistant_count += 1
+        
+        # メッセージIDの再割り当て（ユーザーメッセージのみ）
+        for i, msg in enumerate(self.messages):
+            if msg["role"] == "user":
+                # full_messagesの対応するメッセージを更新
+                for j, full_msg in enumerate(self.full_messages):
+                    if full_msg["role"] == "user" and "message_id" in full_msg and full_msg["message_id"] > index:
+                        # インデックスを1つ減らす
+                        self.full_messages[j]["message_id"] -= 2  # ユーザーとアシスタントの2つを削除したため
+                        
+        return True
