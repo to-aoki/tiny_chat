@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Dict, Any
+# require duckduckgo_search==8.0.1
 from duckduckgo_search import DDGS
 
 class DDGSResult(BaseModel):
