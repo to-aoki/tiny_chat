@@ -653,7 +653,7 @@ def show_chat_component(logger):
             with col4:
                 # DDGSモードのチェックボックス
                 st.checkbox(
-                    "RAG (Web検索)",
+                    "RAG (DDGS検索)",
                     value=st.session_state.web_search_mode,
                     key="web_search_mode_checkbox",
                     on_change=toggle_web_search_mode,
