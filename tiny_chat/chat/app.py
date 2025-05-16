@@ -394,14 +394,100 @@ def rag_search(
 def show_chat_component(logger):
     # チャット履歴の表示
     messages = st.session_state.chat_manager.messages
+    
+    # メッセージ編集用の状態変数を初期化
+    if "editing_message_index" not in st.session_state:
+        st.session_state.editing_message_index = -1
+    if "editing_message_content" not in st.session_state:
+        st.session_state.editing_message_content = ""
+    
+    # メッセージ表示ループ
     for i, message in enumerate(messages):
         with st.chat_message(message["role"]):
-            st.write(message["content"])
-            if message["role"] == "assistant":
-                copy_button(message["content"])
+            # 編集モードかどうかを確認
+            if i == st.session_state.editing_message_index:
+                # 編集モード
+                edited_content = st.text_area(
+                    "メッセージを編集", 
+                    value=st.session_state.editing_message_content,
+                    height=min(600, max(150, st.session_state.editing_message_content.count('\n') * 20 + 50)),
+                    key=f"edit_textarea_{i}"
+                )
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    if st.button("保存", key=f"save_edit_{i}"):
+                        # 編集内容を保存
+                        # ユーザーメッセージの場合、full_messagesも更新する
+                        if message["role"] == "user":
+                            # ユーザーメッセージの表示用部分と拡張部分を分離
+                            display_content = edited_content
+                            if "\n\n[添付ファイル:" in edited_content:
+                                display_content = edited_content.split("\n\n[添付ファイル:")[0] + "\n\n[添付ファイル:" + edited_content.split("\n\n[添付ファイル:")[1]
+                            
+                            # full_messagesの更新
+                            for full_msg_idx, full_msg in enumerate(st.session_state.chat_manager.full_messages):
+                                if full_msg["role"] == "user" and "message_id" in full_msg and full_msg["message_id"] == i:
+                                    # プレースホルダーでない場合のみ、full_messagesのコンテンツを更新
+                                    if "placeholder_for_enhanced_prompt" not in full_msg["content"]:
+                                        st.session_state.chat_manager.full_messages[full_msg_idx]["content"] = edited_content
+                                    break
+                            
+                            # messagesを更新
+                            st.session_state.chat_manager.edit_message(i, display_content)
+                        else:
+                            # アシスタントメッセージの場合、通常の編集
+                            st.session_state.chat_manager.edit_message(i, edited_content)
+                        
+                        st.session_state.editing_message_index = -1
+                        st.session_state.editing_message_content = ""
+                        st.rerun()
+                with col2:
+                    if st.button("キャンセル", key=f"cancel_edit_{i}"):
+                        # 編集をキャンセル
+                        st.session_state.editing_message_index = -1
+                        st.session_state.editing_message_content = ""
+                        st.rerun()
+            else:
+                # 通常表示モード
+                st.write(message["content"])
+                
+                # 操作ボタン表示
+                col1, col2, col3 = st.columns([1, 1, 8])
+                with col1:
+                    if st.button("編集", key=f"edit_{i}"):
+                        # 編集モードに切り替え
+                        st.session_state.editing_message_index = i
+                        
+                        # full_messagesから完全なメッセージ内容を取得
+                        full_content = message["content"]  # デフォルトは表示用メッセージ
+                        
+                        if message["role"] == "user":
+                            # ユーザーメッセージの場合、full_messagesから拡張コンテンツを探す
+                            for full_msg in st.session_state.chat_manager.full_messages:
+                                if full_msg["role"] == "user" and "message_id" in full_msg and full_msg["message_id"] == i:
+                                    # プレースホルダーでなければ完全な内容を使用
+                                    if "placeholder_for_enhanced_prompt" not in full_msg["content"]:
+                                        full_content = full_msg["content"]
+                                    break
+                        
+                        st.session_state.editing_message_content = full_content
+                        st.rerun()
+                
+                with col2:
+                    # 削除ボタンはユーザーメッセージに対してのみ表示
+                    # 削除時はユーザーとアシスタントのメッセージ対を削除
+                    if message["role"] == "user" and i < len(messages) - 1 and messages[i + 1]["role"] == "assistant":
+                        if st.button("削除", key=f"delete_{i}"):
+                            # メッセージ対を削除
+                            st.session_state.chat_manager.delete_message_pair(i)
+                            st.rerun()
+                
+                # アシスタントメッセージの場合はコピーボタンを表示
+                if message["role"] == "assistant":
+                    copy_button(message["content"])
                 
                 # 参照ファイルがある場合、最後の応答に対してのみボタンを表示する
-                if i == len(messages) - 1 and st.session_state.reference_files:
+                if message["role"] == "assistant" and i == len(messages) - 1 and st.session_state.reference_files:
                     with st.container():
                         st.write("参照情報を開く:")
                         for idx, file_info in enumerate(st.session_state.reference_files):
@@ -419,7 +505,7 @@ def show_chat_component(logger):
                             else:
                                 st.markdown(
                                     f"[\\[{file_info['index']}\\] {file_info['path']}{page_str}]"
-                                    f"({urllib.parse.quote(file_info['path'], safe=':/')})")
+                                    f"({urllib.parse.quote(file_info['path'], safe='://')})")
 
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
