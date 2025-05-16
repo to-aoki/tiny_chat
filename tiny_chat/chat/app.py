@@ -535,7 +535,7 @@ def show_chat_component(logger):
                         
                         # ダウンロードボタン
                         st.download_button(
-                            label=".promptとして保存",
+                            label="保存",
                             data=content,
                             file_name=f"{file_prefix}.prompt",
                             mime="text/plain",
