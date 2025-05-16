@@ -28,7 +28,8 @@ def convert_extensions(extensions_list):
 
 def process_directory(directory_path: str,
     extensions: List[str] = None,
-    support_extensions: List[str] = SUPPORT_EXTENSIONS
+    support_extensions: List[str] = SUPPORT_EXTENSIONS,
+    include_subdirs: bool = True
 ) -> List[Tuple[List[str], Dict]]:
     """
     ディレクトリ内のファイルを処理します
@@ -36,6 +37,7 @@ def process_directory(directory_path: str,
     Args:
         directory_path: 処理するディレクトリのパス
         extensions: 処理対象のファイル拡張子リスト (None の場合はすべてのサポートされる形式)
+        include_subdirs: サブディレクトリも走査するかどうか (True: 走査する, False: 走査しない)
 
     Returns:
         [(text_array, metadata), ...]: 抽出されたテキスト配列とメタデータのリスト
@@ -48,10 +50,30 @@ def process_directory(directory_path: str,
     # セットによる高速ルックアップ
     extensions_set = set(extensions)
 
-    # ファイルを検索
-    for root, _, files in os.walk(directory_path):
+    # ファイルを検索（サブディレクトリ走査オプションに基づいて処理）
+    if include_subdirs:
+        # サブディレクトリを含めて走査
+        for root, _, files in os.walk(directory_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                file_ext = os.path.splitext(file_path)[1].lower()
+
+                if file_ext in extensions_set:
+                    text = None
+                    try:
+                        text, metadata = process_file(file_path)
+                    except Exception as e:
+                        st.error(str(e))
+                    if text:
+                        # 相対パスをメタデータに追加
+                        rel_path = os.path.relpath(file_path, directory_path)
+                        metadata["rel_path"] = rel_path
+                        results.append((text, metadata))
+    else:
+        # 指定ディレクトリのみ走査（サブディレクトリは含めない）
+        files = [f for f in os.listdir(directory_path) if os.path.isfile(os.path.join(directory_path, f))]
         for file in files:
-            file_path = os.path.join(root, file)
+            file_path = os.path.join(directory_path, file)
             file_ext = os.path.splitext(file_path)[1].lower()
 
             if file_ext in extensions_set:
@@ -62,8 +84,7 @@ def process_directory(directory_path: str,
                     st.error(str(e))
                 if text:
                     # 相対パスをメタデータに追加
-                    rel_path = os.path.relpath(file_path, directory_path)
-                    metadata["rel_path"] = rel_path
+                    metadata["rel_path"] = file
                     results.append((text, metadata))
 
     return results
@@ -240,11 +261,26 @@ def show_registration(
             extensions,
             default=extensions
         )
+        
+        # サブディレクトリ走査オプション（ラジオボタン）
+        include_subdirs = st.radio(
+            "サブディレクトリの走査",
+            ["含めない", "含める"],
+            index=0,
+            help="サブディレクトリ内のファイルも処理対象に含めるかどうかを選択します。"
+        )
+        # ラジオボタンの選択をbool値に変換
+        include_subdirs_bool = (include_subdirs == "含める")
 
         if directory_path and os.path.isdir(directory_path):
             if st.button("ディレクトリ内のファイルを登録", type="primary"):
                 with st.spinner(f"ディレクトリを処理中: {directory_path}"):
-                    results = process_directory(directory_path, selected_extensions, support_extensions=extensions)
+                    results = process_directory(
+                        directory_path, 
+                        selected_extensions, 
+                        support_extensions=extensions,
+                        include_subdirs=include_subdirs_bool
+                    )
 
                     if results:
                         texts = [r[0] for r in results]
