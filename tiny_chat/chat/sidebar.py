@@ -212,22 +212,31 @@ def sidebar(config_file_path, logger):
     # プロンプトアップロード機能
     prompt_file = st.file_uploader(
         "プロンプトアップロード",
-        type=["md", "txt"],
+        type=["md", "txt", "prompt"],
         help="マークダウンまたはテキストファイルをアップロードしてチャット入力欄に挿入します",
         disabled=st.session_state.is_sending_message
     )
 
     if prompt_file is not None:
+        encodings_to_try = ['utf-8-sig', 'utf-8', 'cp932', 'euc_jp', 'shift_jis']
+        prompt_content = None
+        for encoding in encodings_to_try:
+            try:
+                prompt_content = prompt_file.getvalue().decode(encoding)
+                break  # 成功したらループを抜ける
+            except UnicodeDecodeError:
+                # デコードに失敗した場合は次のエンコーディングを試す
+                continue
+        if not prompt_content:
+            logger.error("プロンプトファイルの読み込みに失敗したか、空のファイルです")
+            st.error("プロンプトファイルの読み込みに失敗したか、空のファイルです")
         try:
-            # ファイル内容をUTF-8でデコード
-            prompt_content = prompt_file.getvalue().decode("utf-8")
-
             # JavaScriptがエスケープを必要とする文字を処理
             prompt_content = prompt_content.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
 
-            # https://github.com/streamlit/streamlit/issues/7166
-            # https://github.com/streamlit/streamlit/pull/10175
-            # streamlit v 1.45.0　when verup check data-testid!
+            # reason: https://github.com/streamlit/streamlit/issues/7166
+            # fix: https://github.com/streamlit/streamlit/pull/10175
+            # streamlit v 1.45.0　other version check "data-testid"
             direct_js = f"""
             <script>
                 function insert_chat_text_direct() {{
