@@ -209,6 +209,48 @@ def sidebar(config_file_path, logger):
         st.session_state.config["meta_prompt"] = meta_prompt
         settings_changed = True
 
+    # プロンプトアップロード機能
+    prompt_file = st.file_uploader(
+        "プロンプトアップロード",
+        type=["md", "txt"],
+        help="マークダウンまたはテキストファイルをアップロードしてチャット入力欄に挿入します",
+        disabled=st.session_state.is_sending_message
+    )
+
+    if prompt_file is not None:
+        try:
+            # ファイル内容をUTF-8でデコード
+            prompt_content = prompt_file.getvalue().decode("utf-8")
+
+            # JavaScriptがエスケープを必要とする文字を処理
+            prompt_content = prompt_content.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+
+            # https://github.com/streamlit/streamlit/issues/7166
+            # https://github.com/streamlit/streamlit/pull/10175
+            # streamlit v 1.45.0　when verup check data-testid!
+            direct_js = f"""
+            <script>
+                function insert_chat_text_direct() {{
+                    var chatInput = parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+                    nativeInputValueSetter.call(chatInput, "{prompt_content}");
+                    var event = new Event('input', {{ bubbles: true}});
+                    chatInput.dispatchEvent(event);
+                }}
+                insert_chat_text_direct();
+            </script>
+            """
+            # JavaScriptを実行
+            st.components.v1.html(direct_js, height=0)
+
+            # 成功メッセージを表示
+            st.success(f"ファイル '{prompt_file.name}' の内容をチャット入力欄に挿入しました")
+
+        except Exception as e:
+            logger.error(f"プロンプトファイルの読み込みに失敗しました: {str(e)}")
+            st.error(f"ファイルの読み込みに失敗しました: {str(e)}")
+
+
     if not server_mode and server_settings_changed and not st.session_state.is_sending_message:
         # ログ記録
         if server_url_changed:
@@ -578,6 +620,8 @@ def sidebar(config_file_path, logger):
             logger.error(f"データベース接続エラー: {str(e)}")
             st.sidebar.error("データベース接続エラー")
 
+
+    # チャット履歴インポート機能
     uploaded_json = st.file_uploader(
         "チャット履歴をインポート",
         type=["json"],
