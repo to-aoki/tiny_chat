@@ -209,11 +209,11 @@ def sidebar(config_file_path, logger):
         st.session_state.config["meta_prompt"] = meta_prompt
         settings_changed = True
 
-    # プロンプトアップロード機能
+    # プロンプトインポート機能
     prompt_file = st.file_uploader(
-        "プロンプトアップロード",
+        "プロンプトインポート",
         type=["md", "txt", "prompt"],
-        help="マークダウンまたはテキストファイルをアップロードしてチャット入力欄に挿入します",
+        help="テキストファイルをインポートしてチャット入力欄に挿入します",
         disabled=st.session_state.is_sending_message
     )
 
@@ -634,7 +634,7 @@ def sidebar(config_file_path, logger):
     uploaded_json = st.file_uploader(
         "チャット履歴をインポート",
         type=["json"],
-        help="以前に保存したチャット履歴JSONファイルをアップロードします",
+        help="以前に保存したチャット履歴JSONファイルをインポートし、チャット画面に反映します。",
         disabled=st.session_state.is_sending_message  # メッセージ送信中は無効化
     )
 
