@@ -489,6 +489,7 @@ def show_chat_component(logger):
                         content = message["content"].split("\n\n[添付ファイル:")[0].strip()
                         # 特殊文字を除去（ファイル名に使えない文字を置換）
                         safe_content = re.sub(r'[\\/*?:"<>|]', "_", content)
+                        safe_content = re.sub(r'\s+|　', '', safe_content)
                         # 先頭20文字を取得してファイル名にする
                         file_prefix = safe_content[:20]
                         if not file_prefix:
@@ -644,13 +645,12 @@ def show_chat_component(logger):
                         content = msg["content"].split("\n\n[添付ファイル:")[0].strip()
                         # 特殊文字を除去（ファイル名に使えない文字を置換）
                         content = re.sub(r'[\\/*?:"<>|]', "_", content)
-                        # 先頭20文字を取得
-                        last_message_prefix = content[:20]
+                        content = re.sub(r'\s+|　', '', content)
+                        last_message_prefix = content[:20] # 先頭20文字を取得
                         break
                 
                 # ファイル名を生成（先頭20文字がない場合はタイムスタンプのみ）
                 file_name = f"{timestamp}_{last_message_prefix}.json" if last_message_prefix else f"{timestamp}.json"
-
                 st.download_button(
                     label="チャット保存",
                     data=chat_history,
