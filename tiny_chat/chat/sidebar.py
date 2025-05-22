@@ -454,17 +454,49 @@ def sidebar(config_file_path, logger):
             from tiny_chat.database.database import get_or_create_qdrant_manager
             from tiny_chat.database.qdrant.collection import Collection
             with st.expander("DB検索設定", expanded=False):
-                # RAG top_k, score_threshold は db_config に保存
-                rag_top_k_val = st.slider("最大検索件数 (top_k)", min_value=1, max_value=20,
-                                          value=st.session_state.db_config.top_k,
-                                          help="DB検索で取得する最大文書数を設定します",
-                                          disabled=st.session_state.is_sending_message)
-                if rag_top_k_val != st.session_state.db_config.top_k: st.session_state.db_config.top_k = rag_top_k_val
-                rag_score_threshold_val = st.slider("スコアしきい値", min_value=0.0, max_value=5.0,
-                                                    value=st.session_state.db_config.score_threshold, step=0.01,
-                                                    help="DB検索で取得する文書の最小類似度スコア",
-                                                    disabled=st.session_state.is_sending_message)
-                if rag_score_threshold_val != st.session_state.db_config.score_threshold: st.session_state.db_config.score_threshold = rag_score_threshold_val
+                def sync_db_top_k_from_config():
+                    new_val = st.session_state.config["db_top_k"]
+                    if st.session_state.db_config.top_k != new_val:
+                        st.session_state.db_config.top_k = new_val
+
+                def sync_db_score_threshold_from_config():
+                    new_val = st.session_state.config["db_score_threshold"]
+                    if st.session_state.db_config.score_threshold != new_val:
+                        st.session_state.db_config.score_threshold = new_val
+
+                st.slider("最大検索件数 (top_k)", min_value=1, max_value=20,
+                          value=st.session_state.db_config.top_k,  # Initial value from the true source (db_config)
+                          help="DB検索で取得する最大文書数を設定します",
+                          disabled=st.session_state.is_sending_message,
+                          key="db_top_k_widget",
+                          on_change=update_config_value,
+                          args=(
+                              "db_top_k_widget",
+                              "db_top_k",
+                              False,
+                              True,
+                              False,
+                              "DB検索 最大件数 (top_k)",
+                              sync_db_top_k_from_config
+                          ))
+
+
+                st.slider("スコアしきい値", min_value=0.0, max_value=5.0,
+                          value=st.session_state.db_config.score_threshold,
+                          step=0.01,
+                          help="DB検索で取得する文書の最小類似度スコア",
+                          disabled=st.session_state.is_sending_message,
+                          key="db_score_threshold_widget",
+                          on_change=update_config_value,
+                          args=(
+                              "db_score_threshold_widget",
+                              "db_score_threshold",
+                              True,
+                              False,
+                              False,
+                              "DB検索 スコアしきい値",
+                              sync_db_score_threshold_from_config
+                          ))
 
                 st.text_area("検索結果指示", value=st.session_state.config["rag_process_prompt"], height=150,
                              help="検索後の情報活用をLLM指示する文字列を入力してください",
