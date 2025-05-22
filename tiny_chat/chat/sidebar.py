@@ -123,7 +123,7 @@ def sidebar(config_file_path, logger):
                 args=(model_widget_key,)
             )
 
-        # サーバー設定
+        # サーバー設定 (APIキー、サーバーURL、Azure設定はクライアントモードのみ)
         if not server_mode:
             st.text_input(
                 "サーバーURL",
@@ -153,19 +153,29 @@ def sidebar(config_file_path, logger):
                 on_change=update_config_value,
                 args=("is_azure_widget", "is_azure", False, False, True, "Azure設定", set_server_reinit_flag)
             )
-            st.number_input(
-                "クライアントタイムアウト (秒)",
-                min_value=1.0,
-                max_value=600.0,  # 適宜調整
-                value=float(st.session_state.config["timeout"]),  # ChatConfigでデフォルトが設定されている想定
-                step=1.0,
-                format="%.1f",
-                help="LLMの接続・応答のタイムアウト値を設定します",
-                disabled=st.session_state.is_sending_message,
-                key="client_timeout_widget",
-                on_change=update_config_value,
-                args=("client_timeout_widget", "timeout", True, False, False, "タイムアウト", set_server_reinit_flag)
+
+        # タイムアウト設定
+        st.number_input(
+            "クライアントタイムアウト (秒)",
+            min_value=1.0,
+            max_value=600.0,  # 適宜調整
+            value=float(st.session_state.config["timeout"]),  # ChatConfigでデフォルトが設定されている想定
+            step=1.0,
+            format="%.1f",
+            help="LLMの接続・応答のタイムアウト値を設定します",
+            disabled=st.session_state.is_sending_message,
+            key="client_timeout_widget",
+            on_change=update_config_value,
+            args=(
+                "client_timeout_widget",
+                "timeout",
+                True,  # is_float
+                False,  # is_int
+                False,  # is_bool
+                "タイムアウト",
+                set_server_reinit_flag
             )
+        )
 
         st.number_input("メッセージ長", min_value=1000, max_value=2000000,
                         value=int(st.session_state.config["message_length"]), step=1000, help="入力最大メッセージ長",
@@ -282,7 +292,6 @@ def sidebar(config_file_path, logger):
                     current_server_url, current_api_key,
                     current_selected_model_before_reinit,  # 更新前のモデル名を渡す
                     is_azure=current_is_azure
-                    # timeout=current_timeout # ModelManager.update_models_on_server_change が対応するなら渡す
                 )
                 st.session_state.available_models = new_models
                 st.session_state.models_api_success = api_success
@@ -438,7 +447,7 @@ def sidebar(config_file_path, logger):
                       help="DuckDuckGo検索で取得する最大文書数を設定します",
                       disabled=st.session_state.is_sending_message, key="web_top_k_widget",
                       on_change=update_config_value,
-                      args=("web_top_k_widget", "web_top_k", False, True, "DDGS検索最大件数"))
+                      args=("web_top_k_widget", "web_top_k", False, True, False, "DDGS検索最大件数"))
 
     if st.session_state.rag_mode:
         try:
