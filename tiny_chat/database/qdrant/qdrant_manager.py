@@ -269,9 +269,6 @@ class QdrantManager:
         if strategy is None:
             strategy = self.strategy
 
-        # コレクションの存在を確認
-        # self.ensure_collection_exists(collection_name)
-
         if len(documents) != len(metadata_list):
             raise ValueError("documents と metadata_list の長さが一致しません")
 
