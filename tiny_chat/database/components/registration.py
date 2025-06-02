@@ -355,7 +355,6 @@ def show_registration(
                         try:
                             # URIからコンテンツを取得（is_page=Trueでページ単位でテキストを取得）
                             text, meta_data = URIProcessor.process_uri(uri, is_page=True)
-                            print("meta", meta_data)
                             if text:
                                 # テキストが文字列の場合は配列に変換
                                 if isinstance(text, str):
@@ -379,8 +378,6 @@ def show_registration(
                         if collection is None:
                             collection = Collection(collection_name)
                             collection.save(qdrant_manager)
-
-                        print(texts, metadatas)
 
                         # Qdrantに追加
                         added_ids = add_files_to_qdrant(
