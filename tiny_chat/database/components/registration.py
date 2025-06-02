@@ -122,11 +122,12 @@ def add_files_to_qdrant(
             filter_params = {"source": [source]}
             qdrant_manager.delete_by_filter(filter_params)
 
-    all_texts = []
-    all_metadatas = []
+    result_added_ids = []
 
     # ファイルごとにテキストとメタデータを処理
     for i, text_array in enumerate(texts):
+        all_texts = []
+        all_metadatas = []
         base_metadata = metadatas[i].copy()
         for page_index, page_text in enumerate(text_array):
             all_texts.append(page_text)
@@ -134,12 +135,13 @@ def add_files_to_qdrant(
             page_metadata["page"] = page_index + 1  # 配列の添字 + 1 をページとして設定
             all_metadatas.append(page_metadata)
 
-    # Qdrantに追加
-    added_ids = qdrant_manager.add_documents(
-        all_texts, all_metadatas, collection_name=collection_name,
-        strategy=strategy, chunk_size=chunk_size, chunk_overlap=chunk_overlap
-    )
-    return added_ids
+        # Qdrantに追加
+        added_ids = qdrant_manager.add_documents(
+            all_texts, all_metadatas, collection_name=collection_name,
+            strategy=strategy, chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        )
+        result_added_ids.extend(added_ids)
+    return result_added_ids
 
 
 def show_registration(
