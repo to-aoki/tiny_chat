@@ -899,7 +899,7 @@ def show_chat_component(logger):
                         response = client.chat.completions.create(
                             model=st.session_state.config["selected_model"],
                             messages=messages_for_api,
-                            max_completion_tokens=st.session_state.config["max_completion_tokens"],
+                            max_tokens=st.session_state.config["max_completion_tokens"],
                             temperature=st.session_state.config["temperature"],
                             top_p=st.session_state.config["top_p"],
                             stream=True

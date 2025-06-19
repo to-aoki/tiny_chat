@@ -71,16 +71,26 @@ def sidebar(config_file_path, logger):
     def handle_model_change(widget_key_to_read):
         if widget_key_to_read not in st.session_state:
             return
+        
+        # メッセージ送信中は処理をスキップ
+        if st.session_state.is_sending_message:
+            # UIの値を元に戻す
+            st.session_state[widget_key_to_read] = st.session_state.config["selected_model"]
+            return
 
         new_model = st.session_state[widget_key_to_read]
 
-        if new_model != st.session_state.config["selected_model"] and not st.session_state.is_sending_message:
+        if new_model != st.session_state.config["selected_model"]:
             if st.session_state.infer_server_type == 'ollama':
                 # Ollamaの場合、旧モデルをアンロードする（必要な場合）
                 reset_ollama_model(server_url=st.session_state.config["server_url"],
                                    model=st.session_state.config["selected_model"])
+            
+            # 古いモデル名を保存（ログ用）
+            old_model = st.session_state.config["selected_model"]
+            
             st.session_state.config["selected_model"] = new_model
-            logger.info(f"モデルを変更: {new_model}")
+            logger.info(f"モデルを変更: {old_model} → {new_model}")
             st.session_state.settings_changed = True
             st.session_state.just_changed_config_keys.add("selected_model")
 
@@ -94,13 +104,21 @@ def sidebar(config_file_path, logger):
         if st.session_state.models_api_success and st.session_state.available_models:
             model_widget_key = "model_select_widget"
             current_model_idx = 0
+            
+            # 現在のモデルがリストにない場合の処理を改善
             if st.session_state.config["selected_model"] in st.session_state.available_models:
                 current_model_idx = st.session_state.available_models.index(st.session_state.config["selected_model"])
             elif st.session_state.available_models:  # 利用可能なモデルがあるが、選択中のモデルがリストにない場合
+                # モデルがリストにない場合、最初のモデルに自動的に変更
                 logger.warning(
                     f"現在の選択モデル '{st.session_state.config['selected_model']}' は利用可能なモデルリストにありません。"
-                    "リストの先頭モデルを表示します。"
+                    f"'{st.session_state.available_models[0]}' に自動変更します。"
                 )
+                # 設定を実際に更新
+                st.session_state.config["selected_model"] = st.session_state.available_models[0]
+                st.session_state.settings_changed = True
+                st.session_state.just_changed_config_keys.add("selected_model")
+            
             st.selectbox(
                 "モデル",
                 st.session_state.available_models,
@@ -216,21 +234,41 @@ def sidebar(config_file_path, logger):
             current_api_key = st.session_state.config["api_key"]
             current_is_azure = st.session_state.config["is_azure"]
             current_timeout = float(st.session_state.config["timeout"])
+            
+            # 現在選択されているモデルを保存
+            previous_selected_model = st.session_state.config["selected_model"]
+            
             try:
                 st.session_state.openai_client = get_llm_client(server_url=current_server, api_key=current_api_key,
                                                                 is_azure=current_is_azure, timeout=current_timeout)
                 models, api_success = ModelManager.fetch_available_models(current_server, current_api_key,
                                                                           st.session_state.openai_client,
                                                                           is_azure=current_is_azure)
-                st.session_state.available_models = models;
+                st.session_state.available_models = models
                 st.session_state.models_api_success = api_success
+                
                 if not api_success:
-                    logger.warning("モデルリスト取得に失敗しました");
+                    logger.warning("モデルリスト取得に失敗しました")
                     st.error("モデルリストの取得に失敗しました。APIキーとサーバー設定を確認してください。")
+                else:
+                    # モデルリストが正常に取得できた場合
+                    if models and previous_selected_model not in models:
+                        # 以前のモデルが新しいリストにない場合
+                        new_selected_model = models[0]
+                        st.session_state.config["selected_model"] = new_selected_model
+                        st.session_state.settings_changed = True
+                        st.session_state.just_changed_config_keys.add("selected_model")
+                        
+                        st.info(f"選択されていたモデル '{previous_selected_model}' は利用できません。"
+                               f"'{new_selected_model}' に変更されました。")
+                        logger.info(f"モデルリスト更新によりモデルを自動変更: {previous_selected_model} → {new_selected_model}")
+                    elif models:
+                        st.success(f"モデルリストを更新しました。{len(models)}個のモデルが利用可能です。")
+                
                 st.rerun()
             except Exception as e:
-                error_msg = f"モデルリスト更新中にエラー: {str(e)}";
-                logger.error(error_msg);
+                error_msg = f"モデルリスト更新中にエラー: {str(e)}"
+                logger.error(error_msg)
                 st.error(error_msg)
 
     st.text_area("メタプロンプト", value=st.session_state.config["meta_prompt"], height=150,
@@ -243,7 +281,7 @@ def sidebar(config_file_path, logger):
                                    help="テキストファイルをインポートしてチャット入力欄に挿入します",
                                    disabled=st.session_state.is_sending_message)
     if prompt_file is not None:
-        encodings_to_try = ['utf-8-sig', 'utf-8', 'cp932', 'euc_jp', 'shift_jis'];
+        encodings_to_try = ['utf-8-sig', 'utf-8', 'cp932', 'euc_jp', 'shift_jis']
         prompt_content = None
         for encoding in encodings_to_try:
             try:
@@ -252,7 +290,7 @@ def sidebar(config_file_path, logger):
             except UnicodeDecodeError:
                 continue
         if not prompt_content:
-            logger.error("プロンプトファイルの読み込みに失敗したか、空のファイルです");
+            logger.error("プロンプトファイルの読み込みに失敗したか、空のファイルです")
             st.error("プロンプトファイルの読み込みに失敗したか、空のファイルです")
         else:
             try:
@@ -267,7 +305,7 @@ def sidebar(config_file_path, logger):
                 st.components.v1.html(direct_js, height=0)
                 st.success(f"ファイル '{prompt_file.name}' の内容をチャット入力欄に挿入しました")
             except Exception as e:
-                logger.error(f"プロンプトファイルの読み込みに失敗しました: {str(e)}");
+                logger.error(f"プロンプトファイルの読み込みに失敗しました: {str(e)}")
                 st.error(f"ファイルの読み込みに失敗しました: {str(e)}")
 
     # サーバー設定変更時の処理 (クライアント再初期化など)
@@ -325,8 +363,8 @@ def sidebar(config_file_path, logger):
             logger.info("OpenAIクライアント初期化完了")
             st.success("サーバー設定が更新され、クライアントが再接続されました。")
         except Exception as e:
-            error_msg = f"OpenAI クライアントの初期化に失敗: {str(e)}";
-            logger.error(error_msg);
+            error_msg = f"OpenAI クライアントの初期化に失敗: {str(e)}"
+            logger.error(error_msg)
             st.error(error_msg)
             st.session_state.openai_client = None  # クライアント初期化失敗
         finally:
@@ -335,7 +373,7 @@ def sidebar(config_file_path, logger):
             st.rerun()  # UIを更新して反映
 
     # 「設定を反映」ボタン
-    if not server_mode and st.button("設定を反映", disabled=st.session_state.is_sending_message,
+    if not server_mode and st.button("設定保存", disabled=st.session_state.is_sending_message,
                                      help="チャット設定をセッションに反映し、設定値をファイル保存します"):
         # ChatConfigインスタンス作成時にst.session_state.configから最新の値を取得し、型を保証
         config_to_save = ChatConfig(
@@ -361,10 +399,10 @@ def sidebar(config_file_path, logger):
             timeout=float(st.session_state.config["timeout"]))
 
         if config_to_save.save(config_file_path):
-            logger.info("設定をファイルに保存しました");
+            logger.info("設定をファイルに保存しました")
             st.success("設定を更新し、ファイルに保存しました")
         else:
-            logger.warning("設定ファイルへの保存に失敗しました");
+            logger.warning("設定ファイルへの保存に失敗しました")
             st.warning("設定は更新されましたが、ファイルへの保存に失敗しました")
 
         if st.session_state.settings_changed:
@@ -384,7 +422,7 @@ def sidebar(config_file_path, logger):
     if st.session_state.infer_server_type != 'other': query_options.extend(["マルチクエリ生成", "DeepSearch"])
 
     def on_query_conversion_change_callback():
-        option_name = st.session_state.query_conversion_radio;
+        option_name = st.session_state.query_conversion_radio
         new_mode = -1
         # (元のロジックのまま)
         if option_name == query_options[0]:
@@ -505,13 +543,13 @@ def sidebar(config_file_path, logger):
                              args=("rag_process_prompt_widget", "rag_process_prompt", False, False, False,
                                    "検索結果指示"))
                 if not server_mode: st.markdown(
-                    '<span style="font-size: 12px;">保存する場合は「設定を反映」してください</span>',
+                    '<span style="font-size: 12px;">設定値を保存する場合は「設定保存」してください</span>',
                     unsafe_allow_html=True)
 
             manager = get_or_create_qdrant_manager(logger)
             available_collections = [c for c in manager.get_collections() if c != Collection.STORED_COLLECTION_NAME]
             if not available_collections:
-                available_collections = ["default"];
+                available_collections = ["default"]
                 collection = Collection(collection_name="default")
                 collection.top_k = st.session_state.db_config.top_k
                 collection.score_threshold = st.session_state.db_config.score_threshold
@@ -552,7 +590,7 @@ def sidebar(config_file_path, logger):
         except ImportError:
             st.sidebar.warning("データベース機能の依存関係がインストールされていません。")
         except Exception as e:
-            logger.error(f"データベース接続エラー: {str(e)}");
+            logger.error(f"データベース接続エラー: {str(e)}")
             st.sidebar.error("データベース接続エラーが発生しました。")
 
     # チャット履歴インポート機能
