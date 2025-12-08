@@ -74,6 +74,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "use_multi": file_config.use_multi,
             "use_deep": file_config.use_deep,
             "timeout": file_config.timeout,
+            "max_attachment_files": file_config.max_attachment_files,
         }
         if not os.path.exists(config_file_path):
             file_config.save(config_file_path)
@@ -153,6 +154,10 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
 
     if "message_processed" not in st.session_state:
         st.session_state.message_processed = False
+
+    # メッセージ長超過エラーメッセージ
+    if "message_length_error" not in st.session_state:
+        st.session_state.message_length_error = None
 
 
 # チャットをクリアするコールバック関数
@@ -566,6 +571,11 @@ def show_chat_component(logger):
                                     f"[\\[{file_info['index']}\\] {file_info['path']}{page_str}]"
                                     f"({urllib.parse.quote(file_info['path'], safe='://')})")
 
+    # メッセージ長超過エラーの表示
+    if st.session_state.message_length_error:
+        st.error(st.session_state.message_length_error)
+        st.session_state.message_length_error = None  # 一度表示したらクリア
+
     # 添付ファイル一覧を表示
     if st.session_state.chat_manager.attachments:
         with st.expander(f"添付ファイル ({len(st.session_state.chat_manager.attachments)}件)", expanded=True):
@@ -606,7 +616,7 @@ def show_chat_component(logger):
         prompt = st.chat_input(
             "プロンプトを入力してください...",
             disabled=st.session_state.is_sending_message,
-            accept_file=True,
+            accept_file="multiple",
             file_type=[ext.lstrip(".") for ext in SUPPORT_EXTENSIONS]
         )
         if st.session_state.config["use_web"]:
@@ -993,11 +1003,24 @@ def show_chat_component(logger):
     # ユーザーがメッセージを送信した場合の処理
     if prompt:
         with st.spinner("応答中..."):
-            # ファイルアップロードの処理
+            # ファイルアップロードの処理（複数ファイル対応）
             file_processed = False
             if prompt["files"]:
-                uploaded_file = prompt["files"][0]  # 先頭1件のみ処理
-                file_processed = process_uploaded_file(uploaded_file)
+                max_files = st.session_state.config.get("max_attachment_files", 2)
+                uploaded_file_count = len(prompt["files"])
+                
+                # ファイル数超過チェック
+                if uploaded_file_count > max_files:
+                    st.session_state.message_length_error = (
+                        f"エラー: 添付ファイル数が上限を超えています（添付: {uploaded_file_count}件、上限: {max_files}件）。\n"
+                        f"- 添付ファイルを{max_files}件以下にしてください。\n"
+                        f"- サイドバー設定の「最大添付ファイル数」を引き上げてください。"
+                    )
+                    st.rerun()
+                    return
+                
+                for uploaded_file in prompt["files"]:
+                    file_processed = process_uploaded_file(uploaded_file) or file_processed
                 # ファイル処理後、テキストがなければ再描画して終了
                 if not file_processed or not prompt.text:
                     st.rerun()
@@ -1014,10 +1037,16 @@ def show_chat_component(logger):
             )
 
             if would_exceed:
-                st.error(f"エラー: メッセージ長が上限を超えています（推定: {estimated_length}文字、上限: {max_length}文字）。\n"
-                         f"- メッセージを短くするか\n"
-                         f"- 添付ファイルを減らすか\n"
-                         f"- サイドバー設定のメッセージ長制限を引き上げてください。")
+                attachment_count = len(st.session_state.chat_manager.attachments)
+                st.session_state.message_length_error = (
+                    f"エラー: メッセージ長が上限を超えています（推定: {estimated_length}文字、上限: {max_length}文字）。\n"
+                    f"- 添付ファイル: {attachment_count}件\n"
+                    f"- メッセージを短くするか\n"
+                    f"- 添付ファイル数を減らすか\n"
+                    f"- サイドバー設定のメッセージ長制限を引き上げてください。"
+                )
+                st.session_state.chat_manager.clear_attachments()  # 添付ファイルをクリア
+                st.rerun()
             else:
                 # メッセージ送信中フラグをON
                 st.session_state.is_sending_message = True

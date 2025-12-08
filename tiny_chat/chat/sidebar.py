@@ -211,6 +211,11 @@ def sidebar(config_file_path, logger):
                         help="添付ファイルやURLコンテンツの取得最大長", disabled=st.session_state.is_sending_message,
                         key="context_length_widget", on_change=update_config_value,
                         args=("context_length_widget", "context_length", False, True, False, "添付ファイル文字列長"))
+        st.number_input("最大添付ファイル数", min_value=1, max_value=30,
+                        value=int(st.session_state.config.get("max_attachment_files", 2)), step=1,
+                        help="一度に添付できるファイルの最大数", disabled=st.session_state.is_sending_message,
+                        key="max_attachment_files_widget", on_change=update_config_value,
+                        args=("max_attachment_files_widget", "max_attachment_files", False, True, False, "最大添付ファイル数"))
         st.number_input("温度", min_value=0.0, max_value=2.0, value=float(st.session_state.config["temperature"]),
                         step=0.1, help="LLMの応答単語の確率分布制御", disabled=st.session_state.is_sending_message,
                         key="temperature_widget", on_change=update_config_value,
@@ -396,7 +401,8 @@ def sidebar(config_file_path, logger):
             use_deep=bool(st.session_state.config["use_deep"]),
             temperature=float(st.session_state.config["temperature"]),
             top_p=float(st.session_state.config["top_p"]),
-            timeout=float(st.session_state.config["timeout"]))
+            timeout=float(st.session_state.config["timeout"]),
+            max_attachment_files=int(st.session_state.config.get("max_attachment_files", 5)))
 
         if config_to_save.save(config_file_path):
             logger.info("設定をファイルに保存しました")

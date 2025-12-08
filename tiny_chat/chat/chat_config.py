@@ -32,6 +32,7 @@ class ChatConfig:
         use_multi: bool = False,
         use_deep: bool = False,
         timeout: float = 30.,
+        max_attachment_files: int = 2,
         **kwargs
     ):
         self.server_url = server_url
@@ -54,6 +55,7 @@ class ChatConfig:
         self.use_multi = use_multi
         self.use_deep = use_deep
         self.timeout = timeout
+        self.max_attachment_files = max_attachment_files
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -111,7 +113,8 @@ class ChatConfig:
                 'web_top_k': self.web_top_k,
                 'use_multi': self.use_multi,
                 "use_deep": self.use_deep,
-                "timeout": self.timeout
+                "timeout": self.timeout,
+                "max_attachment_files": self.max_attachment_files
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:
