@@ -3,6 +3,7 @@ import os
 
 
 DEFAULT_CHAT_CONFIG_PATH = "chat_app_config.json"
+DEFAULT_REASONING_PATTERN = r"^<think>[\s\S]*?</think>"
 
 
 class ChatConfig:
@@ -34,6 +35,7 @@ class ChatConfig:
         timeout: float = 30.,
         max_attachment_files: int = 2,
         chat_logging_dir: str = None,
+        reasoning_pattern: str = DEFAULT_REASONING_PATTERN,
         **kwargs
     ):
         self.server_url = server_url
@@ -58,6 +60,7 @@ class ChatConfig:
         self.timeout = timeout
         self.max_attachment_files = max_attachment_files
         self.chat_logging_dir = chat_logging_dir
+        self.reasoning_pattern = reasoning_pattern
 
     @classmethod
     def load(cls, file_path: str) -> 'ChatConfig':
@@ -118,7 +121,8 @@ class ChatConfig:
                 "timeout": self.timeout,
                 "timeout": self.timeout,
                 "max_attachment_files": self.max_attachment_files,
-                "chat_logging_dir": self.chat_logging_dir
+                "chat_logging_dir": self.chat_logging_dir,
+                "reasoning_pattern": self.reasoning_pattern
             }
 
             with open(file_path, 'w', encoding='utf-8') as f:

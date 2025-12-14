@@ -28,7 +28,7 @@ CONFIG_FILE = DEFAULT_CHAT_CONFIG_PATH
 SUPPORT_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.json', '.md', '.html', '.htm']
 
 # DeepSeek-R1/Qwen3向け
-THINK_PATTERN = r"^<think>[\s\S]*?</think>"
+# THINK_PATTERN は chat_config.py で設定可能になりました
 
 # ファイルタイプと表示単位のキャッシュ
 FILE_TYPES = {
@@ -123,6 +123,7 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "timeout": file_config.timeout,
             "max_attachment_files": file_config.max_attachment_files,
             "chat_logging_dir": file_config.chat_logging_dir,
+            "reasoning_pattern": file_config.reasoning_pattern,
         }
         if not os.path.exists(config_file_path):
             file_config.save(config_file_path)
@@ -1022,7 +1023,8 @@ def show_chat_component(logger):
                             message_placeholder.empty()
 
                             # DeepSeek-R1/Qwen3
-                            full_response = re.sub(THINK_PATTERN, "", full_response)
+                            if st.session_state.config.get("reasoning_pattern"):
+                                full_response = re.sub(st.session_state.config["reasoning_pattern"], "", full_response)
 
 
                             # 応答をメッセージ履歴に追加
