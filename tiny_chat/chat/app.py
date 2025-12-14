@@ -5,6 +5,9 @@ import logging
 import tempfile
 import webbrowser
 import urllib.parse
+import gzip
+import uuid
+import json
 
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 import streamlit as st
@@ -41,6 +44,47 @@ FILE_TYPES = {
     '.html': ("HTML", ""),
 }
 
+def save_chat_log(user_content, assistant_content, config, logger=None):
+    """
+    チャットログを圧縮して保存する
+    
+    Args:
+        user_content (str): ユーザーの入力
+        assistant_content (str): アシスタントの応答（またはエラーメッセージ）
+        config (dict): 設定辞書
+        logger: ロガーインスタンス
+    """
+    logging_dir = config.get("chat_logging_dir")
+    
+    # logging_dirが設定されていない、または存在しない場合は何もしない
+    if not logging_dir or not os.path.exists(logging_dir):
+        return
+
+    try:
+        # ログデータの作成
+        log_data = {
+            "timestamp": datetime.now().isoformat(),
+            "user": user_content,
+            "assistant": assistant_content
+        }
+        
+        # ファイル名の生成 (タイムスタンプ + UUID)
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"{timestamp_str}_{unique_id}.json.gz"
+        file_path = os.path.join(logging_dir, filename)
+        
+        # 圧縮して保存
+        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+            json.dump(log_data, f, ensure_ascii=False, indent=2)
+            
+        if logger:
+            logger.info(f"チャットログを保存しました: {file_path}")
+            
+    except Exception as e:
+        if logger:
+            logger.error(f"チャットログの保存に失敗しました: {str(e)}")
+
 
 def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_only_mode=False):
     if "config" not in st.session_state:
@@ -74,7 +118,9 @@ def initialize_session_state(config_file_path=CONFIG_FILE, logger=None, session_
             "use_multi": file_config.use_multi,
             "use_deep": file_config.use_deep,
             "timeout": file_config.timeout,
+            "timeout": file_config.timeout,
             "max_attachment_files": file_config.max_attachment_files,
+            "chat_logging_dir": file_config.chat_logging_dir,
         }
         if not os.path.exists(config_file_path):
             file_config.save(config_file_path)
@@ -976,8 +1022,13 @@ def show_chat_component(logger):
                             # DeepSeek-R1/Qwen3
                             full_response = re.sub(THINK_PATTERN, "", full_response)
 
+
                             # 応答をメッセージ履歴に追加
                             st.session_state.chat_manager.add_assistant_message(full_response)
+                            
+                            # ログ保存
+                            log_content = enhanced_prompt if enhanced_prompt else prompt_content
+                            save_chat_log(log_content, full_response, st.session_state.config, logger)
                     else:
                         # 既にキャンセルされていた場合
                         cancel_message = "応答生成がキャンセルされました。"
@@ -990,7 +1041,12 @@ def show_chat_component(logger):
                     logger.error(error_message)
                     message_placeholder.empty()
                     message_placeholder.error(error_message)
+                    message_placeholder.error(error_message)
                     st.session_state.chat_manager.add_assistant_message(error_message)
+                    
+                    # エラー時もログ保存
+                    log_content = enhanced_prompt if enhanced_prompt else prompt_content
+                    save_chat_log(log_content, error_message, st.session_state.config, logger)
 
                 finally:
                     # 処理完了後に各種状態をリセット
