@@ -19,7 +19,7 @@ from tiny_chat.utils.logger import get_logger
 from tiny_chat.utils.llm_utils import get_llm_client, identify_server, reset_ollama_model
 from tiny_chat.chat.sidebar import sidebar
 from tiny_chat.chat.copy_botton import copy_button
-
+from tiny_chat.utils.streamlit_utils import get_remote_ip
 
 # 設定ファイルのパス
 CONFIG_FILE = DEFAULT_CHAT_CONFIG_PATH
@@ -44,6 +44,7 @@ FILE_TYPES = {
     '.html': ("HTML", ""),
 }
 
+
 def save_chat_log(user_content, assistant_content, config, logger=None):
     """
     チャットログを圧縮して保存する
@@ -64,6 +65,7 @@ def save_chat_log(user_content, assistant_content, config, logger=None):
         # ログデータの作成
         log_data = {
             "timestamp": datetime.now().isoformat(),
+            "ip_address": get_remote_ip(),
             "user": user_content,
             "assistant": assistant_content
         }
