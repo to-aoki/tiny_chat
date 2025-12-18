@@ -36,26 +36,15 @@ def _first_ip_from_xff(xff: str) -> Optional[str]:
 def get_remote_ip() -> str:
     """
     クライアントのIPアドレスを取得する（ベストエフォート）
-    - Streamlit 1.45+ の st.context.ip_address を最優先
-    - 次に X-Forwarded-For / X-Real-IP 等のヘッダ
+    - X-Forwarded-For / X-Real-IP 等のヘッダを最優先 (プロキシ対応)
+    - 次に Streamlit 1.45+ の st.context.ip_address
     - localhost のときは 127.0.0.1 を返す
     """
-    # 1) まず公式の ip_address（1.45+）
+    # 1) ヘッダから推定（st.context.headers があれば優先）
     ctx = getattr(st, "context", None)
-    ip = getattr(ctx, "ip_address", None) if ctx else None
-    if ip is not None:
-        # docs: localhost アクセス時は None が期待値
-        if str(ip).strip():
-            return str(ip)
-        # ip が空文字等は通常ないが念のため
-    else:
-        # ip_address が未実装の Streamlit もある
-        pass
-
-    # 2) ヘッダから推定（st.context.headers があれば優先）
     headers = getattr(ctx, "headers", None) if ctx else None
 
-    # 3) 古い Streamlit 向け websocket headers（内部API）
+    # 古い Streamlit 向け websocket headers（内部API）
     if not headers:
         try:
             from streamlit.web.server.websocket_headers import _get_websocket_headers
@@ -67,16 +56,24 @@ def get_remote_ip() -> str:
         # st.context.headers はキーが大小文字無視で取れる仕様
         xff = headers.get("x-forwarded-for")
         if xff:
-            ip2 = _first_ip_from_xff(xff)
-            if ip2:
-                return ip2
+            ip = _first_ip_from_xff(xff)
+            if ip:
+                return ip
 
         for k in ("x-real-ip", "cf-connecting-ip", "x-client-ip"):
             v = headers.get(k)
-            ip2 = _normalize_ip(v.split(",")[0] if isinstance(v, str) else str(v))
-            if ip2:
-                return ip2
+            ip = _normalize_ip(v.split(",")[0] if isinstance(v, str) else str(v))
+            if ip:
+                return ip
 
-    # 4) ローカル開発（localhost）は docs 上 None が正常
+    # 2) 公式の ip_address（1.45+）
+    # ヘッダで見つからなかった場合のフォールバック
+    ip = getattr(ctx, "ip_address", None) if ctx else None
+    if ip is not None:
+        # docs: localhost アクセス時は None が期待値
+        if str(ip).strip():
+            return str(ip)
+
+    # 3) ローカル開発（localhost）は docs 上 None が正常
     #    → Unknown より 127.0.0.1 の方が扱いやすいならこちら
-    return "127.0.0.1" if ip is None else "Unknown"
+    return "127.0.0.1"
