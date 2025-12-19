@@ -69,6 +69,12 @@ def get_remote_ip() -> str:
     # 2) 公式の ip_address（1.45+）
     # ヘッダで見つからなかった場合のフォールバック
     ip = getattr(ctx, "ip_address", None) if ctx else None
+    
+    # DEBUG: 実際の値を確認するためのログ出力
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"DEBUG: headers={dict(headers) if headers else 'None'}, ctx.ip_address={ip}")
+
     if ip is not None:
         # docs: localhost アクセス時は None が期待値
         if str(ip).strip():
