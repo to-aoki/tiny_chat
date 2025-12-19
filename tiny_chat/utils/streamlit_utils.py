@@ -71,9 +71,14 @@ def get_remote_ip() -> str:
     ip = getattr(ctx, "ip_address", None) if ctx else None
     
     # DEBUG: 実際の値を確認するためのログ出力
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"DEBUG: headers={dict(headers) if headers else 'None'}, ctx.ip_address={ip}")
+    try:
+        from tiny_chat.utils.logger import get_logger
+        logger = get_logger()
+        logger.info(f"DEBUG: headers={dict(headers) if headers else 'None'}, ctx.ip_address={ip}")
+    except Exception as e:
+        # ロガー取得失敗時のフォールバック
+        import logging
+        logging.getLogger(__name__).info(f"DEBUG(fallback): headers={dict(headers) if headers else 'None'}, ctx.ip_address={ip}")
 
     if ip is not None:
         # docs: localhost アクセス時は None が期待値
